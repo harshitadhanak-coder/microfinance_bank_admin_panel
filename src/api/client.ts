@@ -1,6 +1,12 @@
 import axios from 'axios';
 
-export const api = axios.create({ baseURL: '/api/v1' });
+// Base URL of the backend API. Set VITE_API_BASE_URL to hit the backend on a
+// specific host (e.g. http://localhost:4000/api/v1 in dev). When unset or empty
+// — as in a same-origin production build — it falls back to the relative
+// '/api/v1' path that nginx reverse-proxies to the backend.
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+
+export const api = axios.create({ baseURL: API_BASE_URL });
 
 api.interceptors.request.use((config) => {
   const token = localStorage.getItem('accessToken');
@@ -19,7 +25,7 @@ api.interceptors.response.use(
       original._retry = true;
       try {
         refreshing ??= axios
-          .post('/api/v1/auth/refresh-token', { refreshToken: localStorage.getItem('refreshToken') })
+          .post(`${API_BASE_URL}/auth/refresh-token`, { refreshToken: localStorage.getItem('refreshToken') })
           .then((r) => {
             const { accessToken, refreshToken } = r.data.data;
             localStorage.setItem('accessToken', accessToken);

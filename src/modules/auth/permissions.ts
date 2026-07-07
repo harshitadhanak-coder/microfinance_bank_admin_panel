@@ -52,6 +52,10 @@ export const MODULES: ModuleDef[] = [
 export const ACTION_ROLES = {
   // POST /branches
   'branch:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
+  // PATCH /branches/:id
+  'branch:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
+  // DELETE /branches/:id
+  'branch:delete': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   // POST /loans/applications/:id/review
   'application:review': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
   // POST /loans/applications/:id/disburse

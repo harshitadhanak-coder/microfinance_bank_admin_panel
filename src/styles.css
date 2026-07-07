@@ -170,7 +170,9 @@ button:disabled { opacity: 0.6; cursor: default; }
 button.ghost { background: transparent; color: inherit; border: 1px solid var(--line); }
 .sidebar button.ghost { color: #c4cec6; border-color: rgba(255,255,255,0.25); }
 button.sm { padding: 0.3rem 0.7rem; font-size: 0.82rem; }
-.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+button.ghost.danger { color: var(--red); border-color: var(--red); }
+button.ghost.danger:hover { background: var(--red); color: #fff; }
+.row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; align-items: center; }
 
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; margin-bottom: 1.2rem; }
 .span-all { grid-column: 1 / -1; }

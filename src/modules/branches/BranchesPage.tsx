@@ -1,4 +1,5 @@
 import { FormEvent, useState } from 'react';
+import { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -6,20 +7,29 @@ import { useAuth } from '../auth/AuthContext';
 import { can, canListAllBranches } from '../auth/permissions';
 
 interface Branch {
-  id: string; code: string; name: string; city: string; state: string; status: string;
+  id: string; code: string; name: string; addressLine: string; city: string; state: string; status: string;
   manager?: { fullName: string } | null;
   _count?: { clients: number; loans: number; employees: number };
 }
+
+const emptyForm = { code: '', name: '', addressLine: '', city: '', state: '' };
+
+/** Reads the API error envelope's message, falling back to a default. */
+const apiMessage = (err: unknown, fallback: string): string =>
+  (err instanceof AxiosError && err.response?.data?.message) || fallback;
 
 export default function BranchesPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const [showForm, setShowForm] = useState(false);
-  const [form, setForm] = useState({ code: '', name: '', addressLine: '', city: '', state: '' });
+  const [editing, setEditing] = useState<Branch | null>(null);
+  const [form, setForm] = useState(emptyForm);
   const [error, setError] = useState('');
 
   const listAll = canListAllBranches(user?.role);
   const canCreate = can(user?.role, 'branch:create');
+  const canUpdate = can(user?.role, 'branch:update');
+  const canDelete = can(user?.role, 'branch:delete');
 
   // Cross-branch roles list every branch; a branch-scoped user (e.g. a manager)
   // can only read their own branch, so fetch that single record instead.
@@ -32,17 +42,51 @@ export default function BranchesPage() {
         : api.get(`/branches/${user!.branchId}`).then((r) => [r.data.data as Branch]),
   });
 
+  const invalidate = () => qc.invalidateQueries({ queryKey: ['branches'] });
+
+  const closeForm = () => { setShowForm(false); setEditing(null); setForm(emptyForm); setError(''); };
+
   const createBranch = useMutation({
     mutationFn: (body: typeof form) => api.post('/branches', body),
-    onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ['branches'] });
-      setShowForm(false);
-      setForm({ code: '', name: '', addressLine: '', city: '', state: '' });
-    },
+    onSuccess: () => { invalidate(); closeForm(); },
     onError: () => setError('Could not create the branch. Check the code is unique and all fields are filled.'),
   });
 
-  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); createBranch.mutate(form); };
+  const updateBranch = useMutation({
+    mutationFn: ({ id, body }: { id: string; body: typeof form }) => api.patch(`/branches/${id}`, body),
+    onSuccess: () => { invalidate(); closeForm(); },
+    onError: (err) => setError(apiMessage(err, 'Could not update the branch. Check the code is unique and all fields are filled.')),
+  });
+
+  const deleteBranch = useMutation({
+    mutationFn: (id: string) => api.delete(`/branches/${id}`),
+    onSuccess: invalidate,
+    onError: (err) => setError(apiMessage(err, 'Could not delete the branch.')),
+  });
+
+  const startCreate = () => {
+    if (showForm && !editing) { closeForm(); return; }
+    setEditing(null); setForm(emptyForm); setError(''); setShowForm(true);
+  };
+
+  const startEdit = (b: Branch) => {
+    setEditing(b);
+    setForm({ code: b.code, name: b.name, addressLine: b.addressLine ?? '', city: b.city, state: b.state });
+    setError('');
+    setShowForm(true);
+  };
+
+  const remove = (b: Branch) => {
+    setError('');
+    if (window.confirm(`Delete ${b.name} (${b.code})? This cannot be undone.`)) deleteBranch.mutate(b.id);
+  };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    if (editing) updateBranch.mutate({ id: editing.id, body: form });
+    else createBranch.mutate(form);
+  };
 
   const columns: Column<Branch>[] = [
     { header: 'Code', render: (b) => <code>{b.code}</code>, sortValue: (b) => b.code },
@@ -54,6 +98,20 @@ export default function BranchesPage() {
     { header: 'Status', render: (b) => <span className={`pill pill-${b.status.toLowerCase()}`}>{b.status}</span>, sortValue: (b) => b.status },
   ];
 
+  if (canUpdate || canDelete) {
+    columns.push({
+      header: 'Actions',
+      render: (b) => (
+        <div className="row-actions">
+          {canUpdate && <button type="button" className="sm ghost" onClick={() => startEdit(b)}>Edit</button>}
+          {canDelete && <button type="button" className="sm ghost danger" onClick={() => remove(b)} disabled={deleteBranch.isPending}>Delete</button>}
+        </div>
+      ),
+    });
+  }
+
+  const saving = createBranch.isPending || updateBranch.isPending;
+
   return (
     <>
       <header className="page-head row">
@@ -62,11 +120,11 @@ export default function BranchesPage() {
           <p className="muted">All operating branches in the network</p>
         </div>
         {canCreate && (
-          <button onClick={() => setShowForm((v) => !v)}>{showForm ? 'Close' : 'Add branch'}</button>
+          <button onClick={startCreate}>{showForm && !editing ? 'Close' : 'Add branch'}</button>
         )}
       </header>
 
-      {canCreate && showForm && (
+      {showForm && (
         <form className="panel pad form-grid" onSubmit={submit}>
           <label>Code<input value={form.code} onChange={(e) => setForm({ ...form, code: e.target.value })} placeholder="BR-SRT-001" required /></label>
           <label>Name<input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} required /></label>
@@ -74,9 +132,14 @@ export default function BranchesPage() {
           <label>City<input value={form.city} onChange={(e) => setForm({ ...form, city: e.target.value })} required /></label>
           <label>State<input value={form.state} onChange={(e) => setForm({ ...form, state: e.target.value })} required /></label>
           {error && <div className="error-box span-all">{error}</div>}
-          <div className="span-all"><button type="submit" disabled={createBranch.isPending}>Save branch</button></div>
+          <div className="span-all row-actions">
+            <button type="submit" disabled={saving}>{editing ? 'Save changes' : 'Save branch'}</button>
+            <button type="button" className="ghost" onClick={closeForm}>Cancel</button>
+          </div>
         </form>
       )}
+
+      {error && !showForm && <div className="error-box">{error}</div>}
 
       <DataTable columns={columns} rows={data ?? []} loading={isLoading} empty="No branches yet. Add the first one." />
     </>
