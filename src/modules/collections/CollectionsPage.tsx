@@ -1,6 +1,7 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
@@ -18,20 +19,28 @@ export default function CollectionsPage() {
   const canComplete = can(user?.role, 'settlement:complete');
   const canClassify = can(user?.role, 'collection:classify');
 
+  const table = useServerTable();
+  const url = `/settlements?${table.params}`;
   const { data, isLoading } = useQuery({
-    queryKey: ['settlements'],
-    queryFn: () => api.get('/settlements?pageSize=100').then((r) => r.data.data as Settlement[]),
+    queryKey: [url],
+    queryFn: () => api.get(url).then((r) => r.data),
+    placeholderData: keepPreviousData,
   });
+  const rows = (data?.data ?? []) as Settlement[];
+  const totalItems = (data?.pagination?.totalItems ?? 0) as number;
+
+  const invalidate = () =>
+    qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/settlements') });
 
   const decide = useMutation({
     mutationFn: ({ id, decision }: { id: string; decision: 'APPROVED' | 'REJECTED' }) =>
       api.post(`/settlements/${id}/decision`, { decision }),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['settlements'] }),
+    onSuccess: invalidate,
   });
 
   const complete = useMutation({
     mutationFn: (id: string) => api.post(`/settlements/${id}/complete`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['settlements'] }),
+    onSuccess: invalidate,
   });
 
   const classify = useMutation({
@@ -39,31 +48,38 @@ export default function CollectionsPage() {
   });
 
   const columns: Column<Settlement>[] = [
-    { header: 'Loan', render: (s) => <code>{s.loan.loanNumber}</code>, sortValue: (s) => s.loan.loanNumber },
-    { header: 'Client', render: (s) => s.loan.client.fullName, sortValue: (s) => s.loan.client.fullName },
-    { header: 'Branch', render: (s) => s.loan.branch.name, sortValue: (s) => s.loan.branch.name },
-    { header: 'Type', render: (s) => s.settlementType.replace('_', ' '), sortValue: (s) => s.settlementType },
-    { header: 'Amount', render: (s) => <span className="num">{inr(s.settlementAmount)}</span>, sortValue: (s) => Number(s.settlementAmount) },
-    { header: 'Waiver', render: (s) => <span className="num">{inr(s.waiverAmount)}</span>, sortValue: (s) => Number(s.waiverAmount) },
-    { header: 'Status', render: (s) => <span className={`pill pill-${s.status.toLowerCase()}`}>{s.status.replace('_', ' ')}</span>, sortValue: (s) => s.status },
+    { header: 'Loan', render: (s) => <code>{s.loan.loanNumber}</code>, sortKey: 'loanNumber' },
+    { header: 'Client', render: (s) => s.loan.client.fullName, sortKey: 'client' },
+    { header: 'Branch', render: (s) => s.loan.branch.name, sortKey: 'branch' },
+    { header: 'Type', render: (s) => s.settlementType.replace('_', ' '), sortKey: 'settlementType' },
+    { header: 'Amount', render: (s) => <span className="num">{inr(s.settlementAmount)}</span>, sortKey: 'settlementAmount' },
+    { header: 'Waiver', render: (s) => <span className="num">{inr(s.waiverAmount)}</span>, sortKey: 'waiverAmount' },
+    { header: 'Status', render: (s) => <span className={`pill pill-${s.status.toLowerCase()}`}>{s.status.replace('_', ' ')}</span>, sortKey: 'status' },
   ];
 
   if (canDecide || canComplete) {
     columns.push({
       header: 'Actions',
-      render: (s) => (
-        <div className="row-actions">
-          {canDecide && s.status === 'PENDING_APPROVAL' && (
-            <>
-              <button className="sm" onClick={() => decide.mutate({ id: s.id, decision: 'APPROVED' })}>Approve</button>
-              <button className="sm ghost" onClick={() => decide.mutate({ id: s.id, decision: 'REJECTED' })}>Reject</button>
-            </>
-          )}
-          {canComplete && s.status === 'APPROVED' && (
-            <button className="sm" onClick={() => complete.mutate(s.id)}>Complete &amp; issue NOC</button>
-          )}
-        </div>
-      ),
+      render: (s) => {
+        const decidable = canDecide && s.status === 'PENDING_APPROVAL';
+        const completable = canComplete && s.status === 'APPROVED';
+        // INITIATED / COMPLETED / REJECTED settlements have no pending action —
+        // show a placeholder rather than an empty cell.
+        if (!decidable && !completable) return <span className="muted">—</span>;
+        return (
+          <div className="row-actions">
+            {decidable && (
+              <>
+                <button className="sm" onClick={() => decide.mutate({ id: s.id, decision: 'APPROVED' })}>Approve</button>
+                <button className="sm ghost" onClick={() => decide.mutate({ id: s.id, decision: 'REJECTED' })}>Reject</button>
+              </>
+            )}
+            {completable && (
+              <button className="sm" onClick={() => complete.mutate(s.id)}>Complete &amp; issue NOC</button>
+            )}
+          </div>
+        );
+      },
     });
   }
 
@@ -80,7 +96,23 @@ export default function CollectionsPage() {
           </button>
         )}
       </header>
-      <DataTable columns={columns} rows={data ?? []} loading={isLoading} empty="No settlements pending." />
+      <DataTable
+        columns={columns}
+        rows={rows}
+        loading={isLoading}
+        empty="No settlements pending."
+        searchPlaceholder="Search by loan no., client or branch…"
+        server={{
+          page: table.page,
+          pageSize: table.pageSize,
+          totalItems,
+          onPageChange: table.setPage,
+          sort: table.sort,
+          onSortChange: table.onSortChange,
+          search: table.search,
+          onSearchChange: table.onSearchChange,
+        }}
+      />
     </>
   );
 }

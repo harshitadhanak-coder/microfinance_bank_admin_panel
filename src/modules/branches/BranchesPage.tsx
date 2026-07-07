@@ -1,8 +1,9 @@
 import { FormEvent, useState } from 'react';
 import { AxiosError } from 'axios';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { useServerTable } from '../../components/useServerTable';
 import { useAuth } from '../auth/AuthContext';
 import { can, canListAllBranches } from '../auth/permissions';
 
@@ -31,18 +32,30 @@ export default function BranchesPage() {
   const canUpdate = can(user?.role, 'branch:update');
   const canDelete = can(user?.role, 'branch:delete');
 
-  // Cross-branch roles list every branch; a branch-scoped user (e.g. a manager)
-  // can only read their own branch, so fetch that single record instead.
-  const { data, isLoading } = useQuery({
-    queryKey: listAll ? ['branches'] : ['branch', user?.branchId],
-    enabled: listAll || !!user?.branchId,
-    queryFn: () =>
-      listAll
-        ? api.get('/branches?pageSize=100').then((r) => r.data.data as Branch[])
-        : api.get(`/branches/${user!.branchId}`).then((r) => [r.data.data as Branch]),
+  const table = useServerTable();
+
+  // Cross-branch roles list every branch (server-paginated); a branch-scoped
+  // user (e.g. a manager) can only read their own branch, so fetch that single
+  // record instead — no paging needed for one row.
+  const listUrl = `/branches?${table.params}`;
+  const listQuery = useQuery({
+    queryKey: [listUrl],
+    enabled: listAll,
+    queryFn: () => api.get(listUrl).then((r) => r.data),
+    placeholderData: keepPreviousData,
+  });
+  const singleQuery = useQuery({
+    queryKey: ['branch', user?.branchId],
+    enabled: !listAll && !!user?.branchId,
+    queryFn: () => api.get(`/branches/${user!.branchId}`).then((r) => [r.data.data as Branch]),
   });
 
-  const invalidate = () => qc.invalidateQueries({ queryKey: ['branches'] });
+  const rows = (listAll ? listQuery.data?.data : singleQuery.data) as Branch[] | undefined;
+  const totalItems = (listQuery.data?.pagination?.totalItems ?? 0) as number;
+  const isLoading = listAll ? listQuery.isLoading : singleQuery.isLoading;
+
+  const invalidate = () =>
+    qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/branches') || q.queryKey[0] === 'branch' });
 
   const closeForm = () => { setShowForm(false); setEditing(null); setForm(emptyForm); setError(''); };
 
@@ -89,13 +102,13 @@ export default function BranchesPage() {
   };
 
   const columns: Column<Branch>[] = [
-    { header: 'Code', render: (b) => <code>{b.code}</code>, sortValue: (b) => b.code },
-    { header: 'Branch', render: (b) => <strong>{b.name}</strong>, sortValue: (b) => b.name },
-    { header: 'Location', render: (b) => `${b.city}, ${b.state}`, sortValue: (b) => `${b.city}, ${b.state}` },
-    { header: 'Manager', render: (b) => b.manager?.fullName ?? '—', sortValue: (b) => b.manager?.fullName ?? '' },
-    { header: 'Clients', render: (b) => b._count?.clients ?? 0, sortValue: (b) => b._count?.clients ?? 0 },
-    { header: 'Loans', render: (b) => b._count?.loans ?? 0, sortValue: (b) => b._count?.loans ?? 0 },
-    { header: 'Status', render: (b) => <span className={`pill pill-${b.status.toLowerCase()}`}>{b.status}</span>, sortValue: (b) => b.status },
+    { header: 'Code', render: (b) => <code>{b.code}</code>, sortKey: 'code' },
+    { header: 'Branch', render: (b) => <strong>{b.name}</strong>, sortKey: 'name' },
+    { header: 'Location', render: (b) => `${b.city}, ${b.state}`, sortKey: 'city' },
+    { header: 'Manager', render: (b) => b.manager?.fullName ?? '—', sortKey: 'manager' },
+    { header: 'Clients', render: (b) => b._count?.clients ?? 0, sortKey: 'clients' },
+    { header: 'Loans', render: (b) => b._count?.loans ?? 0, sortKey: 'loans' },
+    { header: 'Status', render: (b) => <span className={`pill pill-${b.status.toLowerCase()}`}>{b.status}</span>, sortKey: 'status' },
   ];
 
   if (canUpdate || canDelete) {
@@ -141,7 +154,23 @@ export default function BranchesPage() {
 
       {error && !showForm && <div className="error-box">{error}</div>}
 
-      <DataTable columns={columns} rows={data ?? []} loading={isLoading} empty="No branches yet. Add the first one." />
+      <DataTable
+        columns={columns}
+        rows={rows ?? []}
+        loading={isLoading}
+        empty="No branches yet. Add the first one."
+        searchPlaceholder="Search by code, name, city or manager…"
+        server={listAll ? {
+          page: table.page,
+          pageSize: table.pageSize,
+          totalItems,
+          onPageChange: table.setPage,
+          sort: table.sort,
+          onSortChange: table.onSortChange,
+          search: table.search,
+          onSearchChange: table.onSearchChange,
+        } : undefined}
+      />
     </>
   );
 }
