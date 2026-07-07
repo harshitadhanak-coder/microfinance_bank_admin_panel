@@ -1,0 +1,45 @@
+# =============================================================================
+#  Microfinance Admin Panel — production compose (frontend only)
+#
+#  The SPA is a static bundle served by nginx; there is intentionally NO backend
+#  service here. The one piece of configuration, VITE_API_BASE_URL, is a Vite
+#  BUILD-TIME variable (baked into the JS bundle), so it cannot be injected at
+#  container runtime. Compose auto-loads the adjacent `.env` file and we forward
+#  that value into the build arg — so it stays in `.env`, not hardcoded here.
+#
+#  Usage:
+#    docker compose up -d --build          # build image and start
+#    docker compose logs -f                # follow logs
+#    docker compose down                   # stop and remove
+# =============================================================================
+
+services:
+  admin-panel:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        # Pulled from .env (compose interpolates ${...} from the adjacent file).
+        VITE_API_BASE_URL: ${VITE_API_BASE_URL}
+    image: microfinance-admin-panel:latest
+    container_name: microfinance-admin-panel
+    restart: unless-stopped
+
+    ports:
+      # host:container — nginx-unprivileged listens on 8080. Change the left
+      # side to "80:8080" to expose the panel on the standard HTTP port.
+      - "8080:8080"
+
+    # Surface the container's /healthz route to compose.
+    healthcheck:
+      test: ["CMD", "sh", "-c", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      start_period: 10s
+      retries: 3
+
+    logging:
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"

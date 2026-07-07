@@ -1,0 +1,23 @@
+# Dependencies & build output (reinstalled/recompiled inside the image)
+node_modules
+dist
+
+# Secrets & local env — never bake into an image.
+# VITE_API_BASE_URL is injected via build-arg, not read from .env files.
+.env
+.env.*
+!.env.example
+
+# VCS & tooling
+# NOTE: nginx.conf is intentionally NOT ignored — the Dockerfile COPYs it.
+.git
+.gitignore
+.dockerignore
+Dockerfile
+docker-compose.yml
+
+# Logs & OS cruft
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
