@@ -12,6 +12,12 @@ import { canAccessModule, ModuleKey, visibleModules } from './modules/auth/permi
 import BranchesPage from './modules/branches/BranchesPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
+import EmployeesPage from './modules/employees/EmployeesPage';
+import HrDashboardPage from './modules/hr/HrDashboardPage';
+import AttendancePage from './modules/hr/AttendancePage';
+import LeavePage from './modules/hr/LeavePage';
+import PayrollPage from './modules/hr/PayrollPage';
+import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
 import LeadsPage from './modules/leads/LeadsPage';
 import ApplicationsPage from './modules/loans/ApplicationsPage';
 import LoansPage from './modules/loans/LoansPage';
@@ -60,6 +66,12 @@ createRoot(document.getElementById('root')!).render(
             <Route element={<RequireAuth />}>
               <Route element={<AppLayout />}>
                 <Route index element={<IndexRoute />} />
+                <Route path="hr-overview" element={<RequireModule module="hrDashboard"><HrDashboardPage /></RequireModule>} />
+                <Route path="employees" element={<RequireModule module="employees"><EmployeesPage /></RequireModule>} />
+                <Route path="attendance" element={<RequireModule module="attendance"><AttendancePage /></RequireModule>} />
+                <Route path="leave" element={<RequireModule module="leave"><LeavePage /></RequireModule>} />
+                <Route path="payroll" element={<RequireModule module="payroll"><PayrollPage /></RequireModule>} />
+                <Route path="employee-loans" element={<RequireModule module="employeeLoans"><EmployeeLoansPage /></RequireModule>} />
                 <Route path="branches" element={<RequireModule module="branches"><BranchesPage /></RequireModule>} />
                 <Route path="loans" element={<RequireModule module="loans"><LoansPage /></RequireModule>} />
                 <Route path="applications" element={<RequireModule module="applications"><ApplicationsPage /></RequireModule>} />

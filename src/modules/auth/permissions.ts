@@ -16,7 +16,7 @@ export type Role =
   | 'HUMAN_RESOURCES_ADMIN'
   | 'ACCOUNTANT';
 
-export type ModuleKey = 'dashboard' | 'branches' | 'loans' | 'applications' | 'leads' | 'collections';
+export type ModuleKey = 'dashboard' | 'hrDashboard' | 'employees' | 'attendance' | 'leave' | 'payroll' | 'employeeLoans' | 'branches' | 'loans' | 'applications' | 'leads' | 'collections';
 
 export interface ModuleDef {
   key: ModuleKey;
@@ -41,8 +41,18 @@ const ALL_ROLES: Role[] = [
  */
 export const MODULES: ModuleDef[] = [
   { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
+  // HR-facing screens. Scoped to HR (and SUPER_ADMIN, which sees every module)
+  // so no other role's sidebar changes. 'hrDashboard' is first among HR modules
+  // so it becomes HR's landing page.
+  { key: 'hrDashboard', to: '/hr-overview', label: 'Dashboard', end: true, roles: ['HUMAN_RESOURCES_ADMIN'] },
+  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN'] },
+  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN'] },
+  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN'] },
+  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN'] },
+  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loans', roles: ['HUMAN_RESOURCES_ADMIN'] },
   { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
-  { key: 'loans', to: '/loans', label: 'Loans', roles: ALL_ROLES },
+  // Client loans — an operations/finance function, not HR. Every role except HR.
+  { key: 'loans', to: '/loans', label: 'Loans', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER', 'ACCOUNTANT'] },
   { key: 'applications', to: '/applications', label: 'Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
   { key: 'leads', to: '/leads', label: 'Leads', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
   { key: 'collections', to: '/collections', label: 'Collections', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
@@ -50,6 +60,15 @@ export const MODULES: ModuleDef[] = [
 
 /** In-page actions, each mapped to the roles the backend permits. */
 export const ACTION_ROLES = {
+  // POST /employees  &  PATCH /employees/:id
+  'employee:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'employee:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // POST /human-resources/leaves/:id/decision
+  'leave:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  // POST /human-resources/payroll/run
+  'payroll:run': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // Employee-loan lifecycle (apply / decide / disburse / repay)
+  'employeeLoan:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   // POST /branches
   'branch:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   // PATCH /branches/:id
