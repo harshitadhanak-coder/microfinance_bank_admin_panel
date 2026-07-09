@@ -18,6 +18,8 @@ interface EmployeeLoan {
   outstandingAmount: string;
   purpose?: string | null;
   status: string;
+  requestedAt: string;
+  disbursedAt?: string | null;
   employee: { fullName: string; employeeCode: string; designation: string; branch?: { name: string } | null };
 }
 
@@ -29,6 +31,8 @@ type Form = typeof emptyForm;
 
 const inr = (v?: string | number | null): string =>
   v == null || v === '' ? '—' : `₹${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
+const fmtDate = (v?: string | null): string =>
+  v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const apiMessage = (err: unknown, fallback: string): string =>
   (err instanceof AxiosError && err.response?.data?.message) || fallback;
 
@@ -102,6 +106,8 @@ export default function EmployeeLoansPage() {
     { header: 'Tenure', render: (l) => `${l.tenureMonths} mo`, sortValue: (l) => l.tenureMonths },
     { header: 'Monthly', render: (l) => inr(l.monthlyDeduction), sortValue: (l) => Number(l.monthlyDeduction) },
     { header: 'Outstanding', render: (l) => inr(l.outstandingAmount), sortValue: (l) => Number(l.outstandingAmount) },
+    { header: 'Requested', render: (l) => fmtDate(l.requestedAt), sortValue: (l) => l.requestedAt },
+    { header: 'Disbursed', render: (l) => fmtDate(l.disbursedAt), sortValue: (l) => l.disbursedAt ?? '' },
     { header: 'Status', render: (l) => <span className={`pill pill-${l.status.toLowerCase()}`}>{l.status}</span>, sortValue: (l) => l.status },
   ];
 

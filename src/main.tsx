@@ -21,6 +21,7 @@ import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
 import LeadsPage from './modules/leads/LeadsPage';
 import ApplicationsPage from './modules/loans/ApplicationsPage';
 import LoansPage from './modules/loans/LoansPage';
+import LoanLinkPage from './modules/loans/LoanLinkPage';
 
 const queryClient = new QueryClient({
   defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
@@ -74,9 +75,12 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="employee-loans" element={<RequireModule module="employeeLoans"><EmployeeLoansPage /></RequireModule>} />
                 <Route path="branches" element={<RequireModule module="branches"><BranchesPage /></RequireModule>} />
                 <Route path="loans" element={<RequireModule module="loans"><LoansPage /></RequireModule>} />
+                <Route path="loan-link" element={<RequireModule module="loanLink"><LoanLinkPage /></RequireModule>} />
                 <Route path="applications" element={<RequireModule module="applications"><ApplicationsPage /></RequireModule>} />
                 <Route path="leads" element={<RequireModule module="leads"><LeadsPage /></RequireModule>} />
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
+                {/* Legacy /settlements deep links now live inside Collections & Settlements. */}
+                <Route path="settlements" element={<Navigate to="/collections" replace />} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

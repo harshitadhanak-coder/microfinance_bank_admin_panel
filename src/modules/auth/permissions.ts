@@ -6,6 +6,10 @@
  * Two layers:
  *   • MODULES  — which navigation sections a role may open (sidebar + routing)
  *   • can()    — whether a role may perform a specific in-page action
+ *
+ * Sidebar modules carry a `group` ('hr' | 'operations') so the navigation is
+ * organised the way the operating plan describes — a Human Resources group and
+ * an Operations group — rather than one long flat list.
  */
 
 export type Role =
@@ -16,7 +20,23 @@ export type Role =
   | 'HUMAN_RESOURCES_ADMIN'
   | 'ACCOUNTANT';
 
-export type ModuleKey = 'dashboard' | 'hrDashboard' | 'employees' | 'attendance' | 'leave' | 'payroll' | 'employeeLoans' | 'branches' | 'loans' | 'applications' | 'leads' | 'collections';
+export type ModuleKey =
+  | 'dashboard'
+  | 'hrDashboard'
+  | 'employees'
+  | 'attendance'
+  | 'leave'
+  | 'payroll'
+  | 'employeeLoans'
+  | 'branches'
+  | 'loans'
+  | 'loanLink'
+  | 'applications'
+  | 'leads'
+  | 'collections'
+  | 'settlements';
+
+export type ModuleGroup = 'hr' | 'operations';
 
 export interface ModuleDef {
   key: ModuleKey;
@@ -24,6 +44,8 @@ export interface ModuleDef {
   label: string;
   end?: boolean;
   roles: Role[];
+  /** Sidebar group. Omitted for top-level links (e.g. Dashboard). */
+  group?: ModuleGroup;
 }
 
 const ALL_ROLES: Role[] = [
@@ -36,54 +58,56 @@ const ALL_ROLES: Role[] = [
 ];
 
 /**
- * Navigation modules and the roles allowed to open them. Order defines the
- * sidebar order and the fallback landing page (first module the role can see).
+ * Navigation modules, the roles allowed to open them, and their sidebar group.
+ * Order defines sidebar order and the fallback landing page (first module the
+ * role can see). Labels follow the operating plan's wording.
  */
 export const MODULES: ModuleDef[] = [
-  { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
-  // HR-facing screens. Scoped to HR (and SUPER_ADMIN, which sees every module)
-  // so no other role's sidebar changes. 'hrDashboard' is first among HR modules
-  // so it becomes HR's landing page.
-  { key: 'hrDashboard', to: '/hr-overview', label: 'Dashboard', end: true, roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loans', roles: ['HUMAN_RESOURCES_ADMIN'] },
-  { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
-  // Client loans — an operations/finance function, not HR. Every role except HR.
-  { key: 'loans', to: '/loans', label: 'Loans', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER', 'ACCOUNTANT'] },
-  { key: 'applications', to: '/applications', label: 'Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
-  { key: 'leads', to: '/leads', label: 'Leads', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'] },
-  { key: 'collections', to: '/collections', label: 'Collections', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
+  // Top-level
+  { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
+
+  // Human Resources
+  { key: 'hrDashboard', to: '/hr-overview', label: 'HR', end: true, roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'employees', to: '/employees', label: 'Employee Management', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loan', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+
+  // Operations
+  { key: 'branches', to: '/branches', label: 'Branch Master', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'leads', to: '/leads', label: 'Lead Review', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'applications', to: '/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
+  { key: 'loans', to: '/loans', label: 'Loan List', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
+  { key: 'loanLink', to: '/loan-link', label: 'Loan Link with FO', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations' },
+  // Collections & Settlements — one screen: assign loans to field officers for
+  // collection, and verify each officer's day-end cash (plus settlement offers
+  // / NPA classification for HQ & accounts).
+  { key: 'collections', to: '/collections', label: 'Collections & Settlements', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
 ];
 
 /** In-page actions, each mapped to the roles the backend permits. */
 export const ACTION_ROLES = {
-  // POST /employees  &  PATCH /employees/:id
-  'employee:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  'employee:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  // POST /human-resources/leaves/:id/decision
+  'employee:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  'employee:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'leave:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  // POST /human-resources/payroll/run
-  'payroll:run': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  // Employee-loan lifecycle (apply / decide / disburse / repay)
-  'employeeLoan:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  // POST /branches
+  'payroll:run': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  'employeeLoan:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'branch:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
-  // PATCH /branches/:id
   'branch:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
-  // DELETE /branches/:id
   'branch:delete': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
-  // POST /loans/applications/:id/review
+  'lead:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'],
+  'lead:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'],
+  'lead:assign': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
+  'lead:stage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'],
   'application:review': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
-  // POST /loans/applications/:id/disburse
   'application:disburse': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
-  // POST /settlements/:id/decision
+  // PATCH /loans/:id/assign-officer — Loan Link with Field Officer
+  'loan:link': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
+  // POST /collections/settlements/:id/accept — Settlement Verification
+  'settlement:verify': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
   'settlement:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
-  // POST /settlements/:id/complete
   'settlement:complete': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
-  // POST /collections/jobs/classify-npa
   'collection:classify': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
 } satisfies Record<string, Role[]>;
 
@@ -100,20 +124,11 @@ export const visibleModules = (role?: string | null): ModuleDef[] => {
   return MODULES.filter((m) => m.roles.includes(r));
 };
 
-/**
- * HR-facing modules that SUPER_ADMIN sees collected under a single "Human
- * Resources" sidebar group. The HUMAN_RESOURCES_ADMIN role keeps these as a
- * plain flat list (its whole sidebar is HR), so grouping only applies to
- * SUPER_ADMIN — see navItems().
- */
-export const HR_GROUP_KEYS: ModuleKey[] = [
-  'hrDashboard',
-  'employees',
-  'attendance',
-  'leave',
-  'payroll',
-  'employeeLoans',
-];
+const GROUP_LABEL: Record<ModuleGroup, string> = {
+  hr: 'Human Resources',
+  operations: 'Operations',
+};
+const GROUP_ORDER: ModuleGroup[] = ['hr', 'operations'];
 
 export interface NavLinkItem {
   type: 'link';
@@ -130,34 +145,27 @@ export interface NavGroupItem {
 export type NavItem = NavLinkItem | NavGroupItem;
 
 /**
- * Sidebar navigation for a role. For SUPER_ADMIN the HR screens are folded into
- * one collapsible "Human Resources" group (inserted where the first HR module
- * would sit) so the long flat list stays readable. Every other role — including
- * HUMAN_RESOURCES_ADMIN — gets the unchanged flat list.
+ * Sidebar navigation for a role: top-level links first (Dashboard), then a
+ * collapsible group per section (Human Resources, Operations). The HR admin —
+ * whose entire sidebar is HR — keeps a flat list instead of a single group.
  */
 export const navItems = (role?: string | null): NavItem[] => {
   const mods = visibleModules(role);
-  if (asRole(role) !== 'SUPER_ADMIN') {
+  const r = asRole(role);
+
+  if (r === 'HUMAN_RESOURCES_ADMIN') {
     return mods.map((module) => ({ type: 'link', module }));
   }
 
-  const items: NavItem[] = [];
-  let hrGroup: NavGroupItem | null = null;
-  for (const module of mods) {
-    if (HR_GROUP_KEYS.includes(module.key)) {
-      if (!hrGroup) {
-        hrGroup = { type: 'group', key: 'hr', label: 'Human Resources', children: [] };
-        items.push(hrGroup);
-      }
-      // The HR overview's own label is just "Dashboard"; inside the SUPER_ADMIN
-      // "Human Resources" group that clashes with the top-level Dashboard, so
-      // show it as "HR Dashboard" here only. HR's own sidebar is unaffected.
-      hrGroup.children.push(
-        module.key === 'hrDashboard' ? { ...module, label: 'HR Dashboard' } : module,
-      );
-    } else {
-      items.push({ type: 'link', module });
-    }
+  const items: NavItem[] = mods.filter((m) => !m.group).map((module) => ({ type: 'link', module }));
+
+  for (const groupKey of GROUP_ORDER) {
+    const children = mods
+      .filter((m) => m.group === groupKey)
+      // The HR overview's own label is "Dashboard"; inside a group that clashes
+      // with the top-level Dashboard, so show it as "HR Dashboard" there.
+      .map((m) => (m.key === 'hrDashboard' ? { ...m, label: 'HR Dashboard' } : m));
+    if (children.length) items.push({ type: 'group', key: groupKey, label: GROUP_LABEL[groupKey], children });
   }
   return items;
 };

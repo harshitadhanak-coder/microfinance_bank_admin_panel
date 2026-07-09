@@ -1,3 +1,4 @@
+import axios from 'axios';
 import { FormEvent, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from './AuthContext';
@@ -17,8 +18,11 @@ export default function LoginPage() {
     try {
       await login(email, password);
       navigate('/');
-    } catch {
-      setError('Email or password is incorrect. Check and try again.');
+    } catch (err) {
+      // Surface the server's message (e.g. wrong-portal) when present, otherwise
+      // a safe generic credentials error.
+      const serverMessage = axios.isAxiosError(err) ? err.response?.data?.message : undefined;
+      setError(serverMessage || 'Email or password is incorrect. Check and try again.');
     } finally {
       setBusy(false);
     }

@@ -104,8 +104,8 @@ export default function EmployeesPage() {
     <>
       <header className="page-head row">
         <div>
-          <h1>Employees</h1>
-          <p className="muted">All staff across the organisation — profile, salary, documents and status</p>
+          <h1>Employee Management</h1>
+          <p className="muted">Staff profiles — personal details, branch, KYC documents and salary</p>
         </div>
         {canCreate && <button onClick={startCreate}>{showForm ? 'Close' : 'Add employee'}</button>}
       </header>

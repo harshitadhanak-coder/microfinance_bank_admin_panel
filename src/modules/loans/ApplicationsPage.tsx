@@ -9,11 +9,16 @@ import { can } from '../auth/permissions';
 
 interface Application {
   id: string; applicationNumber: string; requestedAmount: string; tenureMonths: number; status: string;
+  leadId?: string | null;
+  createdAt: string;
   client: { fullName: string };
   loanProduct: { name: string };
 }
 
 const STATUSES = ['SUBMITTED', 'UNDER_REVIEW', 'APPROVED', 'REJECTED', 'DISBURSED'];
+
+const fmtDate = (v?: string | null): string =>
+  v ? new Date(v).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 
 export default function ApplicationsPage() {
   const qc = useQueryClient();
@@ -53,11 +58,12 @@ export default function ApplicationsPage() {
   });
 
   const columns: Column<Application>[] = [
-    { header: 'App no.', render: (a) => <code>{a.applicationNumber}</code>, sortKey: 'applicationNumber' },
+    { header: 'App no.', render: (a) => <><code>{a.applicationNumber}</code>{a.leadId && <div className="muted sm-text">from lead</div>}</>, sortKey: 'applicationNumber' },
     { header: 'Client', render: (a) => <strong>{a.client.fullName}</strong>, sortKey: 'client' },
     { header: 'Product', render: (a) => a.loanProduct.name, sortKey: 'product' },
     { header: 'Amount', render: (a) => <span className="num">{inr(a.requestedAmount)}</span>, sortKey: 'requestedAmount' },
     { header: 'Tenure', render: (a) => `${a.tenureMonths} mo`, sortKey: 'tenureMonths' },
+    { header: 'Submitted', render: (a) => fmtDate(a.createdAt), sortKey: 'submittedAt' },
   ];
 
   if (canReview || canDisburse) {

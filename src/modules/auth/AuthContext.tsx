@@ -46,7 +46,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   const login = async (email: string, password: string) => {
-    const { data } = await api.post('/auth/login', { email, password });
+    // Portal lock: this is the Admin Panel website — field officers must use the
+    // Field Officer site instead. The backend rejects a role/portal mismatch.
+    const { data } = await api.post('/auth/login', { email, password, portal: 'ADMIN' });
     const { accessToken, refreshToken, user } = data.data;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);

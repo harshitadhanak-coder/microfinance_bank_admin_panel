@@ -137,13 +137,29 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
 .panel-head h2 { margin: 0; }
 
 /* ── Tables ── */
-table { width: 100%; border-collapse: collapse; font-size: 0.92rem; }
-th { text-align: left; font-size: 0.76rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); padding: 0.7rem 1rem; border-bottom: 1px solid var(--line); background: #fbfaf7; }
-td { padding: 0.7rem 1rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+/* Horizontal scroll wrapper so cells never wrap awkwardly on narrow screens. */
+.table-scroll { width: 100%; overflow-x: auto; }
+table { width: 100%; border-collapse: collapse; font-size: 0.9rem; }
+th {
+  text-align: left; font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
+  letter-spacing: 0.06em; color: var(--muted); white-space: nowrap;
+  padding: 0.7rem 1.1rem; border-bottom: 1px solid var(--line);
+  background: #f3f1ea; position: sticky; top: 0; z-index: 1;
+}
+td {
+  padding: 0.75rem 1.1rem; border-bottom: 1px solid var(--line);
+  vertical-align: middle; white-space: nowrap;
+}
+/* Zebra striping + hover for easy row scanning. */
+tbody tr:nth-child(even) td { background: #fbfaf7; }
+tbody tr:hover td { background: #f1ede1; }
 tr:last-child td { border-bottom: none; }
-table.plain th, table.plain td { padding: 0.45rem 0.3rem; border: none; background: none; }
+/* Let a cell opt back into wrapping (e.g. long free-text notes). */
+td.wrap { white-space: normal; }
+table.plain th, table.plain td { padding: 0.45rem 0.3rem; border: none; background: none; white-space: normal; position: static; }
+table.plain tbody tr:nth-child(even) td, table.plain tbody tr:hover td { background: none; }
 th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--ink); background: #f4f2ec; }
+th.sortable:hover { color: var(--ink); background: #ebe7db; }
 .th-inner { display: inline-flex; align-items: center; gap: 0.35rem; white-space: nowrap; }
 .sort-caret { font-size: 0.7rem; line-height: 1; }
 .sort-caret.idle { color: var(--muted); opacity: 0.4; }

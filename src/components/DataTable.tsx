@@ -156,6 +156,7 @@ export function DataTable<T extends { id: string }>({
         <div className="panel pad muted">{hasSearch ? 'No records match your search.' : empty ?? 'Nothing here yet.'}</div>
       ) : (
         <div className="panel">
+          <div className="table-scroll">
           <table>
             <thead>
               <tr>
@@ -188,6 +189,7 @@ export function DataTable<T extends { id: string }>({
               ))}
             </tbody>
           </table>
+          </div>
 
           {showPager && (
             <div className="table-pager">

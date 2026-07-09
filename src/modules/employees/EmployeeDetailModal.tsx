@@ -18,7 +18,8 @@ interface SalaryStructure {
 interface EmployeeDetail {
   id: string; employeeCode: string; fullName: string; phoneNumber: string; email?: string | null;
   designation: string; employmentStatus: string; joiningDate: string; branchId?: string | null;
-  branch?: { name: string } | null; bankIfscCode?: string | null; bankAccountMasked?: string | null;
+  branch?: { name: string; code?: string | null; city?: string | null; state?: string | null } | null;
+  bankIfscCode?: string | null; bankAccountMasked?: string | null;
   panMasked?: string | null; salaryStructure?: SalaryStructure | null;
 }
 
@@ -41,11 +42,16 @@ const emptyEdit = {
   joiningDate: '', employmentStatus: 'ACTIVE', bankAccountNumber: '', bankIfscCode: '', panNumber: '',
 };
 
-type Tab = 'details' | 'salary' | 'documents' | 'edit';
+type Tab = 'personal' | 'branch' | 'kyc' | 'salary' | 'edit';
 
+/**
+ * Employee workspace under Employee Management. Splits the profile into the
+ * sections HR works with: personal details, posting (branch), KYC documents and
+ * salary — plus an edit form for HR managers.
+ */
 export default function EmployeeDetailModal({ employeeId, canManage, onClose }: Props) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('details');
+  const [tab, setTab] = useState<Tab>('personal');
 
   const detailQuery = useQuery({
     queryKey: ['/employees', employeeId],
@@ -88,12 +94,12 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
       qc.invalidateQueries({ queryKey: ['/employees'] });
       detailQuery.refetch();
       setEditError('');
-      setTab('details');
+      setTab('personal');
     },
     onError: (err) => setEditError(apiMessage(err, 'Could not save changes.')),
   });
 
-  // ── Documents ──
+  // ── KYC documents ──
   const documentsQuery = useQuery({
     queryKey: ['/documents', employeeId],
     queryFn: () => api.get(`/documents?employeeId=${employeeId}`).then((r) => r.data.data as EmployeeDocument[]),
@@ -159,9 +165,10 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
   const documents = documentsQuery.data ?? [];
 
   const tabs: { key: Tab; label: string }[] = [
-    { key: 'details', label: 'Details' },
+    { key: 'personal', label: 'Personal Details' },
+    { key: 'branch', label: 'Branch' },
+    { key: 'kyc', label: `KYC Document${documents.length ? ` (${documents.length})` : ''}` },
     { key: 'salary', label: 'Salary' },
-    { key: 'documents', label: `Documents${documents.length ? ` (${documents.length})` : ''}` },
     ...(canManage ? [{ key: 'edit' as Tab, label: 'Edit' }] : []),
   ];
 
@@ -188,41 +195,38 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
               ))}
             </div>
 
-            {tab === 'details' && (
+            {tab === 'personal' && (
               <dl className="detail-list">
+                <div><dt>Employee code</dt><dd><code>{detail.employeeCode}</code></dd></div>
+                <div><dt>Designation</dt><dd>{detail.designation}</dd></div>
+                <div><dt>Status</dt><dd>{statusPill(detail.employmentStatus)}</dd></div>
                 <div><dt>Phone</dt><dd>{detail.phoneNumber}</dd></div>
                 <div><dt>Email</dt><dd>{detail.email ?? '—'}</dd></div>
-                <div><dt>Branch</dt><dd>{detail.branch?.name ?? '—'}</dd></div>
                 <div><dt>Joining date</dt><dd>{fmtDate(detail.joiningDate)}</dd></div>
+                <div><dt>PAN</dt><dd>{detail.panMasked ?? '—'}</dd></div>
                 <div><dt>Bank account</dt><dd>{detail.bankAccountMasked ?? '—'}</dd></div>
                 <div><dt>IFSC</dt><dd>{detail.bankIfscCode ?? '—'}</dd></div>
-                <div><dt>PAN</dt><dd>{detail.panMasked ?? '—'}</dd></div>
               </dl>
             )}
 
-            {tab === 'salary' && (
-              salary ? (
+            {tab === 'branch' && (
+              detail.branch ? (
                 <dl className="detail-list">
-                  <div><dt>Basic</dt><dd>{inr(salary.basicSalary)}</dd></div>
-                  <div><dt>HRA</dt><dd>{inr(salary.houseRentAllowance)}</dd></div>
-                  <div><dt>Dearness</dt><dd>{inr(salary.dearnessAllowance)}</dd></div>
-                  <div><dt>Special</dt><dd>{inr(salary.specialAllowance)}</dd></div>
-                  <div><dt>Gross (monthly)</dt><dd><strong>{inr(
-                    Number(salary.basicSalary) + Number(salary.houseRentAllowance) +
-                    Number(salary.dearnessAllowance) + Number(salary.specialAllowance),
-                  )}</strong></dd></div>
-                  <div><dt>PF applicable</dt><dd>{salary.isProvidentFundApplicable ? 'Yes' : 'No'}</dd></div>
-                  <div><dt>ESI applicable</dt><dd>{salary.isStateInsuranceApplicable ? 'Yes' : 'No'}</dd></div>
-                  <div><dt>Effective from</dt><dd>{fmtDate(salary.effectiveFrom)}</dd></div>
+                  <div><dt>Branch</dt><dd>{detail.branch.name}</dd></div>
+                  <div><dt>Branch code</dt><dd>{detail.branch.code ? <code>{detail.branch.code}</code> : '—'}</dd></div>
+                  <div><dt>City</dt><dd>{detail.branch.city ?? '—'}</dd></div>
+                  <div><dt>State</dt><dd>{detail.branch.state ?? '—'}</dd></div>
                 </dl>
-              ) : <p className="muted">No salary structure on record.</p>
+              ) : (
+                <p className="muted">This employee is not assigned to a branch yet.{canManage ? ' Use the Edit tab to assign one.' : ''}</p>
+              )
             )}
 
-            {tab === 'documents' && (
+            {tab === 'kyc' && (
               <>
                 <div className="doc-list">
                   {documentsQuery.isLoading && <p className="muted">Loading…</p>}
-                  {!documentsQuery.isLoading && documents.length === 0 && <p className="muted">No documents uploaded yet.</p>}
+                  {!documentsQuery.isLoading && documents.length === 0 && <p className="muted">No KYC documents uploaded yet.</p>}
                   {documents.map((d) => (
                     <div key={d.id} className="doc-row">
                       <span className="doc-meta">
@@ -252,6 +256,24 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
               </>
             )}
 
+            {tab === 'salary' && (
+              salary ? (
+                <dl className="detail-list">
+                  <div><dt>Basic</dt><dd>{inr(salary.basicSalary)}</dd></div>
+                  <div><dt>HRA</dt><dd>{inr(salary.houseRentAllowance)}</dd></div>
+                  <div><dt>Dearness</dt><dd>{inr(salary.dearnessAllowance)}</dd></div>
+                  <div><dt>Special</dt><dd>{inr(salary.specialAllowance)}</dd></div>
+                  <div><dt>Gross (monthly)</dt><dd><strong>{inr(
+                    Number(salary.basicSalary) + Number(salary.houseRentAllowance) +
+                    Number(salary.dearnessAllowance) + Number(salary.specialAllowance),
+                  )}</strong></dd></div>
+                  <div><dt>PF applicable</dt><dd>{salary.isProvidentFundApplicable ? 'Yes' : 'No'}</dd></div>
+                  <div><dt>ESI applicable</dt><dd>{salary.isStateInsuranceApplicable ? 'Yes' : 'No'}</dd></div>
+                  <div><dt>Effective from</dt><dd>{fmtDate(salary.effectiveFrom)}</dd></div>
+                </dl>
+              ) : <p className="muted">No salary structure on record.</p>
+            )}
+
             {tab === 'edit' && canManage && (
               <form className="form-grid" onSubmit={submitEdit}>
                 <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required /></label>
@@ -279,7 +301,7 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
                 {editError && <div className="error-box span-all">{editError}</div>}
                 <div className="span-all row-actions">
                   <button type="submit" disabled={updateEmployee.isPending}>Save changes</button>
-                  <button type="button" className="ghost" onClick={() => setTab('details')}>Cancel</button>
+                  <button type="button" className="ghost" onClick={() => setTab('personal')}>Cancel</button>
                 </div>
               </form>
             )}
