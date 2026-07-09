@@ -100,6 +100,68 @@ export const visibleModules = (role?: string | null): ModuleDef[] => {
   return MODULES.filter((m) => m.roles.includes(r));
 };
 
+/**
+ * HR-facing modules that SUPER_ADMIN sees collected under a single "Human
+ * Resources" sidebar group. The HUMAN_RESOURCES_ADMIN role keeps these as a
+ * plain flat list (its whole sidebar is HR), so grouping only applies to
+ * SUPER_ADMIN — see navItems().
+ */
+export const HR_GROUP_KEYS: ModuleKey[] = [
+  'hrDashboard',
+  'employees',
+  'attendance',
+  'leave',
+  'payroll',
+  'employeeLoans',
+];
+
+export interface NavLinkItem {
+  type: 'link';
+  module: ModuleDef;
+}
+
+export interface NavGroupItem {
+  type: 'group';
+  key: string;
+  label: string;
+  children: ModuleDef[];
+}
+
+export type NavItem = NavLinkItem | NavGroupItem;
+
+/**
+ * Sidebar navigation for a role. For SUPER_ADMIN the HR screens are folded into
+ * one collapsible "Human Resources" group (inserted where the first HR module
+ * would sit) so the long flat list stays readable. Every other role — including
+ * HUMAN_RESOURCES_ADMIN — gets the unchanged flat list.
+ */
+export const navItems = (role?: string | null): NavItem[] => {
+  const mods = visibleModules(role);
+  if (asRole(role) !== 'SUPER_ADMIN') {
+    return mods.map((module) => ({ type: 'link', module }));
+  }
+
+  const items: NavItem[] = [];
+  let hrGroup: NavGroupItem | null = null;
+  for (const module of mods) {
+    if (HR_GROUP_KEYS.includes(module.key)) {
+      if (!hrGroup) {
+        hrGroup = { type: 'group', key: 'hr', label: 'Human Resources', children: [] };
+        items.push(hrGroup);
+      }
+      // The HR overview's own label is just "Dashboard"; inside the SUPER_ADMIN
+      // "Human Resources" group that clashes with the top-level Dashboard, so
+      // show it as "HR Dashboard" here only. HR's own sidebar is unaffected.
+      hrGroup.children.push(
+        module.key === 'hrDashboard' ? { ...module, label: 'HR Dashboard' } : module,
+      );
+    } else {
+      items.push({ type: 'link', module });
+    }
+  }
+  return items;
+};
+
 /** Whether a role may open a given module. SUPER_ADMIN may open anything. */
 export const canAccessModule = (role: string | null | undefined, key: ModuleKey): boolean => {
   const r = asRole(role);

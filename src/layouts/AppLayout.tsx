@@ -1,14 +1,18 @@
 import { useState } from 'react';
-import { Link, NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../modules/auth/AuthContext';
-import { visibleModules } from '../modules/auth/permissions';
+import { navItems } from '../modules/auth/permissions';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
 
-  const nav = visibleModules(user?.role);
+  const nav = navItems(user?.role);
+  const toggleGroup = (key: string) =>
+    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
 
   const nameParts = (user?.fullName ?? '').trim().split(/\s+/).filter(Boolean);
   const initials = ((nameParts[0]?.[0] ?? '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase() || 'U';
@@ -26,9 +30,41 @@ export default function AppLayout() {
       <aside className="sidebar">
         <Link to="/" className="brand"><span className="brand-mark sm">MF</span> Microfinance</Link>
         <nav>
-          {nav.map((n) => (
-            <NavLink key={n.to} to={n.to} end={n.end}>{n.label}</NavLink>
-          ))}
+          {nav.map((item) => {
+            if (item.type === 'link') {
+              return (
+                <NavLink key={item.module.to} to={item.module.to} end={item.module.end}>
+                  {item.module.label}
+                </NavLink>
+              );
+            }
+
+            const childActive = item.children.some((c) =>
+              c.end ? location.pathname === c.to : location.pathname.startsWith(c.to),
+            );
+            const open = openGroups[item.key] ?? childActive;
+
+            return (
+              <div key={item.key} className="nav-group">
+                <button
+                  type="button"
+                  className={`nav-group-toggle${childActive ? ' has-active' : ''}`}
+                  aria-expanded={open}
+                  onClick={() => toggleGroup(item.key)}
+                >
+                  <span>{item.label}</span>
+                  <span className={`nav-caret${open ? ' open' : ''}`} aria-hidden="true">▾</span>
+                </button>
+                {open && (
+                  <div className="nav-sub">
+                    {item.children.map((c) => (
+                      <NavLink key={c.to} to={c.to} end={c.end}>{c.label}</NavLink>
+                    ))}
+                  </div>
+                )}
+              </div>
+            );
+          })}
         </nav>
         <div className="sidebar-foot">
           <div className="user-chip" tabIndex={0} role="button" aria-label="Account details">

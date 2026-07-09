@@ -53,6 +53,23 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
 }
 .sidebar nav a:hover { background: rgba(255,255,255,0.06); color: #fff; }
 .sidebar nav a.active { background: var(--brass); color: var(--ink); font-weight: 600; }
+.sidebar nav .nav-group { display: flex; flex-direction: column; gap: 2px; }
+.sidebar nav .nav-group-toggle {
+  display: flex; align-items: center; justify-content: space-between; gap: 0.5rem;
+  width: 100%; background: none; border: none; cursor: pointer; text-align: left;
+  color: #c4cec6; padding: 0.55rem 0.7rem; border-radius: 7px;
+  font-family: inherit; font-weight: 500; font-size: 0.93rem;
+}
+.sidebar nav .nav-group-toggle:hover { background: rgba(255,255,255,0.06); color: #fff; }
+.sidebar nav .nav-group-toggle.has-active { color: #fff; }
+.sidebar nav .nav-caret { font-size: 0.7rem; line-height: 1; transition: transform 0.15s ease; }
+.sidebar nav .nav-caret.open { transform: rotate(180deg); }
+.sidebar nav .nav-sub {
+  display: flex; flex-direction: column; gap: 2px;
+  margin: 2px 0 4px 0.7rem; padding-left: 0.55rem;
+  border-left: 1px solid rgba(255,255,255,0.14);
+}
+.sidebar nav .nav-sub a { font-size: 0.9rem; padding: 0.5rem 0.65rem; }
 .sidebar-foot { border-top: 1px solid rgba(255,255,255,0.12); padding-top: 0.9rem; display: grid; gap: 0.6rem; }
 .user-chip { position: relative; display: flex; align-items: center; gap: 0.6rem; padding: 0.15rem 0.1rem; cursor: default; outline: none; }
 .user-avatar {
