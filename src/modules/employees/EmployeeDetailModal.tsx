@@ -175,7 +175,7 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {!detail ? (
           <p className="muted">Loading…</p>
         ) : (

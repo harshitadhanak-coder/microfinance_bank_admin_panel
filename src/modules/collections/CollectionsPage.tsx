@@ -22,12 +22,17 @@ interface CollectionLoan {
   assignedOfficer: { id: string; fullName: string } | null;
 }
 interface Employee { id: string; fullName: string; employeeCode: string; designation: string | null }
+type DayCloseStatus = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'APPROVED' | 'REJECTED';
 interface DayEndSettlement {
   id: string;
   businessDate: string;
   totalCashCollected: string;
   totalCashDeposited: string;
   varianceAmount: string;
+  status: DayCloseStatus;
+  depositReference: string | null;
+  submittedAt: string | null;
+  reviewNote: string | null;
   approvedById: string | null;
   employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
 }
@@ -425,10 +430,23 @@ function AssignModal({
 }
 
 // ── Settlement verification: day-end cash ───────────────────────────────────
+//
+// Lifecycle: the officer SUBMITS the day's cash; the branch VERIFIES the
+// counted amount against the ledger, then APPROVES (locks) it — or REJECTS it
+// with a note so the officer corrects and resubmits.
+const DAY_CLOSE_PILL: Record<DayCloseStatus, string> = {
+  DRAFT: 'pill-new', SUBMITTED: 'pill-new', VERIFIED: 'pill-applied',
+  APPROVED: 'pill-approved', REJECTED: 'pill-rejected',
+};
+const DAY_CLOSE_LABEL: Record<DayCloseStatus, string> = {
+  DRAFT: 'Draft', SUBMITTED: 'Submitted', VERIFIED: 'Verified', APPROVED: 'Approved', REJECTED: 'Rejected',
+};
+
 function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; branchScoped: boolean }) {
   const queryClient = useQueryClient();
   const [status, setStatus] = useState('PENDING');
   const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
+  const [rejecting, setRejecting] = useState<DayEndSettlement | null>(null);
 
   const url = `/collections/settlements${status ? `?status=${status}` : ''}`;
   const { data, isLoading } = useQuery({
@@ -436,33 +454,27 @@ function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; bran
     queryFn: () => api.get(url).then((r) => r.data.data as DayEndSettlement[]),
   });
   const rows = data ?? [];
+  const refresh = () => queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/collections/settlements') });
 
-  const accept = useMutation({
-    mutationFn: (id: string) => api.post(`/collections/settlements/${id}/accept`),
-    onSuccess: () => {
-      setBanner({ ok: true, text: 'Settlement accepted and locked for that officer.' });
-      void queryClient.invalidateQueries({ queryKey: [url] });
+  const act = useMutation({
+    mutationFn: ({ id, action, note }: { id: string; action: 'verify' | 'accept' | 'reject'; note?: string }) =>
+      api.post(`/collections/settlements/${id}/${action}`, note ? { note } : undefined),
+    onSuccess: (res, variables) => {
+      setBanner({ ok: true, text: res.data?.message ?? 'Settlement updated.' });
+      if (variables.action === 'reject') setRejecting(null);
+      void refresh();
     },
-    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not accept the settlement.') }),
+    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not update the settlement.') }),
   });
-
-  const statusPill = (s: DayEndSettlement) => {
-    if (!s.approvedById) {
-      return Number(s.varianceAmount) !== 0
-        ? <span className="pill pill-rejected">Discrepancy</span>
-        : <span className="pill pill-new">Pending</span>;
-    }
-    return <span className="pill pill-approved">Accepted</span>;
-  };
 
   const columns: Column<DayEndSettlement>[] = [
     { header: 'Field officer', render: (s) => <><strong>{s.employee.fullName}</strong><div className="muted sm-text">{s.employee.employeeCode}</div></>, sortValue: (s) => s.employee.fullName },
     ...(branchScoped ? [] : [{ header: 'Branch', render: (s) => s.employee.branch?.name ?? '—', sortValue: (s) => s.employee.branch?.name ?? '' } satisfies Column<DayEndSettlement>]),
     { header: 'Date', render: (s) => fmtDate(s.businessDate), sortValue: (s) => new Date(s.businessDate) },
-    { header: 'Expected cash', render: (s) => <span className="num">{inr(s.totalCashCollected)}</span>, sortValue: (s) => Number(s.totalCashCollected) },
-    { header: 'Declared', render: (s) => <span className="num">{inr(s.totalCashDeposited)}</span>, sortValue: (s) => Number(s.totalCashDeposited) },
+    { header: 'System cash', render: (s) => <span className="num">{inr(s.totalCashCollected)}</span>, sortValue: (s) => Number(s.totalCashCollected) },
+    { header: 'Handed over', render: (s) => <span className="num">{inr(s.totalCashDeposited)}</span>, sortValue: (s) => Number(s.totalCashDeposited) },
     {
-      header: 'Difference',
+      header: 'Short / Excess',
       render: (s) => {
         const v = Number(s.varianceAmount);
         const cls = v === 0 ? '' : v > 0 ? 'pill pill-rejected' : 'pill pill-sma_0';
@@ -471,14 +483,41 @@ function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; bran
       },
       sortValue: (s) => Number(s.varianceAmount),
     },
-    { header: 'Status', render: (s) => statusPill(s) },
+    { header: 'Deposit ref.', render: (s) => s.depositReference ? <span className="muted sm-text">{s.depositReference}</span> : <span className="muted">—</span> },
+    { header: 'Submitted', render: (s) => s.submittedAt ? fmtDateTime(s.submittedAt) : '—', sortValue: (s) => s.submittedAt ?? '' },
+    {
+      header: 'Status',
+      render: (s) => (
+        <span className={`pill ${DAY_CLOSE_PILL[s.status]}`} title={s.status === 'REJECTED' && s.reviewNote ? s.reviewNote : undefined}>
+          {DAY_CLOSE_LABEL[s.status]}
+        </span>
+      ),
+      sortValue: (s) => s.status,
+    },
     ...(canVerify
       ? [{
-          header: '',
-          render: (s: DayEndSettlement) =>
-            s.approvedById
-              ? <span className="muted sm-text">Locked</span>
-              : <button type="button" className="sm" disabled={accept.isPending} onClick={() => { setBanner(null); accept.mutate(s.id); }}>Accept</button>,
+          header: 'Actions',
+          render: (s: DayEndSettlement) => {
+            if (s.status === 'APPROVED') return <span className="muted sm-text">Locked</span>;
+            if (s.status === 'REJECTED') return <span className="muted sm-text">Awaiting resubmission</span>;
+            return (
+              <div className="row-actions">
+                {s.status === 'SUBMITTED' && (
+                  <button type="button" className="sm" disabled={act.isPending} title="Confirm the counted cash matches the ledger" onClick={() => { setBanner(null); act.mutate({ id: s.id, action: 'verify' }); }}>
+                    Verify
+                  </button>
+                )}
+                {s.status === 'VERIFIED' && (
+                  <button type="button" className="sm" disabled={act.isPending} title="Approve and lock this settlement" onClick={() => { setBanner(null); act.mutate({ id: s.id, action: 'accept' }); }}>
+                    Approve
+                  </button>
+                )}
+                <button type="button" className="sm ghost" disabled={act.isPending} onClick={() => { setBanner(null); setRejecting(s); }}>
+                  Reject
+                </button>
+              </div>
+            );
+          },
         } satisfies Column<DayEndSettlement>]
       : []),
   ];
@@ -487,8 +526,11 @@ function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; bran
     <>
       <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
         <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="PENDING">Pending</option>
-          <option value="ACCEPTED">Accepted</option>
+          <option value="PENDING">Pending review</option>
+          <option value="SUBMITTED">Submitted</option>
+          <option value="VERIFIED">Verified</option>
+          <option value="APPROVED">Approved</option>
+          <option value="REJECTED">Rejected</option>
           <option value="">All</option>
         </select>
       </div>
@@ -499,10 +541,56 @@ function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; bran
         columns={columns}
         rows={rows}
         loading={isLoading}
-        empty={status === 'PENDING' ? 'No settlements waiting to be verified.' : 'No settlements found.'}
+        empty={status === 'PENDING' ? 'No settlements waiting for review.' : 'No settlements found.'}
         searchPlaceholder="Search by field officer…"
       />
+
+      {rejecting && (
+        <RejectSettlementModal
+          settlement={rejecting}
+          pending={act.isPending}
+          onClose={() => setRejecting(null)}
+          onReject={(note) => act.mutate({ id: rejecting.id, action: 'reject', note })}
+        />
+      )}
     </>
+  );
+}
+
+function RejectSettlementModal({
+  settlement,
+  pending,
+  onClose,
+  onReject,
+}: {
+  settlement: DayEndSettlement;
+  pending: boolean;
+  onClose: () => void;
+  onReject: (note: string) => void;
+}) {
+  const [note, setNote] = useState('');
+  return (
+    <div className="modal-overlay" onClick={onClose}>
+      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+        <div className="panel-head">
+          <h2>Reject settlement</h2>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
+        </div>
+        <p className="muted sm-text" style={{ margin: 0 }}>
+          {settlement.employee.fullName} · {fmtDate(settlement.businessDate)} · system cash {inr(settlement.totalCashCollected)}, handed over {inr(settlement.totalCashDeposited)}.
+          The officer will see this note and must resubmit the day's settlement.
+        </p>
+        <label style={{ marginTop: '0.5rem' }}>Reason
+          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} placeholder="e.g. Cash short by ₹500 — recount and resubmit" />
+        </label>
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim())}>
+            {pending ? 'Rejecting…' : 'Reject settlement'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 

@@ -128,7 +128,7 @@ export default function PayrollPage() {
 
       {openRun && (
         <div className="modal-overlay" onClick={() => setOpenRun(null)}>
-          <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+          <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
             <header className="row">
               <div>
                 <h2>Payslips — {MONTHS[openRun.month - 1]} {openRun.year}</h2>

@@ -16,7 +16,9 @@
   /* Shared sizing so buttons, inputs and icon buttons always line up. */
   --control-h: 38px;
   --control-h-sm: 30px;
-  --modal-pad: 24px;
+  /* Modal breathing room: 28px on every side; titles sit 24px from the top
+     edge and footer buttons 24px from the bottom edge. */
+  --modal-pad: 28px;
   --shadow-modal: 0 24px 60px rgba(17, 39, 31, 0.28);
   font-size: 15px;
 }
@@ -311,8 +313,8 @@ button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: tr
 .modal {
   background: var(--surface); border: 1px solid var(--line); border-radius: 16px;
   padding: var(--modal-pad);
-  width: min(400px, 92vw); display: grid; justify-items: center; text-align: center;
-  gap: 0.5rem;
+  width: min(420px, 92vw); display: grid; justify-items: center; text-align: center;
+  gap: 0.6rem;
   box-shadow: var(--shadow-modal);
   animation: modal-in 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
@@ -323,7 +325,7 @@ button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: tr
 }
 .modal h2 { margin: 0; font-size: 1.2rem; }
 .modal p { margin: 0; font-size: 0.92rem; line-height: 1.45; max-width: 30ch; }
-.modal-actions { display: flex; gap: 0.6rem; margin-top: 1.2rem; width: 100%; }
+.modal-actions { display: flex; gap: 0.75rem; margin-top: 24px; width: 100%;padding-bottom: 20px; }
 .modal-actions button { flex: 1; padding: 0.6rem 1rem; }
 .modal-actions button.danger { background: var(--red); }
 .modal-actions button.danger:hover { background: #922e26; }
@@ -333,48 +335,56 @@ button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: tr
    long forms never overflow and the buttons stay visible. Structure-agnostic:
    works whether the action bar is a direct child or nested inside a <form>. */
 .modal-wide {
-  width: min(660px, 94vw);
-  max-height: min(90vh, 860px);
+  width: min(680px, 94vw);
+  max-height: min(90vh, 880px);
   overflow-y: auto;
   padding: 0;                 /* each row owns its own padding */
-  gap: 1rem;
+  gap: 1.15rem;
   justify-items: stretch;
   text-align: left;
 }
+/* Larger variant for table-heavy popups (detail views, payslips, results). */
+.modal-wide.modal-lg { width: min(880px, 96vw); }
 /* Uniform horizontal padding + shrink-to-fit for every row. */
 .modal-wide > * { padding-left: var(--modal-pad); padding-right: var(--modal-pad); min-width: 0; }
-/* Pinned header — only the modal's own top header, never an in-body section head. */
+/* Bare first-child text (loading placeholders) still respects the padding. */
+.modal-wide > p:first-child { margin: 0; padding-top: var(--modal-pad); padding-bottom: var(--modal-pad); }
+/* Pinned header — only the modal's own top header, never an in-body section head.
+   Title sits 24px from the top edge. */
 .modal-wide > .panel-head:first-child,
 .modal-wide > header:first-child {
   position: sticky; top: 0; z-index: 3;
   display: flex; align-items: center; justify-content: space-between; gap: 0.75rem;
-  margin: 0; padding-top: 18px; padding-bottom: 16px;
+  margin: 0; padding-top: 24px; padding-bottom: 18px;
   background: var(--surface); border-bottom: 1px solid var(--line);
   border-radius: 16px 16px 0 0;
 }
 .modal-wide > .panel-head:first-child h2,
-.modal-wide > header:first-child h2 { font-size: 1.12rem; }
-/* Pinned footer — only the modal's own bottom action bar. */
+.modal-wide > header:first-child h2 { font-size: 1.15rem; }
+/* Pinned footer — only the modal's own bottom action bar. 20px above the
+   buttons, 24px between them and the bottom edge. */
 .modal-wide > .modal-actions:last-child {
   position: sticky; bottom: 0; z-index: 3;
-  margin: 0; padding-top: 14px; padding-bottom: 16px;
+  margin: 0; padding-top: 20px; padding-bottom: 24px;
   background: var(--surface); border-top: 1px solid var(--line);
   border-radius: 0 0 16px 16px;
-  justify-content: flex-end;
 }
-.modal-wide > .modal-actions:last-child button { flex: 0 0 auto; min-width: 110px; }
+/* Wide-modal action bars never stretch their buttons: right-aligned,
+   comfortably sized. (Not tied to :last-child so in-body bars match too.) */
+.modal-wide .modal-actions { justify-content: flex-end; }
+.modal-wide .modal-actions > button { flex: 0 0 auto; min-width: 112px; padding-left: 1.25rem; padding-right: 1.25rem; }
 
 /* Form controls must never expand the modal past its width — a <select> with a
    long option label is the classic offender. Keep them fluid and clipped. */
 .modal label { min-width: 0; }
 .modal input, .modal select, .modal textarea { width: 100%; min-width: 0; max-width: 100%; }
 /* Two columns inside a modal (not the page's three) so fields aren't cramped. */
-.modal .form-grid { grid-template-columns: 1fr 1fr; }
+.modal .form-grid { grid-template-columns: 1fr 1fr; gap: 1rem 1.25rem; margin-bottom: 0.4rem; }
 @media (max-width: 560px) { .modal .form-grid { grid-template-columns: 1fr; } }
 
 /* Scrollable body wrapper for modals that separate a distinct content region
    from the pinned header/footer (e.g. the import dialog). */
-.modal-body { display: grid; gap: 0.85rem; align-content: start; }
+.modal-body { display: grid; gap: 1.25rem; align-content: start; }
 
 /* ── Import dialog ── */
 /* Numbered step rows: badge on the left, step content on the right. */
@@ -398,8 +408,8 @@ button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: tr
 
 .dropzone {
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
-  gap: 0.45rem; padding: 1.6rem 1rem; cursor: pointer;
-  border: 1.5px dashed #cfccbf; border-radius: 11px; background: #faf9f5;
+  gap: 0.5rem; padding: 2rem 1.5rem; cursor: pointer;
+  border: 1.5px dashed #cfccbf; border-radius: 12px; background: #faf9f5;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .dropzone:hover, .dropzone:focus-within { border-color: var(--brass); background: #f6f2e8; }
@@ -422,8 +432,8 @@ button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: tr
 .link-btn:hover { background: none; color: var(--ink); }
 
 .section-title { margin: 0.6rem 0 0; font-size: 0.95rem; color: var(--ink-2); }
-.detail-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem 1.4rem; margin: 0; }
-.detail-list > div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding: 0.35rem 0; font-size: 0.88rem; }
+.detail-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem 1.75rem; margin: 0; }
+.detail-list > div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding: 0.5rem 0; font-size: 0.88rem; }
 .detail-list dt { color: var(--muted); }
 .detail-list dd { margin: 0; text-align: right; }
 @media (max-width: 640px) { .detail-list { grid-template-columns: 1fr; } }

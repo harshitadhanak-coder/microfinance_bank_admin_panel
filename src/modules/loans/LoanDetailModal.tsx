@@ -88,7 +88,7 @@ export default function LoanDetailModal({ loanId, onClose }: { loanId: string; o
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         {!loan ? (
           <p className="muted">Loading…</p>
         ) : (
