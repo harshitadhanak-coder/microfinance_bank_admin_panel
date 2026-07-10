@@ -1,43 +1,34 @@
-# syntax=docker/dockerfile:1
-
-# =============================================================================
-#  Microfinance Admin Panel — production image
-#  Multi-stage: build the Vite SPA -> serve static assets via unprivileged nginx.
-# =============================================================================
-
-############################
-# Build — compile the Vite/React SPA
-############################
 FROM node:22-alpine AS build
-WORKDIR /app
-COPY package.json package-lock.json ./
-RUN --mount=type=cache,target=/root/.npm npm ci
 
-# VITE_API_BASE_URL is baked into the bundle at build time.
-# Default empty => same-origin: nginx reverse-proxies /api/* to the backend,
-# so no CORS and no hardcoded host is required. Override only for a split-host
-# deployment (e.g. https://api.your-domain.com).
-ARG VITE_API_BASE_URL=""
-ENV VITE_API_BASE_URL=$VITE_API_BASE_URL
+WORKDIR /app
+
+COPY package*.json ./
+RUN npm ci
 
 COPY . .
+
+# Copy environment file
+COPY .env .env
+
+# Build React/Vite app
 RUN npm run build
 
 
-############################
-# Runtime — static files on a non-root nginx
-############################
-# nginx-unprivileged runs as uid 101 (non-root) and listens on 8080 by default.
-FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
+FROM nginx:alpine
 
-# Reverse-proxy + SPA-fallback config.
+# Remove default nginx files
+RUN rm -rf /usr/share/nginx/html/*
+
+
+# Copy environment file
+COPY .env .env
+
+# Copy custom nginx config
 COPY nginx.conf /etc/nginx/conf.d/default.conf
 
-# Static build output.
+# Copy build output
 COPY --from=build /app/dist /usr/share/nginx/html
 
 EXPOSE 8080
 
-# Probe nginx's own lightweight health route (does not depend on the backend).
-HEALTHCHECK --interval=30s --timeout=5s --start-period=10s --retries=3 \
-  CMD ["sh", "-c", "wget -q -O /dev/null http://127.0.0.1:8080/healthz || exit 1"]
+CMD ["nginx", "-g", "daemon off;"]

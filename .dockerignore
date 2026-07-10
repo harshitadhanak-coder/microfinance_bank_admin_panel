@@ -4,8 +4,6 @@ dist
 
 # Secrets & local env — never bake into an image.
 # VITE_API_BASE_URL is injected via build-arg, not read from .env files.
-.env
-.env.*
 !.env.example
 
 # VCS & tooling
