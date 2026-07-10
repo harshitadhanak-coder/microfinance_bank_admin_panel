@@ -106,12 +106,13 @@ export default function LeadFormModal({ lead, onClose }: { lead?: LeadFormLead |
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <header>
+        <div className="panel-head">
           <h2>{isEdit ? 'Edit lead' : 'New lead'}</h2>
-          <p className="muted">{isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}</p>
-        </header>
+          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+        </div>
+        <p className="muted sm-text">{isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}</p>
 
-        <form className="form-grid" onSubmit={submit}>
+        <form id="lead-form" className="form-grid" onSubmit={submit}>
           <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required minLength={2} /></label>
           <label>Phone<input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} required placeholder="+91…" /></label>
           <label>Requested amount (₹)<input type="number" min={0} step="0.01" value={form.requestedAmount} onChange={(e) => setForm({ ...form, requestedAmount: e.target.value })} /></label>
@@ -142,11 +143,12 @@ export default function LeadFormModal({ lead, onClose }: { lead?: LeadFormLead |
           )}
 
           {error && <div className="error-box span-all">{error}</div>}
-          <div className="span-all row-actions">
-            <button type="submit" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Capture lead'}</button>
-            <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          </div>
         </form>
+
+        <div className="modal-actions">
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" form="lead-form" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Capture lead'}</button>
+        </div>
       </div>
     </div>
   );

@@ -157,7 +157,7 @@ export default function LoanDetailModal({ loanId, onClose }: { loanId: string; o
             )}
 
             {tab === 'schedule' && (
-              <div className="panel" style={{ maxHeight: '46vh', overflowY: 'auto' }}>
+              <div className="panel table-scroll" style={{ maxHeight: '46vh', overflowY: 'auto' }}>
                 <table>
                   <thead>
                     <tr><th>#</th><th>Due date</th><th>Principal</th><th>Interest</th><th>Total due</th><th>Paid</th><th>Status</th></tr>

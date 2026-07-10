@@ -46,6 +46,12 @@ export interface ModuleDef {
   roles: Role[];
   /** Sidebar group. Omitted for top-level links (e.g. Dashboard). */
   group?: ModuleGroup;
+  /**
+   * Hidden from the sidebar but still routable by URL. Used for screens whose
+   * function is reached through another module (loan applications live under
+   * the loan flow; officer-linking lives inside Collections & Settlements).
+   */
+  hidden?: boolean;
 }
 
 const ALL_ROLES: Role[] = [
@@ -77,9 +83,11 @@ export const MODULES: ModuleDef[] = [
   // Operations
   { key: 'branches', to: '/branches', label: 'Branch Master', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
   { key: 'leads', to: '/leads', label: 'Lead Review', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
-  { key: 'applications', to: '/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
+  // Reached through the loan flow, so hidden from the sidebar (still routable).
+  { key: 'applications', to: '/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations', hidden: true },
   { key: 'loans', to: '/loans', label: 'Loan List', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
-  { key: 'loanLink', to: '/loan-link', label: 'Loan Link with FO', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations' },
+  // Officer-linking now lives inside Collections & Settlements, so hidden here.
+  { key: 'loanLink', to: '/loan-link', label: 'Loan Link with FO', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations', hidden: true },
   // Collections & Settlements — one screen: assign loans to field officers for
   // collection, and verify each officer's day-end cash (plus settlement offers
   // / NPA classification for HQ & accounts).
@@ -102,6 +110,12 @@ export const ACTION_ROLES = {
   'lead:stage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'FIELD_OFFICER'],
   'application:review': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
   'application:disburse': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
+  // POST /loans and POST /loans/import — back-office quick-create + bulk import
+  'loan:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
+  // PATCH /loans/:id — edit a loan's officer / purpose
+  'loan:edit': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
+  // POST /collections/payments/manual · /import, PATCH /collections/payments/:id
+  'collection:record': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'],
   // PATCH /loans/:id/assign-officer — Loan Link with Field Officer
   'loan:link': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'],
   // POST /collections/settlements/:id/accept — Settlement Verification
@@ -150,7 +164,8 @@ export type NavItem = NavLinkItem | NavGroupItem;
  * whose entire sidebar is HR — keeps a flat list instead of a single group.
  */
 export const navItems = (role?: string | null): NavItem[] => {
-  const mods = visibleModules(role);
+  // Hidden modules stay routable (see ModuleDef.hidden) but never appear in the sidebar.
+  const mods = visibleModules(role).filter((m) => !m.hidden);
   const r = asRole(role);
 
   if (r === 'HUMAN_RESOURCES_ADMIN') {
