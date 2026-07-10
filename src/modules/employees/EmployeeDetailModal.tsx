@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import { X } from '../../components/icons';
 
 interface Props {
   employeeId: string;
@@ -184,7 +185,10 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
                 <h2>{detail.fullName}</h2>
                 <p className="muted">{detail.designation} · <code>{detail.employeeCode}</code></p>
               </div>
-              {statusPill(detail.employmentStatus)}
+              <div className="row-actions">
+                {statusPill(detail.employmentStatus)}
+                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
+              </div>
             </header>
 
             <div className="tabs">

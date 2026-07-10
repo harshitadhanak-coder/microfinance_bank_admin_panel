@@ -1,7 +1,36 @@
-import { useState } from 'react';
+import { ReactNode, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../modules/auth/AuthContext';
 import { navItems } from '../modules/auth/permissions';
+import type { ModuleKey } from '../modules/auth/permissions';
+import {
+  Banknote, Briefcase, CalendarCheck, CalendarOff, ChevronDown, HandCoins,
+  Landmark, LayoutDashboard, ListChecks, LogOut, Settings2, Target, UserCheck,
+  Users, Wallet,
+} from '../components/icons';
+
+/** One icon per navigation module so the sidebar reads at a glance. */
+const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
+  dashboard: <LayoutDashboard />,
+  hrDashboard: <LayoutDashboard />,
+  employees: <Users />,
+  attendance: <CalendarCheck />,
+  leave: <CalendarOff />,
+  payroll: <Wallet />,
+  employeeLoans: <Banknote />,
+  branches: <Landmark />,
+  loans: <ListChecks />,
+  loanLink: <UserCheck />,
+  applications: <ListChecks />,
+  leads: <Target />,
+  collections: <HandCoins />,
+  settlements: <HandCoins />,
+};
+
+const GROUP_ICONS: Record<string, ReactNode> = {
+  hr: <Briefcase />,
+  operations: <Settings2 />,
+};
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -34,7 +63,8 @@ export default function AppLayout() {
             if (item.type === 'link') {
               return (
                 <NavLink key={item.module.to} to={item.module.to} end={item.module.end}>
-                  {item.module.label}
+                  {MODULE_ICONS[item.module.key]}
+                  <span>{item.module.label}</span>
                 </NavLink>
               );
             }
@@ -42,7 +72,8 @@ export default function AppLayout() {
             const childActive = item.children.some((c) =>
               c.end ? location.pathname === c.to : location.pathname.startsWith(c.to),
             );
-            const open = openGroups[item.key] ?? childActive;
+            // Collapsed by default; the user opens a section explicitly.
+            const open = openGroups[item.key] ?? false;
 
             return (
               <div key={item.key} className="nav-group">
@@ -52,8 +83,10 @@ export default function AppLayout() {
                   aria-expanded={open}
                   onClick={() => toggleGroup(item.key)}
                 >
-                  <span>{item.label}</span>
-                  <span className={`nav-caret${open ? ' open' : ''}`} aria-hidden="true">▾</span>
+                  {GROUP_ICONS[item.key]}
+                  <span className="nav-label">{item.label}</span>
+                  {!open && childActive && <span className="nav-active-dot" aria-hidden="true" />}
+                  <span className={`nav-caret${open ? ' open' : ''}`} aria-hidden="true"><ChevronDown size={14} /></span>
                 </button>
                 {open && (
                   <div className="nav-sub">
@@ -108,7 +141,7 @@ export default function AppLayout() {
               </dl>
             </div>
           </div>
-          <button className="ghost" onClick={() => setConfirmSignOut(true)}>Sign out</button>
+          <button className="ghost" onClick={() => setConfirmSignOut(true)}><LogOut size={15} /> Sign out</button>
         </div>
       </aside>
       <main className="content"><Outlet /></main>
@@ -117,11 +150,7 @@ export default function AppLayout() {
         <div className="modal-overlay" onClick={() => setConfirmSignOut(false)}>
           <div className="modal" role="dialog" aria-modal="true" aria-labelledby="signout-title" onClick={(e) => e.stopPropagation()}>
             <div className="modal-icon" aria-hidden="true">
-              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                <polyline points="16 17 21 12 16 7" />
-                <line x1="21" y1="12" x2="9" y2="12" />
-              </svg>
+              <LogOut size={24} />
             </div>
             <h2 id="signout-title">Sign out?</h2>
             <p className="muted">You will need to sign in again to access the admin panel.</p>

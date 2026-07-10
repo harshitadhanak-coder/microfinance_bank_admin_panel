@@ -6,6 +6,7 @@ import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
+import { X } from '../../components/icons';
 
 interface LinkableLoan {
   id: string;
@@ -127,9 +128,9 @@ function AssignModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>Link loan {loan.loanNumber}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}</p>
 

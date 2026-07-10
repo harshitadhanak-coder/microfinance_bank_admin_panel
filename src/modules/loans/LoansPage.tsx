@@ -9,6 +9,7 @@ import ImportModal from '../../components/ImportModal';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import LoanDetailModal from './LoanDetailModal';
+import { X } from '../../components/icons';
 
 interface Loan {
   id: string; loanNumber: string; principalAmount: string; outstandingPrincipal: string;
@@ -197,9 +198,9 @@ function NewLoanModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>New loan</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>Creates the application, approves and disburses it in one step. Only KYC-verified clients are eligible.</p>
 
@@ -280,9 +281,9 @@ function EditLoanModal({ loan, onClose, onDone }: { loan: Loan; onClose: () => v
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>Edit loan {loan.loanNumber}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}. Financial terms cannot be changed after disbursal.</p>
 

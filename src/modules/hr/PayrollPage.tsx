@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import { X } from '../../components/icons';
 
 interface PayrollRun {
   id: string;
@@ -133,6 +134,7 @@ export default function PayrollPage() {
                 <h2>Payslips — {MONTHS[openRun.month - 1]} {openRun.year}</h2>
                 <p className="muted">{openRun._count?.payslips ?? 0} employees</p>
               </div>
+              <button type="button" className="icon-btn" onClick={() => setOpenRun(null)} aria-label="Close dialog"><X size={18} /></button>
             </header>
             <DataTable
               columns={slipColumns}

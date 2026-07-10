@@ -6,6 +6,7 @@ import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { LeadFormLead } from './LeadFormModal';
+import { X } from '../../components/icons';
 
 interface LeadActivity {
   id: string; fromStage?: string | null; toStage?: string | null; note?: string | null; createdAt: string;
@@ -165,7 +166,10 @@ export default function LeadDetailModal({
                 <h2>{lead.fullName}</h2>
                 <p className="muted">{lead.phoneNumber} · {lead.branch.name}</p>
               </div>
-              {stagePill(lead.stage)}
+              <div className="row-actions">
+                {stagePill(lead.stage)}
+                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
+              </div>
             </header>
 
             <div className="tabs">

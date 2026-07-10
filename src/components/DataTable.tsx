@@ -1,4 +1,5 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
+import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from './icons';
 
 export interface Column<T> {
   header: string;
@@ -141,13 +142,10 @@ export function DataTable<T extends { id: string }>({
     <>
       {showSearch && (
         <div className="table-search">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="11" cy="11" r="8" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
+          <Search size={16} />
           <input value={searchValue} onChange={(e) => onSearch(e.target.value)} placeholder={searchPlaceholder} aria-label="Search table" />
           {hasSearch && (
-            <button type="button" className="table-search-clear" onClick={clearSearch} aria-label="Clear search">×</button>
+            <button type="button" className="table-search-clear" onClick={clearSearch} aria-label="Clear search"><X size={14} /></button>
           )}
         </div>
       )}
@@ -174,7 +172,9 @@ export function DataTable<T extends { id: string }>({
                         {c.header}
                         {sortableCol && (
                           <span className={`sort-caret ${active ? activeDirection : 'idle'}`} aria-hidden="true">
-                            {active ? (activeDirection === 'asc' ? '▲' : '▼') : '↕'}
+                            {active
+                              ? (activeDirection === 'asc' ? <ArrowUp size={13} /> : <ArrowDown size={13} />)
+                              : <ChevronsUpDown size={13} />}
                           </span>
                         )}
                       </span>

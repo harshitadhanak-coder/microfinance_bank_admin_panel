@@ -2,6 +2,7 @@ import { useState } from 'react';
 import axios from 'axios';
 import { api } from '../api/client';
 import { parseSpreadsheet, readCell, downloadCsvTemplate } from '../lib/importFile';
+import { AlertCircle, Check, CheckCircle, Download, Loader, Upload, X } from './icons';
 
 export interface ImportColumn {
   /** API payload field name this column maps to. */
@@ -108,60 +109,78 @@ export default function ImportModal({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
+      <div className="modal modal-wide" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
           <h2>{title}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
 
         {!summary ? (
           <>
             <div className="modal-body">
-              <p className="muted sm-text" style={{ margin: 0 }}>
-                Upload a CSV or Excel (.xlsx) file whose header row matches these columns:
-              </p>
+              {/* Step 1 — get the template */}
+              <div className="import-step">
+                <span className="step-badge" aria-hidden="true">1</span>
+                <div className="step-body">
+                  <span className="step-title">Download the sample template</span>
+                  <p className="step-hint">
+                    Your file's header row must match these columns. Start from the template to get them right.
+                  </p>
+                  <ul className="import-cols">
+                    {columns.map((c) => (
+                      <li key={c.field} className="import-col">
+                        <code>{c.header}</code>
+                        <span className={`import-tag ${c.required ? 'req' : 'opt'}`}>{c.required ? 'Required' : 'Optional'}</span>
+                      </li>
+                    ))}
+                  </ul>
+                  <div>
+                    <button type="button" className="ghost sm" onClick={downloadTemplate}>
+                      <Download size={14} /> Download sample
+                    </button>
+                  </div>
+                </div>
+              </div>
 
-              <ul className="import-cols">
-                {columns.map((c) => (
-                  <li key={c.field} className="import-col">
-                    <code>{c.header}</code>
-                    <span className={`import-tag ${c.required ? 'req' : 'opt'}`}>{c.required ? 'Required' : 'Optional'}</span>
-                  </li>
-                ))}
-              </ul>
+              {/* Step 2 — upload the filled-in file */}
+              <div className={`import-step${ready ? ' done' : ''}`}>
+                <span className="step-badge" aria-hidden="true">{ready ? <Check size={15} /> : '2'}</span>
+                <div className="step-body">
+                  <span className="step-title">Upload your file</span>
+                  <label className={`dropzone ${ready ? 'has-file' : ''}`}>
+                    <input
+                      type="file"
+                      accept=".csv,.xlsx,.xls"
+                      onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ''; }}
+                    />
+                    <span className="dz-icon" aria-hidden="true">
+                      {ready ? <Check size={20} /> : <Upload size={20} />}
+                    </span>
+                    <span className="dz-title">{fileName || 'Choose a file to upload'}</span>
+                    <span className="dz-sub">
+                      {ready
+                        ? `${rows.length} row${rows.length === 1 ? '' : 's'} ready to import`
+                        : 'Click to browse — .csv or .xlsx'}
+                    </span>
+                  </label>
+                </div>
+              </div>
 
-              <label className={`dropzone ${ready ? 'has-file' : ''}`}>
-                <input
-                  type="file"
-                  accept=".csv,.xlsx,.xls"
-                  onChange={(e) => { const f = e.target.files?.[0]; if (f) void onFile(f); e.target.value = ''; }}
-                />
-                <span className="dz-icon" aria-hidden="true">
-                  {ready ? '✓' : (
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                      <polyline points="17 8 12 3 7 8" />
-                      <line x1="12" y1="3" x2="12" y2="15" />
-                    </svg>
-                  )}
-                </span>
-                <span className="dz-title">{fileName || 'Choose a file to upload'}</span>
-                <span className="dz-sub">
-                  {ready
-                    ? `${rows.length} row${rows.length === 1 ? '' : 's'} ready to import`
-                    : 'Click to browse — .csv or .xlsx'}
-                </span>
-              </label>
+              {busy && (
+                <div className="progress-track" role="progressbar" aria-label="Import in progress">
+                  <div className="progress-fill" />
+                </div>
+              )}
 
-              <button type="button" className="link-btn" onClick={downloadTemplate}>Download a template file</button>
-
-              {error && <div className="error-box">{error}</div>}
+              {error && <div className="error-box"><AlertCircle size={16} /><span>{error}</span></div>}
             </div>
 
             <div className="modal-actions">
-              <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+              <button type="button" className="ghost" onClick={onClose} disabled={busy}>Cancel</button>
               <button type="button" disabled={busy || !ready} onClick={submit}>
-                {busy ? 'Importing…' : ready ? `Import ${rows.length} row${rows.length === 1 ? '' : 's'}` : 'Import'}
+                {busy ? <><Loader size={15} /> Importing…</>
+                  : ready ? <><Upload size={15} /> Import {rows.length} row{rows.length === 1 ? '' : 's'}</>
+                  : 'Import'}
               </button>
             </div>
           </>
@@ -169,11 +188,14 @@ export default function ImportModal({
           <>
             <div className="modal-body">
               <div className={summary.failed === 0 ? 'success-box' : 'error-box'}>
-                Imported {summary.created} row{summary.created === 1 ? '' : 's'} successfully
-                {summary.failed > 0 ? `, ${summary.failed} could not be imported.` : '.'}
+                {summary.failed === 0 ? <CheckCircle size={16} /> : <AlertCircle size={16} />}
+                <span>
+                  Imported {summary.created} row{summary.created === 1 ? '' : 's'} successfully
+                  {summary.failed > 0 ? `, ${summary.failed} could not be imported.` : '.'}
+                </span>
               </div>
               {summary.failed > 0 && (
-                <div className="panel table-scroll" style={{ maxHeight: '38vh', overflowY: 'auto' }}>
+                <div className="panel table-scroll" style={{ maxHeight: '38vh' }}>
                   <table>
                     <thead><tr><th>Row</th><th>Reason</th></tr></thead>
                     <tbody>

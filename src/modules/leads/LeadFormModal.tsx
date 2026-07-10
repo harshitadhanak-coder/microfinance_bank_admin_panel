@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import { X } from '../../components/icons';
 
 interface BranchOption { id: string; name: string; code: string }
 interface EmployeeOption { id: string; fullName: string; designation: string; branchId?: string | null }
@@ -108,9 +109,9 @@ export default function LeadFormModal({ lead, onClose }: { lead?: LeadFormLead |
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
         <div className="panel-head">
           <h2>{isEdit ? 'Edit lead' : 'New lead'}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
-        <p className="muted sm-text">{isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}</p>
+        <p className="muted sm-text" style={{ margin: 0 }}>{isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}</p>
 
         <form id="lead-form" className="form-grid" onSubmit={submit}>
           <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required minLength={2} /></label>

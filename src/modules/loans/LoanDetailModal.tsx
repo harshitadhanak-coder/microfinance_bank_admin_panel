@@ -5,6 +5,7 @@ import { api } from '../../api/client';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import { X } from '../../components/icons';
 
 interface Installment {
   id: string; sequenceNumber: number; dueDate: string;
@@ -100,6 +101,7 @@ export default function LoanDetailModal({ loanId, onClose }: { loanId: string; o
               <div className="row-actions">
                 {pill(loan.status)}
                 {pill(loan.assetClassification)}
+                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
               </div>
             </header>
 

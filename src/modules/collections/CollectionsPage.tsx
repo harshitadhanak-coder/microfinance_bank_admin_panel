@@ -8,6 +8,7 @@ import { inr } from '../../components/StatCard';
 import ImportModal from '../../components/ImportModal';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import { X } from '../../components/icons';
 
 // ── Shared types ────────────────────────────────────────────────────────────
 interface CollectionLoan {
@@ -211,9 +212,9 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>Record payment</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>Recorded against the loan's assigned field officer. Amount is allocated to the oldest unpaid installments.</p>
 
@@ -268,9 +269,9 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: PaymentRow; o
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>Edit collection {payment.receiptNumber}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>
           {payment.loan.loanNumber} · {payment.loan.client.fullName} · {inr(payment.amount)}. The amount cannot be edited.
@@ -394,9 +395,9 @@ function AssignModal({
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head" style={{ width: '100%' }}>
+        <div className="panel-head">
           <h2>Assign loan {loan.loanNumber}</h2>
-          <button type="button" className="ghost sm" onClick={onClose}>Close</button>
+          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
         </div>
         <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}</p>
 
