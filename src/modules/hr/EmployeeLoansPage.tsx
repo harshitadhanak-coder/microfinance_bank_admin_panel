@@ -5,7 +5,8 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
 import { ConfirmDialog, Modal } from '../../components/Modal';
-import { CheckCircle, Eye, HandCoins, Landmark, Pencil, X } from '../../components/icons';
+import { ActionMenu, type ActionItem } from '../../components/ActionMenu';
+import { Ban, Banknote, CheckCircle, Eye, HandCoins, Landmark, Lock, Pencil } from '../../components/icons';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 
@@ -138,36 +139,39 @@ export default function EmployeeLoansPage() {
     { header: 'Status', render: (l) => <span className={`pill pill-${l.status.toLowerCase()}`}>{statusLabel(l.status)}</span>, sortKey: 'status' },
     {
       header: 'Actions',
-      render: (l) => {
-        const busy = stageMutation.isPending;
-        return (
-          <div className="row-actions">
-            <button type="button" className="icon-btn" title="View" aria-label="View" onClick={() => { setNotice(''); setError(''); setViewLoan(l); }}>
-              <Eye size={16} />
-            </button>
-            {canManage && l.status === 'PENDING' && (
-              <>
-                <button type="button" className="icon-btn" title="Edit" aria-label="Edit" onClick={() => { setNotice(''); setError(''); setEditLoan(l); }}>
-                  <Pencil size={16} />
-                </button>
-                <button type="button" className="sm ghost" disabled={busy} onClick={() => { setNotice(''); setError(''); setStage({ loan: l, action: 'APPROVE' }); }}>Approve</button>
-                <button type="button" className="sm ghost danger" disabled={busy} onClick={() => { setNotice(''); setError(''); setStage({ loan: l, action: 'REJECT' }); }}>Reject</button>
-              </>
-            )}
-            {canManage && l.status === 'APPROVED' && (
-              <button type="button" className="sm ghost" disabled={busy} onClick={() => { setNotice(''); setError(''); setStage({ loan: l, action: 'DISBURSE' }); }}>Disburse</button>
-            )}
-            {canManage && l.status === 'DISBURSED' && (
-              <>
-                <button type="button" className="sm ghost" onClick={() => { setNotice(''); setError(''); setRepayFor(l); setRepayAmount(''); }}>Record repayment</button>
-                <button type="button" className="sm ghost" disabled={busy} onClick={() => { setNotice(''); setError(''); setStage({ loan: l, action: 'CLOSE' }); }}>Close</button>
-              </>
-            )}
-          </div>
-        );
-      },
+      render: (l) => <div className="actions-cell"><ActionMenu items={rowActions(l)} /></div>,
     },
   ];
+
+  // Only the actions valid for a loan's current status appear in its menu, so
+  // an invalid transition can never be triggered. Groups are visually separated.
+  function rowActions(l: EmployeeLoan): ActionItem[] {
+    const clear = () => { setNotice(''); setError(''); };
+    const view: ActionItem = { key: 'view', label: 'View details', icon: <Eye size={15} />, onSelect: () => { clear(); setViewLoan(l); } };
+    if (!canManage) return [view];
+    switch (l.status) {
+      case 'PENDING':
+        return [
+          view,
+          { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => { clear(); setEditLoan(l); } },
+          { key: 'approve', label: 'Approve', icon: <CheckCircle size={15} />, separatorBefore: true, onSelect: () => { clear(); setStage({ loan: l, action: 'APPROVE' }); } },
+          { key: 'reject', label: 'Reject', icon: <Ban size={15} />, tone: 'danger', onSelect: () => { clear(); setStage({ loan: l, action: 'REJECT' }); } },
+        ];
+      case 'APPROVED':
+        return [
+          view,
+          { key: 'disburse', label: 'Disburse', icon: <Banknote size={15} />, separatorBefore: true, onSelect: () => { clear(); setStage({ loan: l, action: 'DISBURSE' }); } },
+        ];
+      case 'DISBURSED':
+        return [
+          view,
+          { key: 'repay', label: 'Record repayment', icon: <HandCoins size={15} />, separatorBefore: true, onSelect: () => { clear(); setRepayFor(l); setRepayAmount(''); } },
+          { key: 'close', label: 'Close loan', icon: <Lock size={15} />, onSelect: () => { clear(); setStage({ loan: l, action: 'CLOSE' }); } },
+        ];
+      default:
+        return [view];
+    }
+  }
 
   return (
     <>
@@ -236,7 +240,7 @@ export default function EmployeeLoansPage() {
       {stage && (
         <ConfirmDialog
           tone={STAGE_META[stage.action].tone}
-          icon={stage.action === 'REJECT' ? <X size={20} /> : stage.action === 'DISBURSE' ? <Landmark size={20} /> : stage.action === 'CLOSE' ? <HandCoins size={20} /> : <CheckCircle size={20} />}
+          icon={stage.action === 'REJECT' ? <Ban size={20} /> : stage.action === 'DISBURSE' ? <Banknote size={20} /> : stage.action === 'CLOSE' ? <Lock size={20} /> : <CheckCircle size={20} />}
           title={STAGE_META[stage.action].title}
           message={<>{STAGE_META[stage.action].message}<br /><span className="muted sm-text">{stage.loan.loanNumber} · {stage.loan.employee.fullName}</span></>}
           confirmLabel={STAGE_META[stage.action].confirmLabel}

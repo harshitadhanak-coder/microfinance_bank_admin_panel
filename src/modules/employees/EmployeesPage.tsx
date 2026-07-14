@@ -5,7 +5,7 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
 import { ConfirmDialog } from '../../components/Modal';
-import { Eye, Pencil, Trash2 } from '../../components/icons';
+import { Pencil, Trash2 } from '../../components/icons';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import EmployeeDetailModal from './EmployeeDetailModal';
@@ -120,21 +120,15 @@ export default function EmployeesPage() {
     { header: 'Joined', render: (e) => fmtDate(e.joiningDate), sortKey: 'joiningDate' },
     { header: 'Status', render: (e) => statusPill(e.employmentStatus), sortKey: 'employmentStatus' },
     {
-      header: 'Actions',
+      header: '',
       render: (e) => (
         <div className="row-actions">
-          <button type="button" className="icon-btn" title="View profile" aria-label="View profile" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'personal' }); }}>
-            <Eye size={16} />
-          </button>
+          <button type="button" className="sm ghost" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'personal' }); }}>Open</button>
           {canManage && (
-            <button type="button" className="icon-btn" title="Edit employee" aria-label="Edit employee" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'edit' }); }}>
-              <Pencil size={16} />
-            </button>
+            <button type="button" className="sm ghost" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'edit' }); }}><Pencil size={14} /> Edit</button>
           )}
           {canManage && (
-            <button type="button" className="icon-btn danger" title="Delete employee" aria-label="Delete employee" onClick={() => { setNotice(''); setError(''); setDeleteTarget(e); }}>
-              <Trash2 size={16} />
-            </button>
+            <button type="button" className="sm ghost danger" onClick={() => { setNotice(''); setError(''); setDeleteTarget(e); }}><Trash2 size={14} /> Delete</button>
           )}
         </div>
       ),

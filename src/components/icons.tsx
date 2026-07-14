@@ -121,6 +121,18 @@ export const Settings2 = (p: IconProps) => (
 export const Loader = (p: IconProps) => (
   <svg {...base(p)} className={`spin${p.className ? ` ${p.className}` : ''}`}><path d="M21 12a9 9 0 1 1-6.219-8.56" /></svg>
 );
+export const MoreVertical = (p: IconProps) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="1" /><circle cx="12" cy="5" r="1" /><circle cx="12" cy="19" r="1" /></svg>
+);
+export const Ban = (p: IconProps) => (
+  <svg {...base(p)}><circle cx="12" cy="12" r="10" /><path d="m4.9 4.9 14.2 14.2" /></svg>
+);
+export const Lock = (p: IconProps) => (
+  <svg {...base(p)}><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>
+);
+export const Printer = (p: IconProps) => (
+  <svg {...base(p)}><polyline points="6 9 6 2 18 2 18 9" /><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2" /><rect width="12" height="8" x="6" y="14" /></svg>
+);
 export const Eye = (p: IconProps) => (
   <svg {...base(p)}><path d="M2 12s3-7 10-7 10 7 10 7-3 7-10 7-10-7-10-7Z" /><circle cx="12" cy="12" r="3" /></svg>
 );

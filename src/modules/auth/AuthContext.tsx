@@ -7,9 +7,12 @@ interface AuthUser {
   id: string;
   fullName: string;
   email: string;
+  phoneNumber?: string | null;
   role: string;
   branchId: string | null;
   branch?: AuthBranch | null;
+  lastLoginAt?: string | null;
+  status?: string;
 }
 
 interface AuthCtx {

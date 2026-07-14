@@ -6,7 +6,8 @@ import { Column, DataTable } from '../../components/DataTable';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { Modal } from '../../components/Modal';
-import { Wallet } from '../../components/icons';
+import { Eye, Wallet } from '../../components/icons';
+import { SalarySlip } from './SalarySlip';
 
 interface PayrollRun {
   id: string;
@@ -24,6 +25,7 @@ interface Payslip {
   providentFund: string;
   stateInsurance: string;
   professionalTax: string;
+  loanDeduction: string;
   netPay: string;
   employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
 }
@@ -41,6 +43,7 @@ export default function PayrollPage() {
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState({ month: String(now.getMonth() + 1), year: String(now.getFullYear()) });
   const [openRun, setOpenRun] = useState<PayrollRun | null>(null);
+  const [slipId, setSlipId] = useState<string | null>(null);
   const [error, setError] = useState('');
 
   const canRun = can(user?.role, 'payroll:run');
@@ -88,7 +91,9 @@ export default function PayrollPage() {
     { header: 'PF', render: (p) => inr(p.providentFund), sortValue: (p) => Number(p.providentFund) },
     { header: 'ESI', render: (p) => inr(p.stateInsurance), sortValue: (p) => Number(p.stateInsurance) },
     { header: 'Prof. tax', render: (p) => inr(p.professionalTax), sortValue: (p) => Number(p.professionalTax) },
+    { header: 'Loan EMI', render: (p) => (Number(p.loanDeduction) > 0 ? inr(p.loanDeduction) : '—'), sortValue: (p) => Number(p.loanDeduction) },
     { header: 'Net pay', render: (p) => <strong>{inr(p.netPay)}</strong>, sortValue: (p) => Number(p.netPay) },
+    { header: 'Slip', render: (p) => <button type="button" className="sm ghost" onClick={() => setSlipId(p.id)}><Eye size={14} /> View slip</button> },
   ];
 
   return (
@@ -145,6 +150,8 @@ export default function PayrollPage() {
           />
         </Modal>
       )}
+
+      {slipId && <SalarySlip payslipId={slipId} onClose={() => setSlipId(null)} />}
     </>
   );
 }

@@ -48,7 +48,6 @@ export default function AppLayout() {
   const initials = ((nameParts[0]?.[0] ?? '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase() || 'U';
 
   const roleLabel = (user?.role ?? '').replaceAll('_', ' ');
-  const branchLine = user?.branch ? `${user.branch.name} · ${user.branch.city}, ${user.branch.state}` : null;
 
   const signOut = () => {
     logout();
@@ -101,48 +100,16 @@ export default function AppLayout() {
           })}
         </nav>
         <div className="sidebar-foot">
-          <div className="user-chip" tabIndex={0} role="button" aria-label="Account details">
+          <NavLink to="/profile" className="profile-link" title="View my profile">
             <span className="user-avatar" aria-hidden="true">{initials}</span>
             <span className="user-meta">
               <strong>{user?.fullName}</strong>
               <span className="user-role">{roleLabel}</span>
-              {branchLine && <span className="user-branch">{branchLine}</span>}
             </span>
-
-            <div className="user-popover" role="tooltip">
-              <div className="user-popover-head">
-                <span className="user-avatar lg" aria-hidden="true">{initials}</span>
-                <div>
-                  <strong>{user?.fullName}</strong>
-                  <span className="user-role">{roleLabel}</span>
-                </div>
-              </div>
-              <dl className="user-popover-list">
-                <div>
-                  <dt>Email</dt>
-                  <dd>{user?.email}</dd>
-                </div>
-                {user?.branch ? (
-                  <>
-                    <div>
-                      <dt>Branch</dt>
-                      <dd>{user.branch.name} <span className="muted">({user.branch.code})</span></dd>
-                    </div>
-                    <div>
-                      <dt>Location</dt>
-                      <dd>{user.branch.city}, {user.branch.state}</dd>
-                    </div>
-                  </>
-                ) : (
-                  <div>
-                    <dt>Scope</dt>
-                    <dd>All branches</dd>
-                  </div>
-                )}
-              </dl>
-            </div>
-          </div>
-          <button className="ghost" onClick={() => setConfirmSignOut(true)}><LogOut size={15} /> Sign out</button>
+          </NavLink>
+          <button type="button" className="signout-btn" onClick={() => setConfirmSignOut(true)}>
+            <LogOut size={15} /> Sign out
+          </button>
         </div>
       </aside>
       <main className="content"><Outlet /></main>

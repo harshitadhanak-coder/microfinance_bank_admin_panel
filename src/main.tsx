@@ -19,6 +19,7 @@ import LeavePage from './modules/hr/LeavePage';
 import PayrollPage from './modules/hr/PayrollPage';
 import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
 import LeadsPage from './modules/leads/LeadsPage';
+import MyProfilePage from './modules/profile/MyProfilePage';
 import ApplicationsPage from './modules/loans/ApplicationsPage';
 import LoansPage from './modules/loans/LoansPage';
 import LoanLinkPage from './modules/loans/LoanLinkPage';
@@ -67,6 +68,7 @@ createRoot(document.getElementById('root')!).render(
             <Route element={<RequireAuth />}>
               <Route element={<AppLayout />}>
                 <Route index element={<IndexRoute />} />
+                <Route path="profile" element={<MyProfilePage />} />
                 <Route path="hr-overview" element={<RequireModule module="hrDashboard"><HrDashboardPage /></RequireModule>} />
                 <Route path="employees" element={<RequireModule module="employees"><EmployeesPage /></RequireModule>} />
                 <Route path="attendance" element={<RequireModule module="attendance"><AttendancePage /></RequireModule>} />
