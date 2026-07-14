@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
+import { CardsSkeleton } from '../../components/Skeleton';
 import { useAuth } from '../auth/AuthContext';
 
 interface HrSummary {
@@ -37,7 +38,7 @@ export default function HrDashboardPage() {
       </header>
 
       {query.isLoading ? (
-        <div className="panel pad muted">Loading…</div>
+        <CardsSkeleton count={4} />
       ) : (
         <div className="stat-grid">
           {tiles.map((t) => (

@@ -1,8 +1,11 @@
 import { FormEvent, useState } from 'react';
 import { AxiosError } from 'axios';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { useServerTable } from '../../components/useServerTable';
+import { ConfirmDialog } from '../../components/Modal';
+import { Eye, Pencil, Trash2 } from '../../components/icons';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import EmployeeDetailModal from './EmployeeDetailModal';
@@ -22,6 +25,9 @@ interface EmployeeRow {
 
 interface BranchOption { id: string; name: string; code: string }
 
+const STATUS_FILTERS = ['', 'ONBOARDING', 'ACTIVE', 'ON_NOTICE', 'SEPARATED'] as const;
+const statusLabel = (s: string): string => (s ? s.charAt(0) + s.slice(1).toLowerCase().replaceAll('_', ' ') : 'All statuses');
+
 const emptyForm = {
   fullName: '', phoneNumber: '', email: '', designation: '', branchId: '', joiningDate: '',
   bankAccountNumber: '', bankIfscCode: '', panNumber: '',
@@ -39,18 +45,28 @@ const compact = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
 export default function EmployeesPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
+  const table = useServerTable();
+  const [status, setStatus] = useState('');
   const [showForm, setShowForm] = useState(false);
   const [form, setForm] = useState<Form>(emptyForm);
-  const [openId, setOpenId] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ id: string; tab?: 'personal' | 'edit' } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<EmployeeRow | null>(null);
   const [error, setError] = useState('');
+  const [notice, setNotice] = useState('');
 
   const canCreate = can(user?.role, 'employee:create');
   const canManage = can(user?.role, 'employee:update');
 
+  const listUrl = `/employees?${table.params}${status ? `&status=${status}` : ''}`;
   const listQuery = useQuery({
-    queryKey: ['/employees'],
-    queryFn: () => api.get('/employees?pageSize=100').then((r) => r.data.data as EmployeeRow[]),
+    queryKey: [listUrl],
+    queryFn: () => api.get(listUrl).then((r) => r.data),
+    placeholderData: keepPreviousData,
   });
+  const rows = (listQuery.data?.data ?? []) as EmployeeRow[];
+  const totalItems = (listQuery.data?.pagination?.totalItems ?? 0) as number;
+
+  const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/employees') });
 
   const branchesQuery = useQuery({
     queryKey: ['/branches', 'options'],
@@ -76,13 +92,19 @@ export default function EmployeesPage() {
           effectiveFrom: f.effectiveFrom || f.joiningDate,
         }),
       }),
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['/employees'] }); closeForm(); },
+    onSuccess: () => { refresh(); closeForm(); setNotice('Employee created successfully.'); },
     onError: (err) => setError(apiMessage(err, 'Could not create the employee. Check all required fields are valid.')),
+  });
+
+  const deleteEmployee = useMutation({
+    mutationFn: (id: string) => api.delete(`/employees/${id}`),
+    onSuccess: () => { refresh(); setDeleteTarget(null); setError(''); setNotice('Employee deleted successfully.'); },
+    onError: (err) => { setDeleteTarget(null); setNotice(''); setError(apiMessage(err, 'This employee could not be deleted.')); },
   });
 
   const startCreate = () => {
     if (showForm) { closeForm(); return; }
-    setForm(emptyForm); setError(''); setShowForm(true);
+    setForm(emptyForm); setError(''); setNotice(''); setShowForm(true);
   };
 
   const submit = (ev: FormEvent) => { ev.preventDefault(); setError(''); createEmployee.mutate(form); };
@@ -90,14 +112,33 @@ export default function EmployeesPage() {
   const statusPill = (s: string) => <span className={`pill pill-${s.toLowerCase()}`}>{s.replaceAll('_', ' ')}</span>;
 
   const columns: Column<EmployeeRow>[] = [
-    { header: 'Code', render: (e) => <code>{e.employeeCode}</code>, sortValue: (e) => e.employeeCode },
-    { header: 'Name', render: (e) => <strong>{e.fullName}</strong>, sortValue: (e) => e.fullName },
-    { header: 'Designation', render: (e) => e.designation, sortValue: (e) => e.designation },
-    { header: 'Branch', render: (e) => e.branch?.name ?? '—', sortValue: (e) => e.branch?.name ?? '' },
-    { header: 'Phone', render: (e) => e.phoneNumber, sortValue: (e) => e.phoneNumber },
-    { header: 'Joined', render: (e) => fmtDate(e.joiningDate), sortValue: (e) => e.joiningDate },
-    { header: 'Status', render: (e) => statusPill(e.employmentStatus), sortValue: (e) => e.employmentStatus },
-    { header: 'Actions', render: (e) => <button type="button" className="sm ghost" onClick={() => setOpenId(e.id)}>Open</button> },
+    { header: 'Code', render: (e) => <code>{e.employeeCode}</code>, sortKey: 'employeeCode' },
+    { header: 'Name', render: (e) => <strong>{e.fullName}</strong>, sortKey: 'fullName' },
+    { header: 'Designation', render: (e) => e.designation, sortKey: 'designation' },
+    { header: 'Branch', render: (e) => e.branch?.name ?? '—', sortKey: 'branch' },
+    { header: 'Phone', render: (e) => e.phoneNumber },
+    { header: 'Joined', render: (e) => fmtDate(e.joiningDate), sortKey: 'joiningDate' },
+    { header: 'Status', render: (e) => statusPill(e.employmentStatus), sortKey: 'employmentStatus' },
+    {
+      header: 'Actions',
+      render: (e) => (
+        <div className="row-actions">
+          <button type="button" className="icon-btn" title="View profile" aria-label="View profile" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'personal' }); }}>
+            <Eye size={16} />
+          </button>
+          {canManage && (
+            <button type="button" className="icon-btn" title="Edit employee" aria-label="Edit employee" onClick={() => { setNotice(''); setError(''); setDetail({ id: e.id, tab: 'edit' }); }}>
+              <Pencil size={16} />
+            </button>
+          )}
+          {canManage && (
+            <button type="button" className="icon-btn danger" title="Delete employee" aria-label="Delete employee" onClick={() => { setNotice(''); setError(''); setDeleteTarget(e); }}>
+              <Trash2 size={16} />
+            </button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (
@@ -107,7 +148,12 @@ export default function EmployeesPage() {
           <h1>Employee Management</h1>
           <p className="muted">Staff profiles — personal details, branch, KYC documents and salary</p>
         </div>
-        {canCreate && <button onClick={startCreate}>{showForm ? 'Close' : 'Add employee'}</button>}
+        <div className="row-actions">
+          <select value={status} onChange={(e) => { setStatus(e.target.value); table.setPage(1); }} aria-label="Filter by employment status">
+            {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+          </select>
+          {canCreate && <button onClick={startCreate}>{showForm ? 'Close' : 'Add employee'}</button>}
+        </div>
       </header>
 
       {showForm && (
@@ -140,17 +186,43 @@ export default function EmployeesPage() {
         </form>
       )}
 
+      {notice && !showForm && <div className="success-box">{notice}</div>}
       {error && !showForm && <div className="error-box">{error}</div>}
 
       <DataTable
         columns={columns}
-        rows={listQuery.data ?? []}
+        rows={rows}
         loading={listQuery.isLoading}
-        empty="No employees yet. Add the first one."
+        empty="No employees match this filter."
         searchPlaceholder="Search by name, code, designation or branch…"
+        server={{
+          page: table.page, pageSize: table.pageSize, totalItems,
+          onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
+          search: table.search, onSearchChange: table.onSearchChange,
+        }}
       />
 
-      {openId && <EmployeeDetailModal employeeId={openId} canManage={canManage} onClose={() => setOpenId(null)} />}
+      {detail && (
+        <EmployeeDetailModal
+          employeeId={detail.id}
+          canManage={canManage}
+          initialTab={detail.tab}
+          onClose={() => setDetail(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          tone="danger"
+          icon={<Trash2 size={20} />}
+          title={`Delete ${deleteTarget.fullName}?`}
+          message="This permanently removes the employee's profile, salary structure and KYC records. It is blocked if the employee has loans, attendance, payroll or an active branch posting."
+          confirmLabel="Delete employee"
+          loading={deleteEmployee.isPending}
+          onConfirm={() => deleteEmployee.mutate(deleteTarget.id)}
+          onCancel={() => setDeleteTarget(null)}
+        />
+      )}
     </>
   );
 }

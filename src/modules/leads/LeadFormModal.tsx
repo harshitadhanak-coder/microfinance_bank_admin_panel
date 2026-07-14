@@ -4,7 +4,8 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { UserCheck } from '../../components/icons';
 
 interface BranchOption { id: string; name: string; code: string }
 interface EmployeeOption { id: string; fullName: string; designation: string; branchId?: string | null }
@@ -105,15 +106,20 @@ export default function LeadFormModal({ lead, onClose }: { lead?: LeadFormLead |
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>{isEdit ? 'Edit lead' : 'New lead'}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>{isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}</p>
-
-        <form id="lead-form" className="form-grid" onSubmit={submit}>
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<UserCheck size={20} />}
+      title={isEdit ? 'Edit lead' : 'New lead'}
+      subtitle={isEdit ? 'Correct the captured details.' : 'Capture a prospective borrower for follow-up.'}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="submit" form="lead-form" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Capture lead'}</button>
+        </>
+      }
+    >
+      <form id="lead-form" className="form-grid" onSubmit={submit}>
           <label>Full name<input value={form.fullName} onChange={(e) => setForm({ ...form, fullName: e.target.value })} required minLength={2} /></label>
           <label>Phone<input value={form.phoneNumber} onChange={(e) => setForm({ ...form, phoneNumber: e.target.value })} required placeholder="+91…" /></label>
           <label>Requested amount (₹)<input type="number" min={0} step="0.01" value={form.requestedAmount} onChange={(e) => setForm({ ...form, requestedAmount: e.target.value })} /></label>
@@ -145,12 +151,6 @@ export default function LeadFormModal({ lead, onClose }: { lead?: LeadFormLead |
 
           {error && <div className="error-box span-all">{error}</div>}
         </form>
-
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="submit" form="lead-form" disabled={save.isPending}>{save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Capture lead'}</button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

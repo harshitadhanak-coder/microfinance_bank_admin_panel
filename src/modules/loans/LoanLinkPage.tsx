@@ -6,7 +6,8 @@ import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { UserCheck } from '../../components/icons';
 
 interface LinkableLoan {
   id: string;
@@ -126,15 +127,22 @@ function AssignModal({
   });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Link loan {loan.loanNumber}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}</p>
-
-        <label style={{ marginTop: '0.6rem' }}>
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<UserCheck size={20} />}
+      title={`Link loan ${loan.loanNumber}`}
+      subtitle={`Customer: ${loan.client.fullName}`}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
+            {assign.isPending ? 'Linking…' : 'Link loan'}
+          </button>
+        </>
+      }
+    >
+      <label>
           Field officer
           <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
             <option value="">Select a field officer</option>
@@ -145,14 +153,6 @@ function AssignModal({
         </label>
 
         {error && <div className="error-box" style={{ marginTop: '0.6rem' }}>{error}</div>}
-
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
-            {assign.isPending ? 'Linking…' : 'Link loan'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

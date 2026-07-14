@@ -1,6 +1,7 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { inr, StatCard } from '../../components/StatCard';
+import { CardsSkeleton } from '../../components/Skeleton';
 import { useAuth } from '../auth/AuthContext';
 import { canListAllBranches, canViewHqDashboard } from '../auth/permissions';
 
@@ -91,7 +92,7 @@ function HeadquartersDashboard() {
 
   const branchNames = new Map((branches ?? []).map((b) => [b.id, b.name]));
 
-  if (isLoading) return <div className="panel pad muted">Loading dashboard…</div>;
+  if (isLoading) return <CardsSkeleton count={4} />;
   if (isError) return <div className="panel pad error-box">Could not load the dashboard. Please try again.</div>;
   if (!data) return null;
 
@@ -171,7 +172,7 @@ function BranchDashboardView({ branchId, branchName }: { branchId: string | null
   });
 
   if (!branchId) return <div className="panel pad error-box">No branch is assigned to your account.</div>;
-  if (isLoading) return <div className="panel pad muted">Loading dashboard…</div>;
+  if (isLoading) return <CardsSkeleton count={4} />;
   if (isError) return <div className="panel pad error-box">Could not load the dashboard. Please try again.</div>;
   if (!data) return null;
 

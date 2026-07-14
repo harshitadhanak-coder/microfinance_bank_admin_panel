@@ -2,12 +2,15 @@ import { FormEvent, useEffect, useRef, useState } from 'react';
 import { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { Briefcase, Loader } from '../../components/icons';
 
 interface Props {
   employeeId: string;
   canManage: boolean;
   onClose: () => void;
+  /** Tab to open on mount. Defaults to the read-only personal view. */
+  initialTab?: Tab;
 }
 
 interface BranchOption { id: string; name: string; code: string }
@@ -50,9 +53,9 @@ type Tab = 'personal' | 'branch' | 'kyc' | 'salary' | 'edit';
  * sections HR works with: personal details, posting (branch), KYC documents and
  * salary — plus an edit form for HR managers.
  */
-export default function EmployeeDetailModal({ employeeId, canManage, onClose }: Props) {
+export default function EmployeeDetailModal({ employeeId, canManage, onClose, initialTab }: Props) {
   const qc = useQueryClient();
-  const [tab, setTab] = useState<Tab>('personal');
+  const [tab, setTab] = useState<Tab>(initialTab && (initialTab !== 'edit' || canManage) ? initialTab : 'personal');
 
   const detailQuery = useQuery({
     queryKey: ['/employees', employeeId],
@@ -174,23 +177,19 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        {!detail ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <header className="row">
-              <div>
-                <h2>{detail.fullName}</h2>
-                <p className="muted">{detail.designation} · <code>{detail.employeeCode}</code></p>
-              </div>
-              <div className="row-actions">
-                {statusPill(detail.employmentStatus)}
-                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-              </div>
-            </header>
-
+    <Modal
+      size="lg"
+      onClose={onClose}
+      icon={<Briefcase size={20} />}
+      title={detail ? detail.fullName : 'Employee'}
+      subtitle={detail ? <>{detail.designation} · <code>{detail.employeeCode}</code></> : undefined}
+      headerAside={detail ? statusPill(detail.employmentStatus) : undefined}
+      footer={<button onClick={onClose}>Close</button>}
+    >
+      {!detail ? (
+        <div className="modal-loading"><Loader size={22} /><span>Loading employee…</span></div>
+      ) : (
+        <>
             <div className="tabs">
               {tabs.map((t) => (
                 <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
@@ -310,12 +309,8 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose }: 
               </form>
             )}
 
-            <div className="modal-actions">
-              <button onClick={onClose}>Close</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
 }

@@ -8,6 +8,7 @@ import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import LeadFormModal, { LeadFormLead } from './LeadFormModal';
 import LeadDetailModal from './LeadDetailModal';
+import { Pencil } from '../../components/icons';
 
 interface Lead extends LeadFormLead {
   stage: string;
@@ -25,6 +26,7 @@ export default function LeadsPage() {
   const table = useServerTable();
 
   const canCreate = can(user?.role, 'lead:create');
+  const canUpdate = can(user?.role, 'lead:update');
 
   const { data: funnel } = useQuery({
     queryKey: ['lead-funnel'],
@@ -50,7 +52,16 @@ export default function LeadsPage() {
     { header: 'Source', render: (l) => l.source ?? '—', sortKey: 'source' },
     { header: 'Assigned to', render: (l) => l.assignedTo?.fullName ?? 'Unassigned', sortKey: 'assignedTo' },
     { header: 'Stage', render: (l) => <span className={`pill pill-${l.stage.toLowerCase()}`}>{l.stage.replaceAll('_', ' ')}</span>, sortKey: 'stage' },
-    { header: '', render: (l) => <button type="button" className="sm ghost" onClick={() => setDetailId(l.id)}>Open</button> },
+    {
+      header: '', render: (l) => (
+        <div className="row-actions">
+          <button type="button" className="sm ghost" onClick={() => setDetailId(l.id)}>Open</button>
+          {canUpdate && l.stage !== 'CONVERTED' && l.stage !== 'DROPPED' && (
+            <button type="button" className="sm ghost" onClick={() => setFormLead(l)}><Pencil size={14} /> Edit</button>
+          )}
+        </div>
+      ),
+    },
   ];
 
   return (

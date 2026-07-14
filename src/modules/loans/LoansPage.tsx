@@ -9,7 +9,8 @@ import ImportModal from '../../components/ImportModal';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import LoanDetailModal from './LoanDetailModal';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { Landmark } from '../../components/icons';
 
 interface Loan {
   id: string; loanNumber: string; principalAmount: string; outstandingPrincipal: string;
@@ -196,15 +197,22 @@ function NewLoanModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
   const disabled = !clientId || !loanProductId || !requestedAmount || !tenureMonths || create.isPending;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>New loan</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>Creates the application, approves and disburses it in one step. Only KYC-verified clients are eligible.</p>
-
-        <div className="form-grid" style={{ marginTop: '0.4rem' }}>
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<Landmark size={20} />}
+      title="New loan"
+      subtitle="Creates the application, approves and disburses it in one step. Only KYC-verified clients are eligible."
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={disabled} onClick={() => { setError(''); create.mutate(); }}>
+            {create.isPending ? 'Creating…' : 'Create loan'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
           <label className="span-all">Client
             <select value={clientId} onChange={(e) => setClientId(e.target.value)}>
               <option value="">Select a client</option>
@@ -243,15 +251,7 @@ function NewLoanModal({ onClose, onDone }: { onClose: () => void; onDone: () => 
           </p>
         )}
         {error && <div className="error-box">{error}</div>}
-
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={disabled} onClick={() => { setError(''); create.mutate(); }}>
-            {create.isPending ? 'Creating…' : 'Create loan'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -279,15 +279,22 @@ function EditLoanModal({ loan, onClose, onDone }: { loan: Loan; onClose: () => v
   const nothingToSave = !assignedOfficerId && purpose.trim() === '';
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Edit loan {loan.loanNumber}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}. Financial terms cannot be changed after disbursal.</p>
-
-        <label style={{ marginTop: '0.5rem' }}>Field officer
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<Landmark size={20} />}
+      title={`Edit loan ${loan.loanNumber}`}
+      subtitle={`Customer: ${loan.client.fullName}. Financial terms cannot be changed after disbursal.`}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={save.isPending || nothingToSave} onClick={() => { setError(''); save.mutate(); }}>
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </button>
+        </>
+      }
+    >
+      <label>Field officer
           <select value={assignedOfficerId} onChange={(e) => setAssignedOfficerId(e.target.value)}>
             <option value="">Unassigned</option>
             {(employees ?? []).map((e) => <option key={e.id} value={e.id}>{e.fullName}{e.designation ? ` · ${e.designation}` : ''}</option>)}
@@ -298,14 +305,6 @@ function EditLoanModal({ loan, onClose, onDone }: { loan: Loan; onClose: () => v
         </label>
 
         {error && <div className="error-box">{error}</div>}
-
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={save.isPending || nothingToSave} onClick={() => { setError(''); save.mutate(); }}>
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }

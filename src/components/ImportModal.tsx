@@ -2,7 +2,8 @@ import { useState } from 'react';
 import axios from 'axios';
 import { api } from '../api/client';
 import { parseSpreadsheet, readCell, downloadCsvTemplate } from '../lib/importFile';
-import { AlertCircle, Check, CheckCircle, Download, Loader, Upload, X } from './icons';
+import { Modal } from './Modal';
+import { AlertCircle, Check, CheckCircle, Download, FileSpreadsheet, Loader, Upload } from './icons';
 
 export interface ImportColumn {
   /** API payload field name this column maps to. */
@@ -108,13 +109,13 @@ export default function ImportModal({
   const ready = rows.length > 0 && !error;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" aria-label={title} onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>{title}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<FileSpreadsheet size={20} />}
+      title={title}
+      subtitle="Bulk-import records from a .csv or .xlsx file."
+    >
         {!summary ? (
           <>
             <div className="modal-body">
@@ -213,7 +214,6 @@ export default function ImportModal({
             </div>
           </>
         )}
-      </div>
-    </div>
+    </Modal>
   );
 }

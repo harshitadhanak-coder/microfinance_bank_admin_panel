@@ -3,6 +3,7 @@ import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-do
 import { useAuth } from '../modules/auth/AuthContext';
 import { navItems } from '../modules/auth/permissions';
 import type { ModuleKey } from '../modules/auth/permissions';
+import { Modal } from '../components/Modal';
 import {
   Banknote, Briefcase, CalendarCheck, CalendarOff, ChevronDown, HandCoins,
   Landmark, LayoutDashboard, ListChecks, LogOut, Settings2, Target, UserCheck,
@@ -147,19 +148,17 @@ export default function AppLayout() {
       <main className="content"><Outlet /></main>
 
       {confirmSignOut && (
-        <div className="modal-overlay" onClick={() => setConfirmSignOut(false)}>
-          <div className="modal" role="dialog" aria-modal="true" aria-labelledby="signout-title" onClick={(e) => e.stopPropagation()}>
-            <div className="modal-icon" aria-hidden="true">
-              <LogOut size={24} />
-            </div>
-            <h2 id="signout-title">Sign out?</h2>
-            <p className="muted">You will need to sign in again to access the admin panel.</p>
-            <div className="modal-actions">
-              <button className="ghost" onClick={() => setConfirmSignOut(false)}>Cancel</button>
-              <button className="danger" onClick={signOut}>Sign out</button>
-            </div>
+        <Modal size="sm" onClose={() => setConfirmSignOut(false)}>
+          <div className="modal-icon" aria-hidden="true">
+            <LogOut size={24} />
           </div>
-        </div>
+          <h2>Sign out?</h2>
+          <p className="muted">You will need to sign in again to access the admin panel.</p>
+          <div className="modal-actions">
+            <button className="ghost" data-autofocus onClick={() => setConfirmSignOut(false)}>Cancel</button>
+            <button className="danger" onClick={signOut}>Sign out</button>
+          </div>
+        </Modal>
       )}
     </div>
   );

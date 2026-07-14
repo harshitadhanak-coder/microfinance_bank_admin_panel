@@ -1,5 +1,6 @@
 import { ReactNode, useEffect, useMemo, useState } from 'react';
 import { ArrowDown, ArrowUp, ChevronsUpDown, Search, X } from './icons';
+import { TableSkeleton } from './Skeleton';
 
 export interface Column<T> {
   header: string;
@@ -112,7 +113,7 @@ export function DataTable<T extends { id: string }>({
     });
   };
 
-  if (loading) return <div className="panel pad muted">Loading…</div>;
+  if (loading) return <TableSkeleton columns={columns.length} rows={Math.min(pageSize, 8)} />;
 
   // ── Derived view state, unified across client/server modes ──
   const displayRows = isServer ? rows : clientPageRows;

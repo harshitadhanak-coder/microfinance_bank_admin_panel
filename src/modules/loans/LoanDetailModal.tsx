@@ -5,7 +5,8 @@ import { api } from '../../api/client';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { Landmark, Loader } from '../../components/icons';
 
 interface Installment {
   id: string; sequenceNumber: number; dueDate: string;
@@ -87,24 +88,19 @@ export default function LoanDetailModal({ loanId, onClose }: { loanId: string; o
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        {!loan ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <header className="row">
-              <div>
-                <h2><code>{loan.loanNumber}</code></h2>
-                <p className="muted">{loan.client.fullName} · {loan.client.phoneNumber} · {loan.branch.name}</p>
-              </div>
-              <div className="row-actions">
-                {pill(loan.status)}
-                {pill(loan.assetClassification)}
-                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-              </div>
-            </header>
-
+    <Modal
+      size="lg"
+      onClose={onClose}
+      icon={<Landmark size={20} />}
+      title={loan ? <code>{loan.loanNumber}</code> : 'Loan'}
+      subtitle={loan ? `${loan.client.fullName} · ${loan.client.phoneNumber} · ${loan.branch.name}` : undefined}
+      headerAside={loan ? <>{pill(loan.status)}{pill(loan.assetClassification)}</> : undefined}
+      footer={<button onClick={onClose}>Close</button>}
+    >
+      {!loan ? (
+        <div className="modal-loading"><Loader size={22} /><span>Loading loan…</span></div>
+      ) : (
+        <>
             <div className="tabs">
               {tabs.map((t) => (
                 <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
@@ -197,12 +193,8 @@ export default function LoanDetailModal({ loanId, onClose }: { loanId: string; o
               </div>
             )}
 
-            <div className="modal-actions">
-              <button onClick={onClose}>Close</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+        </>
+      )}
+    </Modal>
   );
 }

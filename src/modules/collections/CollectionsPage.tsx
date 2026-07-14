@@ -8,7 +8,8 @@ import { inr } from '../../components/StatCard';
 import ImportModal from '../../components/ImportModal';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { X } from '../../components/icons';
+import { Modal } from '../../components/Modal';
+import { AlertCircle, Banknote, UserCheck } from '../../components/icons';
 
 // ── Shared types ────────────────────────────────────────────────────────────
 interface CollectionLoan {
@@ -215,15 +216,22 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
   const disabled = !loanId || !amount || Number(amount) <= 0 || record.isPending;
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Record payment</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>Recorded against the loan's assigned field officer. Amount is allocated to the oldest unpaid installments.</p>
-
-        <div className="form-grid" style={{ marginTop: '0.4rem' }}>
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<Banknote size={20} />}
+      title="Record payment"
+      subtitle="Recorded against the loan's assigned field officer. Amount is allocated to the oldest unpaid installments."
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={disabled} onClick={() => { setError(''); record.mutate(); }}>
+            {record.isPending ? 'Recording…' : 'Record payment'}
+          </button>
+        </>
+      }
+    >
+      <div className="form-grid">
           <label className="span-all">Loan
             <select value={loanId} onChange={(e) => setLoanId(e.target.value)}>
               <option value="">Select an active loan</option>
@@ -249,14 +257,7 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
         </div>
 
         {error && <div className="error-box">{error}</div>}
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={disabled} onClick={() => { setError(''); record.mutate(); }}>
-            {record.isPending ? 'Recording…' : 'Record payment'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -272,17 +273,22 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: PaymentRow; o
   });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Edit collection {payment.receiptNumber}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>
-          {payment.loan.loanNumber} · {payment.loan.client.fullName} · {inr(payment.amount)}. The amount cannot be edited.
-        </p>
-
-        <label style={{ marginTop: '0.5rem' }}>Payment mode
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<Banknote size={20} />}
+      title={`Edit collection ${payment.receiptNumber}`}
+      subtitle={`${payment.loan.loanNumber} · ${payment.loan.client.fullName} · ${inr(payment.amount)}. The amount cannot be edited.`}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={save.isPending} onClick={() => { setError(''); save.mutate(); }}>
+            {save.isPending ? 'Saving…' : 'Save changes'}
+          </button>
+        </>
+      }
+    >
+      <label>Payment mode
           <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as (typeof PAYMENT_MODES)[number])}>
             {PAYMENT_MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
           </select>
@@ -292,14 +298,7 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: PaymentRow; o
         </label>
 
         {error && <div className="error-box">{error}</div>}
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={save.isPending} onClick={() => { setError(''); save.mutate(); }}>
-            {save.isPending ? 'Saving…' : 'Save changes'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -398,15 +397,22 @@ function AssignModal({
   });
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Assign loan {loan.loanNumber}</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>Customer: {loan.client.fullName}</p>
-
-        <label style={{ marginTop: '0.6rem' }}>
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<UserCheck size={20} />}
+      title={`Assign loan ${loan.loanNumber}`}
+      subtitle={`Customer: ${loan.client.fullName}`}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
+            {assign.isPending ? 'Assigning…' : 'Assign loan'}
+          </button>
+        </>
+      }
+    >
+      <label>
           Field officer
           <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
             <option value="">Select a field officer</option>
@@ -417,15 +423,7 @@ function AssignModal({
         </label>
 
         {error && <div className="error-box" style={{ marginTop: '0.6rem' }}>{error}</div>}
-
-        <div className="modal-actions">
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
-            {assign.isPending ? 'Assigning…' : 'Assign loan'}
-          </button>
-        </div>
-      </div>
-    </div>
+    </Modal>
   );
 }
 
@@ -570,27 +568,25 @@ function RejectSettlementModal({
 }) {
   const [note, setNote] = useState('');
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        <div className="panel-head">
-          <h2>Reject settlement</h2>
-          <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-        </div>
-        <p className="muted sm-text" style={{ margin: 0 }}>
-          {settlement.employee.fullName} · {fmtDate(settlement.businessDate)} · system cash {inr(settlement.totalCashCollected)}, handed over {inr(settlement.totalCashDeposited)}.
-          The officer will see this note and must resubmit the day's settlement.
-        </p>
-        <label style={{ marginTop: '0.5rem' }}>Reason
-          <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} placeholder="e.g. Cash short by ₹500 — recount and resubmit" />
-        </label>
-        <div className="modal-actions">
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<AlertCircle size={20} />}
+      title="Reject settlement"
+      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · system cash ${inr(settlement.totalCashCollected)}, handed over ${inr(settlement.totalCashDeposited)}. The officer will see this note and must resubmit the day's settlement.`}
+      footer={
+        <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim())}>
+          <button type="button" className="danger" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim())}>
             {pending ? 'Rejecting…' : 'Reject settlement'}
           </button>
-        </div>
-      </div>
-    </div>
+        </>
+      }
+    >
+      <label>Reason
+        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} placeholder="e.g. Cash short by ₹500 — recount and resubmit" />
+      </label>
+    </Modal>
   );
 }
 

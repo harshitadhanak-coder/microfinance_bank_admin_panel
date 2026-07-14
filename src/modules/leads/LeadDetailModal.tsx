@@ -6,7 +6,8 @@ import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { LeadFormLead } from './LeadFormModal';
-import { X } from '../../components/icons';
+import { ConfirmDialog, Modal } from '../../components/Modal';
+import { ArrowRight, Check, ListChecks, Loader, Pencil, Trash2, UserCheck, X } from '../../components/icons';
 
 interface LeadActivity {
   id: string; fromStage?: string | null; toStage?: string | null; note?: string | null; createdAt: string;
@@ -99,6 +100,11 @@ export default function LeadDetailModal({
   const currentIndex = PIPELINE.indexOf(lead?.stage ?? '');
   const nextStages = currentIndex >= 0 ? PIPELINE.slice(currentIndex + 1) : [];
   const [stageNote, setStageNote] = useState('');
+  // Stage changes are gated behind a confirmation dialog; dropping opens a
+  // dialog that captures a required reason for the audit trail.
+  const [pendingStage, setPendingStage] = useState<string | null>(null);
+  const [dropOpen, setDropOpen] = useState(false);
+  const [dropReason, setDropReason] = useState('');
 
   const moveStage = useMutation({
     mutationFn: (body: { stage: string; note?: string; dropReason?: string }) =>
@@ -110,12 +116,6 @@ export default function LeadDetailModal({
     },
     onError: onActionError('Could not update the stage.'),
   });
-
-  const dropLead = () => {
-    const reason = window.prompt('Reason for dropping this lead? (required)');
-    if (!reason?.trim()) return;
-    moveStage.mutate({ stage: 'DROPPED', dropReason: reason.trim() });
-  };
 
   // ── Pre-screen ──
   const preScreen = useMutation({
@@ -155,23 +155,19 @@ export default function LeadDetailModal({
   ];
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal modal-wide modal-lg" role="dialog" aria-modal="true" onClick={(e) => e.stopPropagation()}>
-        {!lead ? (
-          <p className="muted">Loading…</p>
-        ) : (
-          <>
-            <header className="row">
-              <div>
-                <h2>{lead.fullName}</h2>
-                <p className="muted">{lead.phoneNumber} · {lead.branch.name}</p>
-              </div>
-              <div className="row-actions">
-                {stagePill(lead.stage)}
-                <button type="button" className="icon-btn" onClick={onClose} aria-label="Close dialog"><X size={18} /></button>
-              </div>
-            </header>
-
+    <Modal
+      size="lg"
+      onClose={onClose}
+      icon={<UserCheck size={20} />}
+      title={lead ? lead.fullName : 'Lead'}
+      subtitle={lead ? `${lead.phoneNumber} · ${lead.branch.name}` : undefined}
+      headerAside={lead ? stagePill(lead.stage) : undefined}
+      footer={<button onClick={onClose}>Close</button>}
+    >
+      {!lead ? (
+        <div className="modal-loading"><Loader size={22} /><span>Loading lead…</span></div>
+      ) : (
+        <>
             <div className="tabs">
               {tabs.map((t) => (
                 <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => { setTab(t.key); setMessage(null); }}>
@@ -205,45 +201,73 @@ export default function LeadDetailModal({
                 </dl>
 
                 {isOpen && (canUpdate || canAssign || canStage) && (
-                  <>
-                    <h3 className="section-title">Actions</h3>
+                  <section className="lead-actions" aria-label="Lead actions">
+                    <div className="lead-actions-head">
+                      <ListChecks size={16} />
+                      <h3>Actions</h3>
+                    </div>
 
                     {canStage && (
-                      <div className="row-actions">
-                        <span className="muted sm-text">Pre-screening:</span>
-                        <button type="button" className="sm ghost" disabled={preScreen.isPending} onClick={() => preScreen.mutate(true)}>Mark passed</button>
-                        <button type="button" className="sm ghost danger" disabled={preScreen.isPending} onClick={() => preScreen.mutate(false)}>Mark failed</button>
+                      <div className="action-group">
+                        <div className="action-group-head">
+                          <span className="action-group-label">Pre-screening</span>
+                          <span className="action-group-hint">Record the initial eligibility check for this lead.</span>
+                        </div>
+                        <div className="action-btn-row">
+                          <button type="button" className="sm ghost" disabled={preScreen.isPending} onClick={() => preScreen.mutate(true)}><Check size={14} /> Mark passed</button>
+                          <button type="button" className="sm ghost danger" disabled={preScreen.isPending} onClick={() => preScreen.mutate(false)}><X size={14} /> Mark failed</button>
+                        </div>
                       </div>
                     )}
 
                     {canStage && nextStages.length > 0 && (
-                      <div className="row-actions">
-                        <span className="muted sm-text">Move to:</span>
-                        {nextStages.map((s) => (
-                          <button key={s} type="button" className="sm" disabled={moveStage.isPending}
-                            onClick={() => moveStage.mutate({ stage: s, note: stageNote || undefined })}>
-                            {label(s)}
-                          </button>
-                        ))}
-                        <input value={stageNote} onChange={(e) => setStageNote(e.target.value)} placeholder="Note (optional)" />
+                      <div className="action-group">
+                        <div className="action-group-head">
+                          <span className="action-group-label">Move to stage</span>
+                          <span className="action-group-hint">Advance this lead along the pipeline — you'll confirm before it moves.</span>
+                        </div>
+                        <label className="action-note">
+                          Note (optional)
+                          <input value={stageNote} onChange={(e) => setStageNote(e.target.value)} placeholder="Add context for this move" />
+                        </label>
+                        <div className="action-btn-row">
+                          {nextStages.map((s, i) => (
+                            <button key={s} type="button" className={`sm stage-btn${i === 0 ? '' : ' ghost'}`} disabled={moveStage.isPending}
+                              onClick={() => setPendingStage(s)}>
+                              {label(s)} <ArrowRight size={14} />
+                            </button>
+                          ))}
+                        </div>
                       </div>
                     )}
 
                     {canAssign && (
-                      <div className="row-actions">
-                        <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="Assign to employee">
-                          <option value="">— Assign to —</option>
-                          {assignees.map((e) => <option key={e.id} value={e.id}>{e.fullName} · {e.designation}</option>)}
-                        </select>
-                        <button type="button" className="sm" disabled={!assigneeId || assign.isPending} onClick={() => assign.mutate()}>Assign</button>
+                      <div className="action-group">
+                        <div className="action-group-head">
+                          <span className="action-group-label">Assign owner</span>
+                          <span className="action-group-hint">Hand this lead to a field officer for follow-up.</span>
+                        </div>
+                        <div className="action-inline">
+                          <select value={assigneeId} onChange={(e) => setAssigneeId(e.target.value)} aria-label="Assign to employee">
+                            <option value="">— Select field officer —</option>
+                            {assignees.map((e) => <option key={e.id} value={e.id}>{e.fullName} · {e.designation}</option>)}
+                          </select>
+                          <button type="button" className="sm" disabled={!assigneeId || assign.isPending} onClick={() => assign.mutate()}>
+                            <UserCheck size={14} /> {assign.isPending ? 'Assigning…' : 'Assign'}
+                          </button>
+                        </div>
                       </div>
                     )}
 
-                    <div className="row-actions">
-                      {canUpdate && <button type="button" className="sm ghost" onClick={() => onEdit(lead)}>Edit details</button>}
-                      {canStage && <button type="button" className="sm ghost danger" disabled={moveStage.isPending} onClick={dropLead}>Drop lead…</button>}
-                    </div>
-                  </>
+                    {(canUpdate || canStage) && (
+                      <div className="action-group action-manage">
+                        <div className="action-btn-row">
+                          {canUpdate && <button type="button" className="sm ghost" onClick={() => onEdit(lead)}><Pencil size={14} /> Edit details</button>}
+                          {canStage && <button type="button" className="sm ghost danger" disabled={moveStage.isPending} onClick={() => { setDropReason(''); setDropOpen(true); }}><Trash2 size={14} /> Drop lead</button>}
+                        </div>
+                      </div>
+                    )}
+                  </section>
                 )}
               </>
             )}
@@ -290,12 +314,53 @@ export default function LeadDetailModal({
               </div>
             )}
 
-            <div className="modal-actions">
-              <button onClick={onClose}>Close</button>
-            </div>
-          </>
-        )}
-      </div>
-    </div>
+            {/* Confirm a pipeline stage change before it happens. */}
+            {pendingStage && (
+              <ConfirmDialog
+                tone="info"
+                icon={<ArrowRight size={22} />}
+                title={`Move lead to ${label(pendingStage)}?`}
+                message={stageNote
+                  ? `This advances the lead with your note: “${stageNote}”.`
+                  : 'This advances the lead to the selected pipeline stage.'}
+                confirmLabel="Move lead"
+                loading={moveStage.isPending}
+                onCancel={() => setPendingStage(null)}
+                onConfirm={() => moveStage.mutate(
+                  { stage: pendingStage, note: stageNote || undefined },
+                  { onSettled: () => setPendingStage(null) },
+                )}
+              />
+            )}
+
+            {/* Drop the lead — captures a required reason for the audit trail. */}
+            {dropOpen && (
+              <Modal
+                size="md"
+                onClose={() => setDropOpen(false)}
+                icon={<Trash2 size={20} />}
+                title="Drop this lead?"
+                subtitle="The lead is removed from the active pipeline. Give a reason for the audit trail — this can't be undone here."
+                footer={
+                  <>
+                    <button type="button" className="ghost" onClick={() => setDropOpen(false)} disabled={moveStage.isPending}>Cancel</button>
+                    <button type="button" className="danger" disabled={!dropReason.trim() || moveStage.isPending}
+                      onClick={() => moveStage.mutate(
+                        { stage: 'DROPPED', dropReason: dropReason.trim() },
+                        { onSettled: () => { setDropOpen(false); setDropReason(''); } },
+                      )}>
+                      {moveStage.isPending ? 'Dropping…' : 'Drop lead'}
+                    </button>
+                  </>
+                }
+              >
+                <label>Reason for dropping <span className="req">*</span>
+                  <textarea value={dropReason} onChange={(e) => setDropReason(e.target.value)} rows={3} placeholder="e.g. Customer no longer interested / ineligible" data-autofocus />
+                </label>
+              </Modal>
+            )}
+        </>
+      )}
+    </Modal>
   );
 }
