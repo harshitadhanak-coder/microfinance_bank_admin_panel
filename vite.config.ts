@@ -6,7 +6,7 @@ export default defineConfig(({ mode }) => {
   return {
     plugins: [react()],
     server: {
-      port: Number(env.VITE_PORT) || 6002,
+      port: Number(env.PORT || env.VITE_PORT) || 6002,
       proxy: {
         '/api': {
           target: env.VITE_API_TARGET || 'http://57.129.128.58:6001/',

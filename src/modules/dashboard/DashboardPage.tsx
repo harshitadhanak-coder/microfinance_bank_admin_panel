@@ -123,7 +123,7 @@ export default function DashboardPage() {
       <section className="dash-charts">
         <div className="chart-card">
           <div className="chart-card-head"><h2>Portfolio Trend</h2><span className="muted sm-text">{trend.length ? inrCompact(trend[trend.length - 1].outstanding) : ''} · 12 months</span></div>
-          {isLoading ? <ChartPlaceholder /> : <LineChart points={trend.map((t) => t.outstanding)} labels={trend.map((t) => t.month)} height={180} />}
+          {isLoading ? <ChartPlaceholder /> : <LineChart points={trend.map((t) => t.outstanding)} labels={trend.map((t) => t.month)} height={150} />}
         </div>
         <div className="chart-card">
           <div className="chart-card-head"><h2>Collection vs Target</h2><span className={`ach-badge ${cvt.collected >= cvt.target && cvt.target > 0 ? 'good' : 'warn'}`}>{cvt.target > 0 ? pct((cvt.collected / cvt.target) * 100) : '—'}</span></div>
@@ -140,7 +140,7 @@ export default function DashboardPage() {
           <div className="chart-card-head"><h2>Portfolio Quality</h2></div>
           {isLoading ? <ChartPlaceholder /> : (
             <div className="pq">
-              <DonutChart data={qualitySlices} size={128} thickness={18} centerValue={totalLoans} centerLabel="loans" />
+              <DonutChart data={qualitySlices} size={116} thickness={16} centerValue={totalLoans} centerLabel="loans" />
               <ChartLegend data={qualitySlices} />
             </div>
           )}

@@ -2,40 +2,55 @@ import { ReactNode, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../modules/auth/AuthContext';
 import { navSections } from '../modules/auth/permissions';
-import type { ModuleKey } from '../modules/auth/permissions';
+import type { ModuleDef, ModuleGroup, ModuleKey } from '../modules/auth/permissions';
 import { Modal } from '../components/Modal';
 import {
-  Banknote, CalendarCheck, CalendarOff, FileSpreadsheet, HandCoins,
+  Banknote, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
   Landmark, LayoutDashboard, ListChecks, LogOut, Menu, PanelLeft, Settings2, Target, UserCheck,
   Users, Wallet, Briefcase,
 } from '../components/icons';
 
 /** One icon per navigation module so the sidebar reads at a glance. */
 const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
-  dashboard: <LayoutDashboard size={20} />,
-  hrDashboard: <Briefcase size={20} />,
-  employees: <Users size={20} />,
-  attendance: <CalendarCheck size={20} />,
-  holidays: <CalendarOff size={20} />,
-  leave: <CalendarOff size={20} />,
-  payroll: <Wallet size={20} />,
-  salaryAdvances: <HandCoins size={20} />,
-  masters: <Settings2 size={20} />,
-  reports: <FileSpreadsheet size={20} />,
-  employeeLoans: <Banknote size={20} />,
-  branches: <Landmark size={20} />,
-  loans: <ListChecks size={20} />,
-  loanLink: <UserCheck size={20} />,
-  applications: <ListChecks size={20} />,
-  leads: <Target size={20} />,
-  collections: <HandCoins size={20} />,
-  settlements: <HandCoins size={20} />,
-  users: <UserCheck size={20} />,
-  documents: <FileSpreadsheet size={20} />,
-  settings: <Settings2 size={20} />,
+  dashboard: <LayoutDashboard size={18} />,
+  hrDashboard: <Briefcase size={18} />,
+  employees: <Users size={18} />,
+  attendance: <CalendarCheck size={18} />,
+  holidays: <CalendarOff size={18} />,
+  leave: <CalendarOff size={18} />,
+  payroll: <Wallet size={18} />,
+  salaryAdvances: <HandCoins size={18} />,
+  masters: <Settings2 size={18} />,
+  reports: <FileSpreadsheet size={18} />,
+  employeeLoans: <Banknote size={18} />,
+  branches: <Landmark size={18} />,
+  loans: <ListChecks size={18} />,
+  loanLink: <UserCheck size={18} />,
+  applications: <ListChecks size={18} />,
+  leads: <Target size={18} />,
+  collections: <HandCoins size={18} />,
+  settlements: <HandCoins size={18} />,
+  users: <UserCheck size={18} />,
+  documents: <FileSpreadsheet size={18} />,
+  settings: <Settings2 size={18} />,
+};
+
+/** One icon per collapsible menu group (Overview items render as top-level links). */
+const GROUP_ICONS: Record<ModuleGroup, ReactNode> = {
+  overview: <LayoutDashboard size={18} />,
+  hr: <Users size={18} />,
+  finance: <Wallet size={18} />,
+  operations: <Landmark size={18} />,
+  insights: <FileSpreadsheet size={18} />,
+  admin: <Settings2 size={18} />,
 };
 
 const COLLAPSE_KEY = 'mf-sidebar-collapsed';
+const NAV_OPEN_KEY = 'mf-nav-open';
+
+/** Does this module own the current URL? Mirrors NavLink's active logic. */
+const isActivePath = (m: ModuleDef, pathname: string): boolean =>
+  m.end ? pathname === m.to : pathname === m.to || pathname.startsWith(`${m.to}/`);
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
@@ -45,12 +60,26 @@ export default function AppLayout() {
   // Rail collapse (desktop, persisted) and drawer open (mobile, transient).
   const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem(COLLAPSE_KEY) === '1');
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Accordion menu: at most one group of submenu links open at a time, so the
+  // whole nav always fits the viewport without its own scrollbar.
+  const [openGroup, setOpenGroup] = useState<string | null>(() => localStorage.getItem(NAV_OPEN_KEY));
 
   useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
+  useEffect(() => {
+    if (openGroup) localStorage.setItem(NAV_OPEN_KEY, openGroup);
+    else localStorage.removeItem(NAV_OPEN_KEY);
+  }, [openGroup]);
   // Close the mobile drawer whenever the route changes.
   useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
 
   const sections = navSections(user?.role);
+
+  // Keep the group that owns the current page open (e.g. after a deep link).
+  useEffect(() => {
+    const owner = sections.find((s) => s.key !== 'overview' && s.modules.some((m) => isActivePath(m, location.pathname)));
+    if (owner) setOpenGroup(owner.key);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [location.pathname]);
 
   const nameParts = (user?.fullName ?? '').trim().split(/\s+/).filter(Boolean);
   const initials = ((nameParts[0]?.[0] ?? '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase() || 'U';
@@ -63,7 +92,7 @@ export default function AppLayout() {
       {/* Mobile top bar — hamburger + brand. Hidden on lg+. */}
       <header className="topbar">
         <button type="button" className="icon-btn topbar-toggle" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
-          <Menu size={20} />
+          <Menu size={18} />
         </button>
         <Link to="/" className="topbar-brand"><span className="brand-mark sm">MF</span> Microfinance</Link>
       </header>
@@ -89,17 +118,44 @@ export default function AppLayout() {
         </div>
 
         <nav className="sidebar-nav">
-          {sections.map((section) => (
-            <div key={section.key} className="nav-section">
-              <p className="nav-section-label">{section.label}</p>
-              {section.modules.map((m) => (
+          {sections.map((section) => {
+            // Overview stays as always-visible top-level links.
+            if (section.key === 'overview') {
+              return section.modules.map((m) => (
                 <NavLink key={m.to} to={m.to} end={m.end} title={m.label} className="nav-item">
                   <span className="nav-item-icon">{MODULE_ICONS[m.key]}</span>
                   <span className="nav-item-label">{m.label}</span>
                 </NavLink>
-              ))}
-            </div>
-          ))}
+              ));
+            }
+            const open = openGroup === section.key;
+            const hasActive = section.modules.some((m) => isActivePath(m, location.pathname));
+            return (
+              <div key={section.key} className={`nav-group${open ? ' open' : ''}${hasActive ? ' has-active' : ''}`}>
+                <button
+                  type="button"
+                  className="nav-group-head"
+                  onClick={() => setOpenGroup((g) => (g === section.key ? null : section.key))}
+                  aria-expanded={open}
+                  title={section.label}
+                >
+                  <span className="nav-item-icon">{GROUP_ICONS[section.key]}</span>
+                  <span className="nav-item-label">{section.label}</span>
+                  <ChevronDown size={14} className="nav-group-caret" />
+                </button>
+                <div className="nav-group-items">
+                  <div className="nav-group-inner">
+                    {section.modules.map((m) => (
+                      <NavLink key={m.to} to={m.to} end={m.end} title={m.label} className="nav-item sub">
+                        <span className="nav-item-icon">{MODULE_ICONS[m.key]}</span>
+                        <span className="nav-item-label">{m.label}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </nav>
 
         <div className="sidebar-foot">

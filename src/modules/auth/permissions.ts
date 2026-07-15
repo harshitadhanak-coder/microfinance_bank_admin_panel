@@ -187,12 +187,12 @@ export interface NavSection {
 }
 
 /**
- * Sidebar navigation for a role: a flat, always-visible list organised under
- * non-collapsible section headings (Overview · Human Resources · Payroll &
- * Finance · Operations · Insights · Administration), in a fixed order. Only
- * sections the role can see are returned. Hidden modules stay routable but never
- * appear here. This replaces the old collapse-by-default accordion so the whole
- * product is discoverable at a glance.
+ * Sidebar navigation for a role: sections in a fixed order (Overview · Human
+ * Resources · Payroll & Finance · Operations · Insights · Administration).
+ * AppLayout renders Overview as top-level links and every other section as a
+ * collapsible menu group (one open at a time) so the nav fits the viewport
+ * without scrolling. Only sections the role can see are returned; hidden
+ * modules stay routable but never appear here.
  */
 export const navSections = (role?: string | null): NavSection[] => {
   const mods = visibleModules(role).filter((m) => !m.hidden);
