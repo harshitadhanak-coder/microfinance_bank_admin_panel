@@ -1,8 +1,14 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
+import { FilterBar } from '../../components/FilterBar';
+import { Badge, BadgeTone } from '../../components/Badge';
+import { Tabs, TabDef } from '../../components/Tabs';
+import { Card } from '../../components/Card';
+import { Calendar, CalendarDayCell } from '../../components/Calendar';
+import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { CalendarOff, Pencil, Plus, Trash2 } from '../../components/icons';
 import { fmtDate, titleCase, apiMessage } from '../../lib/format';
@@ -23,6 +29,8 @@ interface Holiday {
 }
 
 const TYPES: HolidayType[] = ['NATIONAL', 'STATE', 'COMPANY'];
+const TYPE_TONE: Record<HolidayType, BadgeTone> = { NATIONAL: 'brass', STATE: 'info', COMPANY: 'neutral' };
+const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const emptyForm = { date: '', name: '', type: 'NATIONAL' as HolidayType, state: '', isOptional: false };
 type Form = typeof emptyForm;
@@ -36,6 +44,7 @@ export default function HolidaysPage() {
   const { user } = useAuth();
   const toast = useToast();
   const [year, setYear] = useState<number>(CURRENT_YEAR);
+  const [view, setView] = useState<'list' | 'calendar'>('list');
   const [editing, setEditing] = useState<Holiday | 'new' | null>(null);
   const [deleteFor, setDeleteFor] = useState<Holiday | null>(null);
 
@@ -47,6 +56,7 @@ export default function HolidaysPage() {
     queryFn: () => api.get(listUrl).then((r) => r.data.data as Holiday[]),
     placeholderData: keepPreviousData,
   });
+  const holidays = query.data ?? [];
 
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/holidays') });
 
@@ -59,22 +69,29 @@ export default function HolidaysPage() {
   const columns: Column<Holiday>[] = [
     { header: 'Date', render: (h) => fmtDate(h.date), sortValue: (h) => h.date },
     { header: 'Name', render: (h) => <strong>{h.name}</strong>, sortValue: (h) => h.name },
-    { header: 'Type', render: (h) => <span className={`pill pill-${h.type.toLowerCase()}`}>{titleCase(h.type)}</span>, sortValue: (h) => h.type },
+    { header: 'Type', render: (h) => <Badge tone={TYPE_TONE[h.type]}>{titleCase(h.type)}</Badge>, sortValue: (h) => h.type },
     { header: 'State', render: (h) => h.state ?? '—', sortValue: (h) => h.state ?? '' },
     { header: 'Optional', render: (h) => (h.isOptional ? 'Yes' : 'No'), sortValue: (h) => (h.isOptional ? 1 : 0) },
   ];
 
   if (canManage) {
     columns.push({
-      header: 'Actions',
+      header: '',
       render: (h) => (
-        <div className="row-actions">
-          <button type="button" className="icon-btn" title="Edit" aria-label="Edit holiday" onClick={() => setEditing(h)}><Pencil size={15} /></button>
-          <button type="button" className="icon-btn danger" title="Delete" aria-label="Delete holiday" onClick={() => setDeleteFor(h)}><Trash2 size={15} /></button>
+        <div className="actions-cell">
+          <ActionMenu items={[
+            { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(h) },
+            { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleteFor(h) },
+          ]} />
         </div>
       ),
     });
   }
+
+  const viewTabs: TabDef[] = [
+    { key: 'list', label: 'List' },
+    { key: 'calendar', label: 'Calendar' },
+  ];
 
   return (
     <>
@@ -82,24 +99,29 @@ export default function HolidaysPage() {
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Holidays' }]}
         title="Holidays"
         subtitle="National, state and company holiday calendar"
-        actions={canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
+        actions={canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar')} />}
       />
 
-      <div className="filter-row">
-        <label className="inline-field">Year
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
+      <FilterBar>
+        <label>Year
+          <select value={year} onChange={(e) => setYear(Number(e.target.value))} aria-label="Filter by year">
             {YEARS.map((y) => <option key={y} value={y}>{y}</option>)}
           </select>
         </label>
-      </div>
+      </FilterBar>
 
-      <DataTable
-        columns={columns}
-        rows={query.data ?? []}
-        loading={query.isLoading}
-        empty={`No holidays configured for ${year}.`}
-        searchPlaceholder="Search by name, type or state…"
-      />
+      {view === 'list' ? (
+        <DataTable
+          columns={columns}
+          rows={holidays}
+          loading={query.isLoading}
+          empty={`No holidays configured for ${year}.`}
+          searchPlaceholder="Search by name, type or state…"
+        />
+      ) : (
+        <HolidayCalendarView year={year} holidays={holidays} loading={query.isLoading} />
+      )}
 
       {editing && (
         <HolidayFormModal
@@ -122,6 +144,60 @@ export default function HolidaysPage() {
         />
       )}
     </>
+  );
+}
+
+// ── Month calendar (navigable within the selected year) ─────────────────────
+const pad = (n: number) => String(n).padStart(2, '0');
+
+function HolidayCalendarView({ year, holidays, loading }: { year: number; holidays: Holiday[]; loading: boolean }) {
+  const [month, setMonth] = useState<number>(new Date().getFullYear() === year ? new Date().getMonth() + 1 : 1);
+
+  const byDate = useMemo(() => {
+    const map = new Map<string, Holiday>();
+    holidays.forEach((h) => map.set(h.date.slice(0, 10), h));
+    return map;
+  }, [holidays]);
+
+  const days: CalendarDayCell[] = useMemo(() => {
+    const count = new Date(year, month, 0).getDate();
+    return Array.from({ length: count }, (_, i) => {
+      const date = `${year}-${pad(month)}-${pad(i + 1)}`;
+      const h = byDate.get(date);
+      return {
+        date,
+        primary: h ? { label: h.name, tone: TYPE_TONE[h.type] } : undefined,
+        title: h ? `${h.name}${h.isOptional ? ' (optional)' : ''}` : undefined,
+      };
+    });
+  }, [year, month, byDate]);
+
+  const monthHolidays = holidays.filter((h) => Number(h.date.slice(5, 7)) === month).length;
+
+  return (
+    <Card title={`${MONTHS[month - 1]} ${year}`} action={<span className="muted sm-text">{monthHolidays} holiday{monthHolidays === 1 ? '' : 's'} this month</span>}>
+      {loading ? (
+        <p className="muted">Loading calendar…</p>
+      ) : (
+        <Calendar
+          month={month}
+          year={year}
+          days={days}
+          onPrev={month > 1 ? () => setMonth((m) => m - 1) : undefined}
+          onNext={month < 12 ? () => setMonth((m) => m + 1) : undefined}
+          legend={(
+            <div className="att-legend">
+              <span className="att-legend-lead">Holiday types:</span>
+              {TYPES.map((t) => (
+                <span key={t} className="att-legend-item">
+                  <span className={`legend-swatch tone-${TYPE_TONE[t]}`} aria-hidden="true" />{titleCase(t)}
+                </span>
+              ))}
+            </div>
+          )}
+        />
+      )}
+    </Card>
   );
 }
 

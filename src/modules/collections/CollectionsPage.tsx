@@ -1,129 +1,46 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
-import { useServerTable } from '../../components/useServerTable';
-import { inr } from '../../components/StatCard';
+import { FilterBar } from '../../components/FilterBar';
+import { ActionMenu } from '../../components/ActionMenu';
+import { Drawer } from '../../components/Drawer';
+import { Modal } from '../../components/Modal';
 import ImportModal from '../../components/ImportModal';
+import { useServerTable } from '../../components/useServerTable';
+import { useToast } from '../../components/Toast';
+import { Banknote, Eye, Pencil, Plus } from '../../components/icons';
+import { inr, fmtDate, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { Modal } from '../../components/Modal';
-import { AlertCircle, Banknote, UserCheck } from '../../components/icons';
+import { ActiveLoanOption, PAYMENT_MODES, PaymentMode, PaymentRow, modeLabel } from './shared';
 
-// ── Shared types ────────────────────────────────────────────────────────────
-interface CollectionLoan {
-  id: string;
-  loanNumber: string;
-  outstandingPrincipal: string;
-  installmentAmount: string;
-  status: string;
-  nextDueDate?: string | null;
-  client: { fullName: string; phoneNumber: string };
-  assignedOfficer: { id: string; fullName: string } | null;
-}
-interface Employee { id: string; fullName: string; employeeCode: string; designation: string | null }
-type DayCloseStatus = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'APPROVED' | 'REJECTED';
-interface DayEndSettlement {
-  id: string;
-  businessDate: string;
-  totalCashCollected: string;
-  totalCashDeposited: string;
-  varianceAmount: string;
-  status: DayCloseStatus;
-  depositReference: string | null;
-  submittedAt: string | null;
-  reviewNote: string | null;
-  approvedById: string | null;
-  employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
-}
-interface SettlementOffer {
-  id: string; settlementType: string; status: string; settlementAmount: string; waiverAmount: string;
-  loan: { loanNumber: string; client: { fullName: string }; branch: { name: string } };
-}
-interface PaymentRow {
-  id: string; receiptNumber: string; amount: string; paymentMode: string; collectedAt: string; remarks: string | null;
-  loan: { loanNumber: string; client: { fullName: string }; branch: { name: string } | null };
-  collectedByEmployee: { fullName: string } | null;
-}
-interface ActiveLoanOption { id: string; loanNumber: string; client: { fullName: string }; assignedOfficer?: { fullName: string } | null }
-
-const fmtDate = (iso?: string | null) =>
-  iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
 const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
-const PAYMENT_MODES = ['CASH', 'UPI', 'BANK_TRANSFER', 'CHEQUE'] as const;
-const modeLabel = (m: string) => m.replaceAll('_', ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
-const apiMessage = (err: unknown, fallback: string): string =>
-  (axios.isAxiosError(err) && err.response?.data?.message) || fallback;
-
-type Tab = 'collections' | 'payments' | 'verification' | 'offers';
 
 /**
- * Collections & Settlements — the branch manager's one screen for field-officer
- * oversight:
- *   • Collections   — assign each active loan to a field officer for collection.
- *   • Verification  — accept each officer's day-end cash against the expected total.
- *   • Offers        — approve/complete settlement offers and run NPA classification
- *                     (HQ & accounts only).
+ * Collections — List. The payment ledger split out of the old "Collections &
+ * Settlements" mega-page: every recorded collection, with manual record / edit /
+ * import. Amounts are always allocated by the backend allocation engine to the
+ * oldest unpaid installments — never created directly. Officer-assignment moved
+ * to Loans › Assignments; day-end cash verification to Day-End Settlements.
  */
 export default function CollectionsPage() {
+  const qc = useQueryClient();
   const { user } = useAuth();
-
-  const canLink = can(user?.role, 'loan:link');
-  const canVerify = can(user?.role, 'settlement:verify');
-  const canDecide = can(user?.role, 'settlement:decide');
-  const canComplete = can(user?.role, 'settlement:complete');
-  const canClassify = can(user?.role, 'collection:classify');
-  const canRecord = can(user?.role, 'collection:record');
-  const showOffers = canDecide || canComplete || canClassify;
-
-  const [tab, setTab] = useState<Tab>('collections');
-
-  const tabs: { key: Tab; label: string }[] = [
-    { key: 'collections', label: 'Collections' },
-    ...(canRecord ? [{ key: 'payments' as Tab, label: 'Payments' }] : []),
-    { key: 'verification', label: 'Settlement verification' },
-    ...(showOffers ? [{ key: 'offers' as Tab, label: 'Settlement offers' }] : []),
-  ];
-
-  return (
-    <>
-      <PageHeader
-        breadcrumb={[{ label: 'Operations' }, { label: 'Collections & Settlements' }]}
-        title="Collections & Settlements"
-        subtitle={<>Assign loans to field officers and verify their day-end cash.{user?.branch ? ` — ${user.branch.name}` : ''}</>}
-        tabs={(
-          <div className="tabs">
-            {tabs.map((t) => (
-              <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-                {t.label}
-              </button>
-            ))}
-          </div>
-        )}
-      />
-
-      {tab === 'collections' && <CollectionsTab canLink={canLink} />}
-      {tab === 'payments' && canRecord && <PaymentsTab branchScoped={!!user?.branchId} />}
-      {tab === 'verification' && <VerificationTab canVerify={canVerify} branchScoped={!!user?.branchId} />}
-      {tab === 'offers' && showOffers && (
-        <OffersTab canDecide={canDecide} canComplete={canComplete} canClassify={canClassify} />
-      )}
-    </>
-  );
-}
-
-// ── Payments: collection ledger + record / edit / import ────────────────────
-function PaymentsTab({ branchScoped }: { branchScoped: boolean }) {
-  const queryClient = useQueryClient();
   const table = useServerTable({ initialSort: { key: 'collectedAt', direction: 'desc' } });
+  const [from, setFrom] = useState('');
+  const [to, setTo] = useState('');
   const [recording, setRecording] = useState(false);
   const [editing, setEditing] = useState<PaymentRow | null>(null);
+  const [peek, setPeek] = useState<PaymentRow | null>(null);
   const [importing, setImporting] = useState(false);
 
-  const url = `/collections/payments?${table.params}`;
+  const branchScoped = !!user?.branchId;
+  const canRecord = can(user?.role, 'collection:record');
+
+  const url = `/collections/payments?${table.params}${from ? `&from=${from}` : ''}${to ? `&to=${to}` : ''}`;
   const { data, isLoading } = useQuery({
     queryKey: [url],
     queryFn: () => api.get(url).then((r) => r.data),
@@ -131,10 +48,10 @@ function PaymentsTab({ branchScoped }: { branchScoped: boolean }) {
   });
   const rows = (data?.data ?? []) as PaymentRow[];
   const totalItems = (data?.pagination?.totalItems ?? 0) as number;
-  const refresh = () => queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/collections/payments') });
+  const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/collections/payments') });
 
   const columns: Column<PaymentRow>[] = [
-    { header: 'Receipt', render: (p) => <code>{p.receiptNumber}</code>, sortKey: 'receiptNumber' },
+    { header: 'Receipt', render: (p) => <a className="cell-link" onClick={() => setPeek(p)}><code>{p.receiptNumber}</code></a>, sortKey: 'receiptNumber' },
     { header: 'Loan', render: (p) => <code>{p.loan.loanNumber}</code>, sortKey: 'loanNumber' },
     { header: 'Client', render: (p) => p.loan.client.fullName, sortKey: 'client' },
     ...(branchScoped ? [] : [{ header: 'Branch', render: (p) => p.loan.branch?.name ?? '—' } satisfies Column<PaymentRow>]),
@@ -142,15 +59,48 @@ function PaymentsTab({ branchScoped }: { branchScoped: boolean }) {
     { header: 'Mode', render: (p) => modeLabel(p.paymentMode), sortKey: 'paymentMode' },
     { header: 'Collected by', render: (p) => p.collectedByEmployee?.fullName ?? '—' },
     { header: 'Date', render: (p) => fmtDateTime(p.collectedAt), sortKey: 'collectedAt' },
-    { header: '', render: (p) => <button type="button" className="sm ghost" onClick={() => setEditing(p)}>Edit</button> },
+    {
+      header: '',
+      render: (p) => (
+        <div className="actions-cell">
+          <ActionMenu
+            items={[
+              { key: 'view', label: 'View details', icon: <Eye size={15} />, onSelect: () => setPeek(p) },
+              ...(canRecord ? [{ key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(p) }] : []),
+            ]}
+          />
+        </div>
+      ),
+    },
+  ];
+
+  const chips = [
+    ...(from ? [{ key: 'from', label: `From: ${fmtDate(from)}`, onRemove: () => { setFrom(''); table.setPage(1); } }] : []),
+    ...(to ? [{ key: 'to', label: `To: ${fmtDate(to)}`, onRemove: () => { setTo(''); table.setPage(1); } }] : []),
   ];
 
   return (
     <>
-      <div className="row" style={{ justifyContent: 'flex-end', gap: '0.5rem', marginBottom: '0.75rem' }}>
-        <button type="button" className="ghost" onClick={() => setImporting(true)}>Import</button>
-        <button type="button" onClick={() => setRecording(true)}>Record payment</button>
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Collections' }]}
+        title="Collections"
+        subtitle={<>Recorded loan repayments{user?.branch ? ` — ${user.branch.name}` : ''}</>}
+        actions={canRecord && (
+          <>
+            <button className="ghost" onClick={() => setImporting(true)}>Import</button>
+            <button className="btn-lg" onClick={() => setRecording(true)}><Plus size={16} /> Record payment</button>
+          </>
+        )}
+      />
+
+      <FilterBar chips={chips} onReset={chips.length ? () => { setFrom(''); setTo(''); table.setPage(1); } : undefined}>
+        <label>From
+          <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); table.setPage(1); }} aria-label="Collected from date" />
+        </label>
+        <label>To
+          <input type="date" value={to} onChange={(e) => { setTo(e.target.value); table.setPage(1); }} aria-label="Collected to date" />
+        </label>
+      </FilterBar>
 
       <DataTable
         columns={columns}
@@ -164,6 +114,34 @@ function PaymentsTab({ branchScoped }: { branchScoped: boolean }) {
           search: table.search, onSearchChange: table.onSearchChange,
         }}
       />
+
+      {peek && (
+        <Drawer
+          onClose={() => setPeek(null)}
+          title={<code>{peek.receiptNumber}</code>}
+          subtitle={`${peek.loan.loanNumber} · ${peek.loan.client.fullName}`}
+          footer={<button onClick={() => setPeek(null)}>Close</button>}
+        >
+          <dl className="detail-list one-col">
+            <div><dt>Amount</dt><dd><strong className="num">{inr(peek.amount)}</strong></dd></div>
+            <div><dt>Mode</dt><dd>{modeLabel(peek.paymentMode)}</dd></div>
+            <div><dt>Loan</dt><dd><code>{peek.loan.loanNumber}</code></dd></div>
+            <div><dt>Client</dt><dd>{peek.loan.client.fullName}</dd></div>
+            {peek.loan.branch && <div><dt>Branch</dt><dd>{peek.loan.branch.name}</dd></div>}
+            <div><dt>Collected by</dt><dd>{peek.collectedByEmployee?.fullName ?? '—'}</dd></div>
+            <div><dt>Collected at</dt><dd>{fmtDateTime(peek.collectedAt)}</dd></div>
+            <div><dt>Remarks</dt><dd>{peek.remarks || '—'}</dd></div>
+          </dl>
+          <p className="muted sm-text" style={{ marginTop: '0.75rem' }}>
+            The amount was allocated by the collection engine to this loan's oldest unpaid installments.
+          </p>
+          {canRecord && (
+            <div className="row-actions" style={{ marginTop: '0.75rem' }}>
+              <button className="sm ghost" onClick={() => { setEditing(peek); setPeek(null); }}><Pencil size={14} /> Edit</button>
+            </div>
+          )}
+        </Drawer>
+      )}
 
       {recording && <RecordPaymentModal onClose={() => setRecording(false)} onDone={() => { setRecording(false); refresh(); }} />}
       {editing && <EditPaymentModal payment={editing} onClose={() => setEditing(null)} onDone={() => { setEditing(null); refresh(); }} />}
@@ -187,10 +165,12 @@ function PaymentsTab({ branchScoped }: { branchScoped: boolean }) {
   );
 }
 
+// ── Record a manual payment ─────────────────────────────────────────────────
 function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
   const [loanId, setLoanId] = useState('');
   const [amount, setAmount] = useState('');
-  const [paymentMode, setPaymentMode] = useState<(typeof PAYMENT_MODES)[number]>('CASH');
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>('CASH');
   const [collectedAt, setCollectedAt] = useState('');
   const [remarks, setRemarks] = useState('');
   const [error, setError] = useState('');
@@ -201,15 +181,11 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
   });
 
   const record = useMutation({
-    mutationFn: () =>
-      api.post('/collections/payments/manual', {
-        loanId,
-        amount: Number(amount),
-        paymentMode,
-        collectedAt: collectedAt || undefined,
-        remarks: remarks.trim() || undefined,
-      }),
-    onSuccess: onDone,
+    mutationFn: () => api.post('/collections/payments/manual', {
+      loanId, amount: Number(amount), paymentMode,
+      collectedAt: collectedAt || undefined, remarks: remarks.trim() || undefined,
+    }),
+    onSuccess: () => { toast.success('Payment recorded.'); onDone(); },
     onError: (err) => setError(apiMessage(err, 'Could not record the payment.')),
   });
 
@@ -221,7 +197,7 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
       onClose={onClose}
       icon={<Banknote size={20} />}
       title="Record payment"
-      subtitle="Recorded against the loan's assigned field officer. Amount is allocated to the oldest unpaid installments."
+      subtitle="Recorded against the loan's assigned field officer. The amount is allocated to the oldest unpaid installments."
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
@@ -232,43 +208,44 @@ function RecordPaymentModal({ onClose, onDone }: { onClose: () => void; onDone: 
       }
     >
       <div className="form-grid">
-          <label className="span-all">Loan
-            <select value={loanId} onChange={(e) => setLoanId(e.target.value)}>
-              <option value="">Select an active loan</option>
-              {(loans ?? []).map((l) => (
-                <option key={l.id} value={l.id}>{l.loanNumber} · {l.client.fullName}{l.assignedOfficer ? ` · ${l.assignedOfficer.fullName}` : ''}</option>
-              ))}
-            </select>
-          </label>
-          <label>Amount (₹)
-            <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="2500" />
-          </label>
-          <label>Mode
-            <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as (typeof PAYMENT_MODES)[number])}>
-              {PAYMENT_MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
-            </select>
-          </label>
-          <label>Date (optional)
-            <input type="date" value={collectedAt} onChange={(e) => setCollectedAt(e.target.value)} />
-          </label>
-          <label>Remarks (optional)
-            <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="EMI collection" />
-          </label>
-        </div>
-
-        {error && <div className="error-box">{error}</div>}
+        <label className="span-all">Loan
+          <select value={loanId} onChange={(e) => setLoanId(e.target.value)}>
+            <option value="">Select an active loan</option>
+            {(loans ?? []).map((l) => (
+              <option key={l.id} value={l.id}>{l.loanNumber} · {l.client.fullName}{l.assignedOfficer ? ` · ${l.assignedOfficer.fullName}` : ''}</option>
+            ))}
+          </select>
+        </label>
+        <label>Amount (₹)
+          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="2500" />
+        </label>
+        <label>Mode
+          <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}>
+            {PAYMENT_MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
+          </select>
+        </label>
+        <label>Date (optional)
+          <input type="date" value={collectedAt} onChange={(e) => setCollectedAt(e.target.value)} />
+        </label>
+        <label>Remarks (optional)
+          <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="EMI collection" />
+        </label>
+      </div>
+      {error && <div className="error-box">{error}</div>}
     </Modal>
   );
 }
 
+// ── Edit a collection (mode + remarks only; amount is immutable) ─────────────
 function EditPaymentModal({ payment, onClose, onDone }: { payment: PaymentRow; onClose: () => void; onDone: () => void }) {
-  const [paymentMode, setPaymentMode] = useState<(typeof PAYMENT_MODES)[number]>(payment.paymentMode as (typeof PAYMENT_MODES)[number]);
+  const toast = useToast();
+  const [paymentMode, setPaymentMode] = useState<PaymentMode>(payment.paymentMode as PaymentMode);
   const [remarks, setRemarks] = useState(payment.remarks ?? '');
   const [error, setError] = useState('');
 
   const save = useMutation({
     mutationFn: () => api.patch(`/collections/payments/${payment.id}`, { paymentMode, remarks: remarks.trim() }),
-    onSuccess: onDone,
+    onSuccess: () => { toast.success('Collection updated.'); onDone(); },
     onError: (err) => setError(apiMessage(err, 'Could not update the collection.')),
   });
 
@@ -289,408 +266,14 @@ function EditPaymentModal({ payment, onClose, onDone }: { payment: PaymentRow; o
       }
     >
       <label>Payment mode
-          <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as (typeof PAYMENT_MODES)[number])}>
-            {PAYMENT_MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
-          </select>
-        </label>
-        <label>Remarks
-          <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add a note" />
-        </label>
-
-        {error && <div className="error-box">{error}</div>}
-    </Modal>
-  );
-}
-
-// ── Collections: active loans + assign field officer ────────────────────────
-function CollectionsTab({ canLink }: { canLink: boolean }) {
-  const queryClient = useQueryClient();
-  const table = useServerTable({ initialSort: { key: 'loanNumber', direction: 'asc' } });
-  const [assignFor, setAssignFor] = useState<CollectionLoan | null>(null);
-
-  const url = `/loans?${table.params}&status=ACTIVE`;
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: () => api.get(url).then((r) => r.data),
-    placeholderData: keepPreviousData,
-  });
-  const rows = (data?.data ?? []) as CollectionLoan[];
-  const totalItems = (data?.pagination?.totalItems ?? 0) as number;
-
-  const { data: employees } = useQuery({
-    queryKey: ['/employees', 'options'],
-    queryFn: () => api.get('/employees?pageSize=100').then((r) => r.data.data as Employee[]),
-    enabled: canLink,
-  });
-
-  const columns: Column<CollectionLoan>[] = [
-    { header: 'Loan no.', render: (l) => <code>{l.loanNumber}</code>, sortKey: 'loanNumber' },
-    { header: 'Client', render: (l) => <><strong>{l.client.fullName}</strong><div className="muted sm-text">{l.client.phoneNumber}</div></>, sortKey: 'client' },
-    { header: 'Outstanding', render: (l) => <span className="num">{inr(l.outstandingPrincipal)}</span>, sortKey: 'outstandingPrincipal' },
-    { header: 'EMI', render: (l) => <span className="num">{inr(l.installmentAmount)}</span>, sortKey: 'installmentAmount' },
-    { header: 'Next due', render: (l) => fmtDate(l.nextDueDate) },
-    {
-      header: 'Field officer',
-      render: (l) =>
-        l.assignedOfficer
-          ? <span className="pill pill-approved">{l.assignedOfficer.fullName}</span>
-          : <span className="pill pill-new">Unassigned</span>,
-    },
-    ...(canLink
-      ? [{ header: '', render: (l: CollectionLoan) => <button type="button" className="sm ghost" onClick={() => setAssignFor(l)}>{l.assignedOfficer ? 'Reassign' : 'Assign'}</button> } satisfies Column<CollectionLoan>]
-      : []),
-  ];
-
-  return (
-    <>
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        empty="No active loans to collect yet."
-        searchPlaceholder="Search by loan no. or client…"
-        server={{
-          page: table.page,
-          pageSize: table.pageSize,
-          totalItems,
-          onPageChange: table.setPage,
-          sort: table.sort,
-          onSortChange: table.onSortChange,
-          search: table.search,
-          onSearchChange: table.onSearchChange,
-        }}
-      />
-
-      {assignFor && (
-        <AssignModal
-          loan={assignFor}
-          employees={employees ?? []}
-          onClose={() => setAssignFor(null)}
-          onDone={() => {
-            setAssignFor(null);
-            void queryClient.invalidateQueries({ queryKey: [url] });
-          }}
-        />
-      )}
-    </>
-  );
-}
-
-function AssignModal({
-  loan,
-  employees,
-  onClose,
-  onDone,
-}: {
-  loan: CollectionLoan;
-  employees: Employee[];
-  onClose: () => void;
-  onDone: () => void;
-}) {
-  const [officerId, setOfficerId] = useState(loan.assignedOfficer?.id ?? '');
-  const [error, setError] = useState('');
-
-  const assign = useMutation({
-    mutationFn: () => api.patch(`/loans/${loan.id}/assign-officer`, { assignedOfficerId: officerId }),
-    onSuccess: onDone,
-    onError: (err) => setError(apiMessage(err, 'Could not assign the loan.')),
-  });
-
-  return (
-    <Modal
-      size="md"
-      onClose={onClose}
-      icon={<UserCheck size={20} />}
-      title={`Assign loan ${loan.loanNumber}`}
-      subtitle={`Customer: ${loan.client.fullName}`}
-      footer={
-        <>
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
-            {assign.isPending ? 'Assigning…' : 'Assign loan'}
-          </button>
-        </>
-      }
-    >
-      <label>
-          Field officer
-          <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
-            <option value="">Select a field officer</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.fullName}{e.designation ? ` · ${e.designation}` : ''}</option>
-            ))}
-          </select>
-        </label>
-
-        {error && <div className="error-box" style={{ marginTop: '0.6rem' }}>{error}</div>}
-    </Modal>
-  );
-}
-
-// ── Settlement verification: day-end cash ───────────────────────────────────
-//
-// Lifecycle: the officer SUBMITS the day's cash; the branch VERIFIES the
-// counted amount against the ledger, then APPROVES (locks) it — or REJECTS it
-// with a note so the officer corrects and resubmits.
-const DAY_CLOSE_PILL: Record<DayCloseStatus, string> = {
-  DRAFT: 'pill-new', SUBMITTED: 'pill-new', VERIFIED: 'pill-applied',
-  APPROVED: 'pill-approved', REJECTED: 'pill-rejected',
-};
-const DAY_CLOSE_LABEL: Record<DayCloseStatus, string> = {
-  DRAFT: 'Draft', SUBMITTED: 'Submitted', VERIFIED: 'Verified', APPROVED: 'Approved', REJECTED: 'Rejected',
-};
-
-function VerificationTab({ canVerify, branchScoped }: { canVerify: boolean; branchScoped: boolean }) {
-  const queryClient = useQueryClient();
-  const [status, setStatus] = useState('PENDING');
-  const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
-  const [rejecting, setRejecting] = useState<DayEndSettlement | null>(null);
-
-  const url = `/collections/settlements${status ? `?status=${status}` : ''}`;
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: () => api.get(url).then((r) => r.data.data as DayEndSettlement[]),
-  });
-  const rows = data ?? [];
-  const refresh = () => queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/collections/settlements') });
-
-  const act = useMutation({
-    mutationFn: ({ id, action, note }: { id: string; action: 'verify' | 'accept' | 'reject'; note?: string }) =>
-      api.post(`/collections/settlements/${id}/${action}`, note ? { note } : undefined),
-    onSuccess: (res, variables) => {
-      setBanner({ ok: true, text: res.data?.message ?? 'Settlement updated.' });
-      if (variables.action === 'reject') setRejecting(null);
-      void refresh();
-    },
-    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not update the settlement.') }),
-  });
-
-  const columns: Column<DayEndSettlement>[] = [
-    { header: 'Field officer', render: (s) => <><strong>{s.employee.fullName}</strong><div className="muted sm-text">{s.employee.employeeCode}</div></>, sortValue: (s) => s.employee.fullName },
-    ...(branchScoped ? [] : [{ header: 'Branch', render: (s) => s.employee.branch?.name ?? '—', sortValue: (s) => s.employee.branch?.name ?? '' } satisfies Column<DayEndSettlement>]),
-    { header: 'Date', render: (s) => fmtDate(s.businessDate), sortValue: (s) => new Date(s.businessDate) },
-    { header: 'System cash', render: (s) => <span className="num">{inr(s.totalCashCollected)}</span>, sortValue: (s) => Number(s.totalCashCollected) },
-    { header: 'Handed over', render: (s) => <span className="num">{inr(s.totalCashDeposited)}</span>, sortValue: (s) => Number(s.totalCashDeposited) },
-    {
-      header: 'Short / Excess',
-      render: (s) => {
-        const v = Number(s.varianceAmount);
-        const cls = v === 0 ? '' : v > 0 ? 'pill pill-rejected' : 'pill pill-sma_0';
-        const text = v === 0 ? '—' : v > 0 ? `Short ${inr(Math.abs(v))}` : `Excess ${inr(Math.abs(v))}`;
-        return v === 0 ? <span className="muted">—</span> : <span className={cls}>{text}</span>;
-      },
-      sortValue: (s) => Number(s.varianceAmount),
-    },
-    { header: 'Deposit ref.', render: (s) => s.depositReference ? <span className="muted sm-text">{s.depositReference}</span> : <span className="muted">—</span> },
-    { header: 'Submitted', render: (s) => s.submittedAt ? fmtDateTime(s.submittedAt) : '—', sortValue: (s) => s.submittedAt ?? '' },
-    {
-      header: 'Status',
-      render: (s) => (
-        <span className={`pill ${DAY_CLOSE_PILL[s.status]}`} title={s.status === 'REJECTED' && s.reviewNote ? s.reviewNote : undefined}>
-          {DAY_CLOSE_LABEL[s.status]}
-        </span>
-      ),
-      sortValue: (s) => s.status,
-    },
-    ...(canVerify
-      ? [{
-          header: 'Actions',
-          render: (s: DayEndSettlement) => {
-            if (s.status === 'APPROVED') return <span className="muted sm-text">Locked</span>;
-            if (s.status === 'REJECTED') return <span className="muted sm-text">Awaiting resubmission</span>;
-            return (
-              <div className="row-actions">
-                {s.status === 'SUBMITTED' && (
-                  <button type="button" className="sm" disabled={act.isPending} title="Confirm the counted cash matches the ledger" onClick={() => { setBanner(null); act.mutate({ id: s.id, action: 'verify' }); }}>
-                    Verify
-                  </button>
-                )}
-                {s.status === 'VERIFIED' && (
-                  <button type="button" className="sm" disabled={act.isPending} title="Approve and lock this settlement" onClick={() => { setBanner(null); act.mutate({ id: s.id, action: 'accept' }); }}>
-                    Approve
-                  </button>
-                )}
-                <button type="button" className="sm ghost" disabled={act.isPending} onClick={() => { setBanner(null); setRejecting(s); }}>
-                  Reject
-                </button>
-              </div>
-            );
-          },
-        } satisfies Column<DayEndSettlement>]
-      : []),
-  ];
-
-  return (
-    <>
-      <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-        <select value={status} onChange={(e) => setStatus(e.target.value)}>
-          <option value="PENDING">Pending review</option>
-          <option value="SUBMITTED">Submitted</option>
-          <option value="VERIFIED">Verified</option>
-          <option value="APPROVED">Approved</option>
-          <option value="REJECTED">Rejected</option>
-          <option value="">All</option>
+        <select value={paymentMode} onChange={(e) => setPaymentMode(e.target.value as PaymentMode)}>
+          {PAYMENT_MODES.map((m) => <option key={m} value={m}>{modeLabel(m)}</option>)}
         </select>
-      </div>
-
-      {banner && <div className={banner.ok ? 'success-box' : 'error-box'} style={{ marginBottom: '1rem' }}>{banner.text}</div>}
-
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        empty={status === 'PENDING' ? 'No settlements waiting for review.' : 'No settlements found.'}
-        searchPlaceholder="Search by field officer…"
-      />
-
-      {rejecting && (
-        <RejectSettlementModal
-          settlement={rejecting}
-          pending={act.isPending}
-          onClose={() => setRejecting(null)}
-          onReject={(note) => act.mutate({ id: rejecting.id, action: 'reject', note })}
-        />
-      )}
-    </>
-  );
-}
-
-function RejectSettlementModal({
-  settlement,
-  pending,
-  onClose,
-  onReject,
-}: {
-  settlement: DayEndSettlement;
-  pending: boolean;
-  onClose: () => void;
-  onReject: (note: string) => void;
-}) {
-  const [note, setNote] = useState('');
-  return (
-    <Modal
-      size="md"
-      onClose={onClose}
-      icon={<AlertCircle size={20} />}
-      title="Reject settlement"
-      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · system cash ${inr(settlement.totalCashCollected)}, handed over ${inr(settlement.totalCashDeposited)}. The officer will see this note and must resubmit the day's settlement.`}
-      footer={
-        <>
-          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="danger" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim())}>
-            {pending ? 'Rejecting…' : 'Reject settlement'}
-          </button>
-        </>
-      }
-    >
-      <label>Reason
-        <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} placeholder="e.g. Cash short by ₹500 — recount and resubmit" />
       </label>
+      <label>Remarks
+        <input value={remarks} onChange={(e) => setRemarks(e.target.value)} placeholder="Add a note" />
+      </label>
+      {error && <div className="error-box">{error}</div>}
     </Modal>
-  );
-}
-
-// ── Settlement offers + NPA classification (HQ & accounts) ──────────────────
-function OffersTab({ canDecide, canComplete, canClassify }: { canDecide: boolean; canComplete: boolean; canClassify: boolean }) {
-  const qc = useQueryClient();
-  const table = useServerTable();
-  const [banner, setBanner] = useState<{ ok: boolean; text: string } | null>(null);
-  const url = `/settlements?${table.params}`;
-  const { data, isLoading } = useQuery({
-    queryKey: [url],
-    queryFn: () => api.get(url).then((r) => r.data),
-    placeholderData: keepPreviousData,
-  });
-  const rows = (data?.data ?? []) as SettlementOffer[];
-  const totalItems = (data?.pagination?.totalItems ?? 0) as number;
-
-  const invalidate = () =>
-    qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/settlements') });
-
-  const decide = useMutation({
-    mutationFn: ({ id, decision }: { id: string; decision: 'APPROVED' | 'REJECTED' }) =>
-      api.post(`/settlements/${id}/decision`, { decision }),
-    onSuccess: (_data, variables) => {
-      setBanner({ ok: true, text: variables.decision === 'APPROVED' ? 'Settlement offer approved.' : 'Settlement offer rejected.' });
-      void invalidate();
-    },
-    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not record the settlement decision.') }),
-  });
-  const complete = useMutation({
-    mutationFn: (id: string) => api.post(`/settlements/${id}/complete`),
-    onSuccess: () => {
-      setBanner({ ok: true, text: 'Settlement completed and closure notice issued.' });
-      void invalidate();
-    },
-    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not complete the settlement.') }),
-  });
-  const classify = useMutation({
-    mutationFn: () => api.post('/collections/jobs/classify-npa'),
-    onSuccess: () => setBanner({ ok: true, text: 'Overdue and asset classification completed.' }),
-    onError: (err) => setBanner({ ok: false, text: apiMessage(err, 'Could not run the NPA classification.') }),
-  });
-
-  const columns: Column<SettlementOffer>[] = [
-    { header: 'Loan', render: (s) => <code>{s.loan.loanNumber}</code>, sortKey: 'loanNumber' },
-    { header: 'Client', render: (s) => s.loan.client.fullName, sortKey: 'client' },
-    { header: 'Branch', render: (s) => s.loan.branch.name, sortKey: 'branch' },
-    { header: 'Type', render: (s) => s.settlementType.replace('_', ' '), sortKey: 'settlementType' },
-    { header: 'Amount', render: (s) => <span className="num">{inr(s.settlementAmount)}</span>, sortKey: 'settlementAmount' },
-    { header: 'Waiver', render: (s) => <span className="num">{inr(s.waiverAmount)}</span>, sortKey: 'waiverAmount' },
-    { header: 'Status', render: (s) => <span className={`pill pill-${s.status.toLowerCase()}`}>{s.status.replace('_', ' ')}</span>, sortKey: 'status' },
-  ];
-
-  if (canDecide || canComplete) {
-    columns.push({
-      header: 'Actions',
-      render: (s) => {
-        const decidable = canDecide && s.status === 'PENDING_APPROVAL';
-        const completable = canComplete && s.status === 'APPROVED';
-        if (!decidable && !completable) return <span className="muted">—</span>;
-        return (
-          <div className="row-actions">
-            {decidable && (
-              <>
-                <button className="sm" onClick={() => decide.mutate({ id: s.id, decision: 'APPROVED' })}>Approve</button>
-                <button className="sm ghost" onClick={() => decide.mutate({ id: s.id, decision: 'REJECTED' })}>Reject</button>
-              </>
-            )}
-            {completable && (
-              <button className="sm" onClick={() => complete.mutate(s.id)}>Complete &amp; issue NOC</button>
-            )}
-          </div>
-        );
-      },
-    });
-  }
-
-  return (
-    <>
-      {canClassify && (
-        <div className="row" style={{ justifyContent: 'flex-end', marginBottom: '0.75rem' }}>
-          <button className="ghost" onClick={() => { setBanner(null); classify.mutate(); }} disabled={classify.isPending}>
-            {classify.isPending ? 'Running…' : 'Run NPA classification'}
-          </button>
-        </div>
-      )}
-      {banner && <div className={banner.ok ? 'success-box' : 'error-box'} style={{ marginBottom: '1rem' }}>{banner.text}</div>}
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={isLoading}
-        empty="No settlement offers pending."
-        searchPlaceholder="Search by loan no., client or branch…"
-        server={{
-          page: table.page,
-          pageSize: table.pageSize,
-          totalItems,
-          onPageChange: table.setPage,
-          sort: table.sort,
-          onSortChange: table.onSortChange,
-          search: table.search,
-          onSearchChange: table.onSearchChange,
-        }}
-      />
-    </>
   );
 }

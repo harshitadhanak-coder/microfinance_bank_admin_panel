@@ -1,10 +1,10 @@
-import { useQuery } from '@tanstack/react-query';
-import { api } from '../../api/client';
-import { Modal } from '../../components/Modal';
-import { Skeleton } from '../../components/Skeleton';
 import { amountInWords } from '../../lib/format';
 
-import { Download, Printer, Wallet } from '../../components/icons';
+/**
+ * Salary-slip rendering library: the shared HTML/CSS builder plus print and
+ * vector-PDF exporters. Consumed by the printable Salary Slip page
+ * (SalarySlipPage) — no React component lives here.
+ */
 
 /** Salary-slip detail returned by GET /human-resources/payslips/:id. */
 export interface PayslipDetail {
@@ -74,7 +74,7 @@ export interface PayslipDetail {
   netPay: number;
 }
 
-const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
+export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
 const money = (v: number): string =>
   `₹${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -146,7 +146,7 @@ const deductionRows = (d: PayslipDetail): Array<[string, number]> =>
   ] as Array<[string, number]>).filter(([, v]) => v > 0);
 
 /** Styling shared by the on-screen slip and the standalone print/PDF window. */
-const SLIP_STYLES = `
+export const SLIP_STYLES = `
   .slip { color: #1c1e26; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
   .slip * { box-sizing: border-box; }
   .slip .slip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid #1c1e26; }
@@ -187,8 +187,8 @@ const SLIP_STYLES = `
   @media print { @page { size: A4; margin: 14mm; } body { margin: 0; } }
 `;
 
-/** Builds the slip's inner HTML — shared verbatim by the modal and the print window. */
-function buildSlipInner(d: PayslipDetail): string {
+/** Builds the slip's inner HTML — shared verbatim by the on-screen slip and the print window. */
+export function buildSlipInner(d: PayslipDetail): string {
   const period = `${MONTHS[d.period.month - 1]} ${d.period.year}`;
   const status = d.paymentStatus === 'PAID' ? 'Paid' : d.paymentStatus === 'PROCESSED' ? 'Processed' : 'Draft';
   const paidLine = d.paidAt ? `${status} · ${fmtDate(d.paidAt)}` : status;
@@ -257,7 +257,7 @@ function buildSlipInner(d: PayslipDetail): string {
 }
 
 /** Opens the slip in a standalone window and triggers the browser print dialog (Print / Save as PDF). */
-function printSlip(detail: PayslipDetail): void {
+export function printSlip(detail: PayslipDetail): void {
   const title = `Salary Slip — ${detail.employee.fullName} — ${MONTHS[detail.period.month - 1]} ${detail.period.year}`;
   const win = window.open('', '_blank', 'width=880,height=1000');
   if (!win) return;
@@ -285,7 +285,7 @@ const LINE: [number, number, number] = [228, 230, 238];
  * jsPDF is imported dynamically so it is only fetched when a slip is actually
  * downloaded, keeping it out of the initial app bundle.
  */
-async function downloadSlipPdf(d: PayslipDetail): Promise<void> {
+export async function downloadSlipPdf(d: PayslipDetail): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
   const M = 14;
@@ -483,48 +483,4 @@ async function downloadSlipPdf(d: PayslipDetail): Promise<void> {
 
   const safeName = d.employee.fullName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
   doc.save(`Salary-Slip-${safeName}-${MONTHS[d.period.month - 1]}-${d.period.year}.pdf`);
-}
-
-export function SalarySlip({ payslipId, onClose }: { payslipId: string; onClose: () => void }) {
-  const { data, isLoading, isError } = useQuery({
-    queryKey: ['/human-resources/payslips', payslipId],
-    queryFn: () => api.get(`/human-resources/payslips/${payslipId}`).then((r) => r.data.data as PayslipDetail),
-  });
-
-  return (
-    <Modal
-      size="lg"
-      onClose={onClose}
-      icon={<Wallet size={20} />}
-      title="Salary Slip"
-      subtitle={data ? `${data.employee.fullName} · ${data.employee.employeeCode}` : 'Loading…'}
-      footer={
-        <>
-          <button type="button" className="ghost" onClick={onClose}>Close</button>
-          <button type="button" className="ghost" disabled={!data} onClick={() => data && printSlip(data)}>
-            <Printer size={15} /> Print
-          </button>
-          <button type="button" disabled={!data} onClick={() => { if (data) void downloadSlipPdf(data); }}>
-            <Download size={15} /> Download PDF
-          </button>
-        </>
-      }
-    >
-      {isLoading && (
-        <div style={{ display: 'grid', gap: 12 }}>
-          <Skeleton height={48} />
-          <Skeleton height={120} />
-          <Skeleton height={140} />
-        </div>
-      )}
-      {isError && <div className="error-box">Could not load this salary slip.</div>}
-      {data && (
-        <div
-          className="salary-slip-doc"
-          // Content is built from our own API response and every value is escaped in buildSlipInner.
-          dangerouslySetInnerHTML={{ __html: `<style>${SLIP_STYLES}</style><div class="slip">${buildSlipInner(data)}</div>` }}
-        />
-      )}
-    </Modal>
-  );
 }

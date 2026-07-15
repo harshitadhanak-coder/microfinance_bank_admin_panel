@@ -38,7 +38,10 @@ export type ModuleKey =
   | 'applications'
   | 'leads'
   | 'collections'
-  | 'settlements';
+  | 'settlements'
+  | 'users'
+  | 'documents'
+  | 'settings';
 
 export type ModuleGroup = 'overview' | 'hr' | 'finance' | 'operations' | 'insights' | 'admin';
 
@@ -91,21 +94,26 @@ export const MODULES: ModuleDef[] = [
   // Operations
   { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
   { key: 'leads', to: '/leads', label: 'Leads', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
-  // Reached through the loan flow, so hidden from the sidebar (still routable).
-  { key: 'applications', to: '/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations', hidden: true },
   { key: 'loans', to: '/loans', label: 'Loans', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
-  // Officer-linking now lives inside Collections & Settlements, so hidden here.
-  { key: 'loanLink', to: '/loan-link', label: 'Loan Link with FO', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations', hidden: true },
-  // Collections & Settlements — one screen: assign loans to field officers for
-  // collection, and verify each officer's day-end cash (plus settlement offers
-  // / NPA classification for HQ & accounts).
-  { key: 'collections', to: '/collections', label: 'Collections & Settlements', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  // Loan Applications and Loan Assignments are now first-class, nav-visible pages
+  // living under the loan flow (/loans/applications, /loans/assignments).
+  { key: 'applications', to: '/loans/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
+  { key: 'loanLink', to: '/loans/assignments', label: 'Loan Assignments', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations' },
+  // Collections — the payment ledger (record / edit / import collections).
+  { key: 'collections', to: '/collections', label: 'Collections', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  // Day-End Settlements — verify each field officer's day-end cash (own route,
+  // was a tab on the Collections mega-page). Settlement offers / NPA live under
+  // /settlements/offers, reached from this page.
+  { key: 'settlements', to: '/settlements', label: 'Day-End Settlements', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
 
   // Insights
   { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'insights' },
 
   // Administration
+  { key: 'users', to: '/users', label: 'User Management', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'admin' },
+  { key: 'documents', to: '/documents', label: 'Document Center', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'admin' },
   { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
+  { key: 'settings', to: '/settings', label: 'Settings', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin' },
 ];
 
 /** In-page actions, each mapped to the roles the backend permits. */

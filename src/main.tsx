@@ -12,7 +12,12 @@ import LoginPage from './modules/auth/LoginPage';
 import ChangePasswordPage from './modules/auth/ChangePasswordPage';
 import { canAccessModule, ModuleKey, visibleModules } from './modules/auth/permissions';
 import BranchesPage from './modules/branches/BranchesPage';
+import BranchCreatePage from './modules/branches/BranchCreatePage';
+import BranchDetailPage from './modules/branches/BranchDetailPage';
+import BranchEditPage from './modules/branches/BranchEditPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
+import SettlementsPage from './modules/collections/SettlementsPage';
+import SettlementOffersPage from './modules/collections/SettlementOffersPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import EmployeeCreatePage from './modules/employees/EmployeeCreatePage';
@@ -24,14 +29,31 @@ import AttendanceEmployeePage from './modules/hr/AttendanceEmployeePage';
 import HolidaysPage from './modules/hr/HolidaysPage';
 import LeavePage from './modules/hr/LeavePage';
 import PayrollPage from './modules/hr/PayrollPage';
+import PayrollRunPage from './modules/hr/PayrollRunPage';
+import PayrollRunDetailPage from './modules/hr/PayrollRunDetailPage';
+import SalarySlipPage from './modules/hr/SalarySlipPage';
 import SalaryAdvancesPage from './modules/hr/SalaryAdvancesPage';
 import MastersPage from './modules/masters/MastersPage';
-import ReportsPage from './modules/reports/ReportsPage';
+import MasterResourcePage from './modules/masters/MasterResourcePage';
+import UsersPage from './modules/users/UsersPage';
+import DocumentCenterPage from './modules/documents/DocumentCenterPage';
+import SettingsHubPage from './modules/settings/SettingsHubPage';
+import HrPolicyPage from './modules/settings/HrPolicyPage';
+import RolesPage from './modules/settings/RolesPage';
+import ReportsCatalogPage from './modules/reports/ReportsCatalogPage';
+import ReportRunnerPage from './modules/reports/ReportRunnerPage';
 import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
+import EmployeeLoanCreatePage from './modules/hr/EmployeeLoanCreatePage';
+import EmployeeLoanDetailPage from './modules/hr/EmployeeLoanDetailPage';
 import LeadsPage from './modules/leads/LeadsPage';
+import LeadFormPage from './modules/leads/LeadFormPage';
+import LeadDetailPage from './modules/leads/LeadDetailPage';
 import MyProfilePage from './modules/profile/MyProfilePage';
 import ApplicationsPage from './modules/loans/ApplicationsPage';
 import LoansPage from './modules/loans/LoansPage';
+import LoanCreatePage from './modules/loans/LoanCreatePage';
+import LoanImportPage from './modules/loans/LoanImportPage';
+import LoanDetailPage from './modules/loans/LoanDetailPage';
 import LoanLinkPage from './modules/loans/LoanLinkPage';
 
 const queryClient = new QueryClient({
@@ -95,18 +117,42 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="holidays" element={<RequireModule module="holidays"><HolidaysPage /></RequireModule>} />
                 <Route path="leave" element={<RequireModule module="leave"><LeavePage /></RequireModule>} />
                 <Route path="payroll" element={<RequireModule module="payroll"><PayrollPage /></RequireModule>} />
+                <Route path="payroll/run" element={<RequireModule module="payroll"><PayrollRunPage /></RequireModule>} />
+                <Route path="payroll/slip/:id" element={<RequireModule module="payroll"><SalarySlipPage /></RequireModule>} />
+                <Route path="payroll/:runId" element={<RequireModule module="payroll"><PayrollRunDetailPage /></RequireModule>} />
                 <Route path="salary-advances" element={<RequireModule module="salaryAdvances"><SalaryAdvancesPage /></RequireModule>} />
                 <Route path="masters" element={<RequireModule module="masters"><MastersPage /></RequireModule>} />
-                <Route path="reports" element={<RequireModule module="reports"><ReportsPage /></RequireModule>} />
+                <Route path="masters/:resource" element={<RequireModule module="masters"><MasterResourcePage /></RequireModule>} />
+                <Route path="users" element={<RequireModule module="users"><UsersPage /></RequireModule>} />
+                <Route path="documents" element={<RequireModule module="documents"><DocumentCenterPage /></RequireModule>} />
+                <Route path="settings" element={<RequireModule module="settings"><SettingsHubPage /></RequireModule>} />
+                <Route path="settings/hr-policy" element={<RequireModule module="settings"><HrPolicyPage /></RequireModule>} />
+                <Route path="settings/roles" element={<RequireModule module="settings"><RolesPage /></RequireModule>} />
+                <Route path="reports" element={<RequireModule module="reports"><ReportsCatalogPage /></RequireModule>} />
+                <Route path="reports/:reportKey" element={<RequireModule module="reports"><ReportRunnerPage /></RequireModule>} />
                 <Route path="employee-loans" element={<RequireModule module="employeeLoans"><EmployeeLoansPage /></RequireModule>} />
+                <Route path="employee-loans/new" element={<RequireModule module="employeeLoans"><EmployeeLoanCreatePage /></RequireModule>} />
+                <Route path="employee-loans/:id" element={<RequireModule module="employeeLoans"><EmployeeLoanDetailPage /></RequireModule>} />
                 <Route path="branches" element={<RequireModule module="branches"><BranchesPage /></RequireModule>} />
+                <Route path="branches/new" element={<RequireModule module="branches"><BranchCreatePage /></RequireModule>} />
+                <Route path="branches/:id" element={<RequireModule module="branches"><BranchDetailPage /></RequireModule>} />
+                <Route path="branches/:id/edit" element={<RequireModule module="branches"><BranchEditPage /></RequireModule>} />
                 <Route path="loans" element={<RequireModule module="loans"><LoansPage /></RequireModule>} />
-                <Route path="loan-link" element={<RequireModule module="loanLink"><LoanLinkPage /></RequireModule>} />
-                <Route path="applications" element={<RequireModule module="applications"><ApplicationsPage /></RequireModule>} />
+                <Route path="loans/new" element={<RequireModule module="loans"><LoanCreatePage /></RequireModule>} />
+                <Route path="loans/import" element={<RequireModule module="loans"><LoanImportPage /></RequireModule>} />
+                <Route path="loans/applications" element={<RequireModule module="applications"><ApplicationsPage /></RequireModule>} />
+                <Route path="loans/assignments" element={<RequireModule module="loanLink"><LoanLinkPage /></RequireModule>} />
+                <Route path="loans/:id" element={<RequireModule module="loans"><LoanDetailPage /></RequireModule>} />
+                {/* Legacy deep links now live under the loan flow. */}
+                <Route path="loan-link" element={<Navigate to="/loans/assignments" replace />} />
+                <Route path="applications" element={<Navigate to="/loans/applications" replace />} />
                 <Route path="leads" element={<RequireModule module="leads"><LeadsPage /></RequireModule>} />
+                <Route path="leads/new" element={<RequireModule module="leads"><LeadFormPage /></RequireModule>} />
+                <Route path="leads/:id" element={<RequireModule module="leads"><LeadDetailPage /></RequireModule>} />
+                <Route path="leads/:id/edit" element={<RequireModule module="leads"><LeadFormPage /></RequireModule>} />
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
-                {/* Legacy /settlements deep links now live inside Collections & Settlements. */}
-                <Route path="settlements" element={<Navigate to="/collections" replace />} />
+                <Route path="settlements" element={<RequireModule module="settlements"><SettlementsPage /></RequireModule>} />
+                <Route path="settlements/offers" element={<RequireModule module="settlements"><SettlementOffersPage /></RequireModule>} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />

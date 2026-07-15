@@ -4,6 +4,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { CardsSkeleton } from '../../components/Skeleton';
 import { PageHeader } from '../../components/PageHeader';
+import { Badge } from '../../components/Badge';
 import { Column, DataTable } from '../../components/DataTable';
 import { inr } from '../../components/StatCard';
 import { ChartLegend, DonutChart, type Slice } from '../../components/Charts';
@@ -150,7 +151,7 @@ export default function HrDashboardPage() {
     { header: 'From', render: (l) => fmtDate(l.fromDate) },
     { header: 'To', render: (l) => fmtDate(l.toDate) },
     { header: 'Days', render: (l) => Number(l.numberOfDays) },
-    { header: 'Status', render: (l) => <span className={`pill pill-${l.status.toLowerCase()}`}>{titleCase(l.status)}</span> },
+    { header: 'Status', render: (l) => <Badge status={l.status} /> },
   ];
 
   const loading = summaryQuery.isLoading || employeesQuery.isLoading;

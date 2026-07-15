@@ -1,29 +1,24 @@
 import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
+import { FilterBar } from '../../components/FilterBar';
+import { Badge } from '../../components/Badge';
+import { ActionMenu } from '../../components/ActionMenu';
 import { useServerTable } from '../../components/useServerTable';
-import { inr } from '../../components/StatCard';
+import { Eye, Pencil, Plus } from '../../components/icons';
+import { inr } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import LeadFormModal, { LeadFormLead } from './LeadFormModal';
-import LeadDetailModal from './LeadDetailModal';
-import { Pencil } from '../../components/icons';
+import { LeadRow, STAGE_ORDER, stageLabel } from './shared';
 
-interface Lead extends LeadFormLead {
-  stage: string;
-  assignedTo?: { fullName: string } | null;
-  branch: { name: string };
-}
-
-const STAGE_ORDER = ['NEW', 'CONTACTED', 'SITE_VISIT', 'DOCUMENT_COLLECTED', 'APPLIED', 'CONVERTED', 'DROPPED'];
-
+/** Leads — List. Pipeline funnel + server list; detail/create are now pages. */
 export default function LeadsPage() {
   const { user } = useAuth();
+  const navigate = useNavigate();
   const [stage, setStage] = useState('');
-  const [detailId, setDetailId] = useState<string | null>(null);
-  const [formLead, setFormLead] = useState<LeadFormLead | null | 'new'>(null);
   const table = useServerTable();
 
   const canCreate = can(user?.role, 'lead:create');
@@ -40,30 +35,40 @@ export default function LeadsPage() {
     queryFn: () => api.get(url).then((r) => r.data),
     placeholderData: keepPreviousData,
   });
-  const rows = (data?.data ?? []) as Lead[];
+  const rows = (data?.data ?? []) as LeadRow[];
   const totalItems = (data?.pagination?.totalItems ?? 0) as number;
 
   const funnelMap = new Map((funnel ?? []).map((f) => [f.stage, f.count]));
   const pickStage = (s: string) => { setStage(stage === s ? '' : s); table.setPage(1); };
+  const open = (id: string) => navigate(`/leads/${id}`);
 
-  const columns: Column<Lead>[] = [
-    { header: 'Lead', render: (l) => <><strong>{l.fullName}</strong><div className="muted sm-text">{l.phoneNumber}</div></>, sortKey: 'fullName' },
+  const columns: Column<LeadRow>[] = [
+    { header: 'Lead', render: (l) => <a className="cell-link" onClick={() => open(l.id)}><strong>{l.fullName}</strong><div className="muted sm-text">{l.phoneNumber}</div></a>, sortKey: 'fullName' },
     { header: 'Branch', render: (l) => l.branch.name, sortKey: 'branch' },
     { header: 'Requested', render: (l) => (l.requestedAmount ? <span className="num">{inr(l.requestedAmount)}</span> : '—'), sortKey: 'requestedAmount' },
     { header: 'Source', render: (l) => l.source ?? '—', sortKey: 'source' },
-    { header: 'Assigned to', render: (l) => l.assignedTo?.fullName ?? 'Unassigned', sortKey: 'assignedTo' },
-    { header: 'Stage', render: (l) => <span className={`pill pill-${l.stage.toLowerCase()}`}>{l.stage.replaceAll('_', ' ')}</span>, sortKey: 'stage' },
+    { header: 'Assigned to', render: (l) => l.assignedTo?.fullName ?? <span className="muted">Unassigned</span>, sortKey: 'assignedTo' },
+    { header: 'Stage', render: (l) => <Badge status={l.stage} />, sortKey: 'stage' },
     {
-      header: '', render: (l) => (
-        <div className="row-actions">
-          <button type="button" className="sm ghost" onClick={() => setDetailId(l.id)}>Open</button>
-          {canUpdate && l.stage !== 'CONVERTED' && l.stage !== 'DROPPED' && (
-            <button type="button" className="sm ghost" onClick={() => setFormLead(l)}><Pencil size={14} /> Edit</button>
-          )}
+      header: '',
+      render: (l) => (
+        <div className="actions-cell">
+          <ActionMenu
+            items={[
+              { key: 'open', label: 'Open lead', icon: <Eye size={15} />, onSelect: () => open(l.id) },
+              ...(canUpdate && l.stage !== 'CONVERTED' && l.stage !== 'DROPPED'
+                ? [{ key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => navigate(`/leads/${l.id}/edit`) }]
+                : []),
+            ]}
+          />
         </div>
       ),
     },
   ];
+
+  const stageChips = stage
+    ? [{ key: 'stage', label: `Stage: ${stageLabel(stage)}`, onRemove: () => { setStage(''); table.setPage(1); } }]
+    : [];
 
   return (
     <>
@@ -71,15 +76,7 @@ export default function LeadsPage() {
         breadcrumb={[{ label: 'Operations' }, { label: 'Leads' }]}
         title="Leads"
         subtitle="Field pipeline from capture to conversion"
-        actions={(
-          <>
-            <select value={stage} onChange={(e) => { setStage(e.target.value); table.setPage(1); }} aria-label="Filter by stage">
-              <option value="">All stages</option>
-              {STAGE_ORDER.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
-            </select>
-            {canCreate && <button onClick={() => setFormLead('new')}>New lead</button>}
-          </>
-        )}
+        actions={canCreate && <button className="btn-lg" onClick={() => navigate('/leads/new')}><Plus size={16} /> New lead</button>}
       />
 
       <div className="funnel">
@@ -92,13 +89,22 @@ export default function LeadsPage() {
             onClick={() => pickStage(s)}
             onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') pickStage(s); }}
             style={{ cursor: 'pointer', outline: stage === s ? '2px solid var(--brass)' : undefined }}
-            title={stage === s ? 'Clear stage filter' : `Show only ${s.replaceAll('_', ' ')} leads`}
+            title={stage === s ? 'Clear stage filter' : `Show only ${stageLabel(s)} leads`}
           >
             <span className="stat-value">{funnelMap.get(s) ?? 0}</span>
-            <span className="muted sm-text">{s.replaceAll('_', ' ')}</span>
+            <span className="muted sm-text">{stageLabel(s)}</span>
           </div>
         ))}
       </div>
+
+      <FilterBar chips={stageChips} onReset={stageChips.length ? () => { setStage(''); table.setPage(1); } : undefined}>
+        <label>Stage
+          <select value={stage} onChange={(e) => { setStage(e.target.value); table.setPage(1); }} aria-label="Filter by stage">
+            <option value="">All stages</option>
+            {STAGE_ORDER.map((s) => <option key={s} value={s}>{stageLabel(s)}</option>)}
+          </select>
+        </label>
+      </FilterBar>
 
       <DataTable
         columns={columns}
@@ -107,30 +113,11 @@ export default function LeadsPage() {
         empty={stage ? 'No leads in this stage.' : 'No leads captured yet.'}
         searchPlaceholder="Search by name, phone, source or branch…"
         server={{
-          page: table.page,
-          pageSize: table.pageSize,
-          totalItems,
-          onPageChange: table.setPage,
-          sort: table.sort,
-          onSortChange: table.onSortChange,
-          search: table.search,
-          onSearchChange: table.onSearchChange,
+          page: table.page, pageSize: table.pageSize, totalItems,
+          onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
+          search: table.search, onSearchChange: table.onSearchChange,
         }}
       />
-
-      {detailId && (
-        <LeadDetailModal
-          leadId={detailId}
-          onClose={() => setDetailId(null)}
-          onEdit={(lead) => { setDetailId(null); setFormLead(lead); }}
-        />
-      )}
-      {formLead && (
-        <LeadFormModal
-          lead={formLead === 'new' ? null : formLead}
-          onClose={() => setFormLead(null)}
-        />
-      )}
     </>
   );
 }

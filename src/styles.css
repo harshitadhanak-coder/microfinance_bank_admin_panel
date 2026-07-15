@@ -234,6 +234,58 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
 .muted { color: var(--muted); }
 .sm-text { font-size: 0.82rem; }
 .num { font-variant-numeric: tabular-nums; }
+.ta-right { text-align: right; }
+
+/* Table row selection + bulk action bar */
+.col-select { width: 38px; text-align: center; padding-left: 0.5rem !important; padding-right: 0.5rem !important; }
+.col-select input { cursor: pointer; width: 15px; height: 15px; accent-color: var(--brass-dark); }
+tr.row-selected > td { background: var(--status-info-bg); }
+.bulk-bar {
+  display: flex; align-items: center; gap: 0.75rem;
+  padding: 0.55rem 0.9rem; margin-bottom: 0.75rem;
+  background: var(--color-ink); color: #fff; border-radius: var(--radius);
+}
+.bulk-bar .bulk-count { font-weight: 600; }
+.bulk-bar .bulk-spacer { flex: 1; }
+.bulk-bar button { height: var(--control-h-sm); }
+
+/* Hub tiles (Organization Masters hub, Settings hub) */
+.hub-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 1rem; }
+.hub-tile {
+  display: flex; align-items: flex-start; gap: 0.9rem; padding: var(--space-5);
+  background: var(--color-surface); border: 1px solid var(--line); border-radius: var(--radius);
+  box-shadow: var(--shadow-1); text-decoration: none; color: inherit;
+  transition: border-color var(--dur), box-shadow var(--dur);
+}
+.hub-tile:hover { border-color: var(--brass); box-shadow: var(--shadow-2); }
+.hub-tile-icon {
+  width: 40px; height: 40px; border-radius: 10px; flex: none;
+  display: flex; align-items: center; justify-content: center;
+  background: var(--status-info-bg); color: var(--status-info-fg);
+}
+.hub-tile-body { flex: 1; min-width: 0; }
+.hub-tile-head { display: flex; align-items: baseline; justify-content: space-between; gap: 0.5rem; }
+.hub-tile-head h3 { margin: 0; font-size: 0.98rem; }
+.hub-tile-count { font-family: 'Archivo', sans-serif; font-weight: 700; font-size: 1.1rem; font-variant-numeric: tabular-nums; }
+.hub-tile-go { color: var(--muted); flex: none; align-self: center; }
+
+/* Read-only permission matrix (Settings › Roles) */
+.ta-center { text-align: center; }
+.perm-table th.ta-center, .perm-table td.ta-center { width: 46px; }
+.perm-yes { display: inline-flex; color: var(--status-success-fg); }
+.perm-table + .perm-table { margin-top: 0; }
+
+/* Reports — saved views chips */
+.saved-views { display: flex; align-items: center; flex-wrap: wrap; gap: 0.5rem; margin-bottom: 0.75rem; }
+.saved-view-chip { display: inline-flex; align-items: center; gap: 0; padding: 0; overflow: hidden; }
+.saved-view-chip button { border: none; background: none; padding: 0.3rem 0.55rem; font: inherit; color: inherit; cursor: pointer; }
+.saved-view-chip button:first-child { font-weight: 600; }
+.saved-view-chip button:last-child { padding-left: 0.25rem; border-left: 1px solid var(--line); color: var(--muted); display: inline-flex; }
+.saved-view-chip button:last-child:hover { color: var(--red); }
+
+/* Dashboard KPI drill-through */
+.kpi-tile-link { text-decoration: none; color: inherit; transition: border-color var(--dur), box-shadow var(--dur); }
+.kpi-tile-link:hover { border-color: var(--brass); box-shadow: var(--shadow-1); }
 
 /* ── Stats ── */
 .stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 1rem; }
@@ -542,13 +594,14 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .doc-upload input[type="file"] { font-size: 0.82rem; }
 .form-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.9rem; margin-bottom: 1.2rem; }
 .span-all { grid-column: 1 / -1; }
-.error-box, .success-box {
+.error-box, .success-box, .info-box {
   display: flex; align-items: flex-start; gap: 0.5rem;
   padding: 0.65rem 0.85rem; border-radius: 8px; font-size: 0.88rem; line-height: 1.4;
 }
 .error-box { background: #f9e3e0; color: var(--red); }
 .success-box { background: #e2f1e8; color: var(--green); }
-.error-box svg, .success-box svg { flex: none; margin-top: 1px; }
+.info-box { background: var(--status-info-bg); color: var(--status-info-fg); }
+.error-box svg, .success-box svg, .info-box svg { flex: none; margin-top: 1px; }
 
 /* Tabbed detail (employee modal) */
 .tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--line); margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }

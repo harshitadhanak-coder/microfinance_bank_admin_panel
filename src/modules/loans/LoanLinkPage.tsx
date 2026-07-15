@@ -1,13 +1,15 @@
 import { useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import axios from 'axios';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
-import { useServerTable } from '../../components/useServerTable';
-import { inr } from '../../components/StatCard';
-import { useAuth } from '../auth/AuthContext';
+import { PageHeader } from '../../components/PageHeader';
+import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
+import { useServerTable } from '../../components/useServerTable';
+import { useToast } from '../../components/Toast';
 import { UserCheck } from '../../components/icons';
+import { inr, apiMessage } from '../../lib/format';
+import { useAuth } from '../auth/AuthContext';
 
 interface LinkableLoan {
   id: string;
@@ -26,14 +28,17 @@ interface Employee {
   designation: string | null;
 }
 
+/**
+ * Loan Assignments — assign each disbursed (ACTIVE) loan to a field officer so it
+ * appears in that officer's collection list. Now a nav-visible Operations page
+ * (previously the hidden "Loan Link with FO" route).
+ */
 export default function LoanLinkPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const table = useServerTable({ initialSort: { key: 'loanNumber', direction: 'asc' } });
   const [assignFor, setAssignFor] = useState<LinkableLoan | null>(null);
 
-  // Only active loans can be worked in the field, so the link screen is scoped
-  // to ACTIVE loans by default.
   const url = `/loans?${table.params}&status=ACTIVE`;
   const { data, isLoading } = useQuery({
     queryKey: [url],
@@ -57,37 +62,30 @@ export default function LoanLinkPage() {
       header: 'Field officer',
       render: (l) =>
         l.assignedOfficer
-          ? <span className="pill pill-approved">{l.assignedOfficer.fullName}</span>
-          : <span className="pill pill-new">Unassigned</span>,
+          ? <Badge tone="success">{l.assignedOfficer.fullName}</Badge>
+          : <Badge tone="neutral">Unassigned</Badge>,
     },
-    { header: '', render: (l) => <button type="button" className="sm ghost" onClick={() => setAssignFor(l)}>{l.assignedOfficer ? 'Reassign' : 'Assign'}</button> },
+    { header: '', render: (l) => <div className="actions-cell"><button type="button" className="sm ghost" onClick={() => setAssignFor(l)}>{l.assignedOfficer ? 'Reassign' : 'Assign'}</button></div> },
   ];
 
   return (
     <>
-      <header className="page-head">
-        <h1>Loan Link with Field Officer</h1>
-        <p className="muted">
-          Assign each disbursed loan to a field officer. The loan then appears in that officer’s collection list.
-          {user?.branch ? ` — ${user.branch.name}` : ''}
-        </p>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Loans', to: '/loans' }, { label: 'Assignments' }]}
+        title="Loan assignments"
+        subtitle={`Assign disbursed loans to field officers for collection${user?.branch ? ` — ${user.branch.name}` : ''}`}
+      />
 
       <DataTable
         columns={columns}
         rows={rows}
         loading={isLoading}
-        empty="No active loans to link yet."
+        empty="No active loans to assign yet."
         searchPlaceholder="Search by loan no. or client…"
         server={{
-          page: table.page,
-          pageSize: table.pageSize,
-          totalItems,
-          onPageChange: table.setPage,
-          sort: table.sort,
-          onSortChange: table.onSortChange,
-          search: table.search,
-          onSearchChange: table.onSearchChange,
+          page: table.page, pageSize: table.pageSize, totalItems,
+          onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
+          search: table.search, onSearchChange: table.onSearchChange,
         }}
       />
 
@@ -117,13 +115,14 @@ function AssignModal({
   onClose: () => void;
   onDone: () => void;
 }) {
+  const toast = useToast();
   const [officerId, setOfficerId] = useState(loan.assignedOfficer?.id ?? '');
   const [error, setError] = useState('');
 
   const assign = useMutation({
     mutationFn: () => api.patch(`/loans/${loan.id}/assign-officer`, { assignedOfficerId: officerId }),
-    onSuccess: onDone,
-    onError: (err) => setError(axios.isAxiosError(err) ? err.response?.data?.message ?? 'Could not link the loan.' : 'Could not link the loan.'),
+    onSuccess: () => { toast.success('Loan assigned to field officer.'); onDone(); },
+    onError: (err) => setError(apiMessage(err, 'Could not assign the loan.')),
   });
 
   return (
@@ -131,28 +130,28 @@ function AssignModal({
       size="md"
       onClose={onClose}
       icon={<UserCheck size={20} />}
-      title={`Link loan ${loan.loanNumber}`}
+      title={`Assign loan ${loan.loanNumber}`}
       subtitle={`Customer: ${loan.client.fullName}`}
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
           <button type="button" disabled={!officerId || assign.isPending} onClick={() => { setError(''); assign.mutate(); }}>
-            {assign.isPending ? 'Linking…' : 'Link loan'}
+            {assign.isPending ? 'Assigning…' : 'Assign loan'}
           </button>
         </>
       }
     >
       <label>
-          Field officer
-          <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
-            <option value="">Select a field officer</option>
-            {employees.map((e) => (
-              <option key={e.id} value={e.id}>{e.fullName}{e.designation ? ` · ${e.designation}` : ''}</option>
-            ))}
-          </select>
-        </label>
+        Field officer
+        <select value={officerId} onChange={(e) => setOfficerId(e.target.value)}>
+          <option value="">Select a field officer</option>
+          {employees.map((e) => (
+            <option key={e.id} value={e.id}>{e.fullName}{e.designation ? ` · ${e.designation}` : ''}</option>
+          ))}
+        </select>
+      </label>
 
-        {error && <div className="error-box" style={{ marginTop: '0.6rem' }}>{error}</div>}
+      {error && <div className="error-box" style={{ marginTop: '0.6rem' }}>{error}</div>}
     </Modal>
   );
 }

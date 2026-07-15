@@ -41,6 +41,7 @@ export default function ImportModal({
   columns,
   onClose,
   onDone,
+  inline = false,
 }: {
   title: string;
   endpoint: string;
@@ -48,6 +49,8 @@ export default function ImportModal({
   columns: ImportColumn[];
   onClose: () => void;
   onDone: () => void;
+  /** Render the flow inline (as page content) rather than inside a Modal. */
+  inline?: boolean;
 }) {
   const [fileName, setFileName] = useState('');
   const [rows, setRows] = useState<Record<string, unknown>[]>([]);
@@ -108,14 +111,8 @@ export default function ImportModal({
 
   const ready = rows.length > 0 && !error;
 
-  return (
-    <Modal
-      size="md"
-      onClose={onClose}
-      icon={<FileSpreadsheet size={20} />}
-      title={title}
-      subtitle="Bulk-import records from a .csv or .xlsx file."
-    >
+  const body = (
+    <>
         {!summary ? (
           <>
             <div className="modal-body">
@@ -214,6 +211,20 @@ export default function ImportModal({
             </div>
           </>
         )}
+    </>
+  );
+
+  if (inline) return body;
+
+  return (
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<FileSpreadsheet size={20} />}
+      title={title}
+      subtitle="Bulk-import records from a .csv or .xlsx file."
+    >
+      {body}
     </Modal>
   );
 }

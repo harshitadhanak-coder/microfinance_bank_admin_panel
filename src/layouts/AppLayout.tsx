@@ -30,6 +30,9 @@ const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   leads: <Target size={20} />,
   collections: <HandCoins size={20} />,
   settlements: <HandCoins size={20} />,
+  users: <UserCheck size={20} />,
+  documents: <FileSpreadsheet size={20} />,
+  settings: <Settings2 size={20} />,
 };
 
 const COLLAPSE_KEY = 'mf-sidebar-collapsed';

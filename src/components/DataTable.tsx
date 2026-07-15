@@ -41,6 +41,12 @@ function compareValues(a: unknown, b: unknown): number {
   return String(a).localeCompare(String(b), undefined, { numeric: true, sensitivity: 'base' });
 }
 
+/** Row-selection model: the owner keeps the selected ids and reacts to changes. */
+export interface SelectionModel {
+  selectedIds: Set<string>;
+  onChange: (next: Set<string>) => void;
+}
+
 export function DataTable<T extends { id: string }>({
   columns,
   rows,
@@ -50,6 +56,7 @@ export function DataTable<T extends { id: string }>({
   searchPlaceholder = 'Search records…',
   pageSize = 10,
   server,
+  selection,
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -61,6 +68,8 @@ export function DataTable<T extends { id: string }>({
   pageSize?: number;
   /** Enables API-driven pagination/sorting/search. When omitted the table pages locally. */
   server?: ServerTableModel;
+  /** Enables a leading checkbox column with select-all over the visible rows. */
+  selection?: SelectionModel;
 }) {
   const isServer = !!server;
   const [query, setQuery] = useState('');
@@ -132,6 +141,23 @@ export function DataTable<T extends { id: string }>({
   const showPager = (isServer || clientPaged) && totalPages > 1;
   const goToPage = (p: number) => (isServer ? server!.onPageChange(p) : setPage(p));
 
+  // ── Selection (optional) ──
+  const selectedIds = selection?.selectedIds;
+  const pageAllSelected = !!selection && displayRows.length > 0 && displayRows.every((r) => selectedIds!.has(r.id));
+  const toggleRow = (id: string) => {
+    if (!selection) return;
+    const next = new Set(selection.selectedIds);
+    if (next.has(id)) next.delete(id); else next.add(id);
+    selection.onChange(next);
+  };
+  const togglePage = () => {
+    if (!selection) return;
+    const next = new Set(selection.selectedIds);
+    if (pageAllSelected) displayRows.forEach((r) => next.delete(r.id));
+    else displayRows.forEach((r) => next.add(r.id));
+    selection.onChange(next);
+  };
+
   const columnSortable = (c: Column<T>) => (isServer ? !!c.sortKey : !!c.sortValue);
   const columnActive = (c: Column<T>, index: number) =>
     isServer ? server!.sort?.key === c.sortKey : sort?.index === index;
@@ -159,6 +185,11 @@ export function DataTable<T extends { id: string }>({
           <table>
             <thead>
               <tr>
+                {selection && (
+                  <th className="col-select">
+                    <input type="checkbox" aria-label="Select all rows on this page" checked={pageAllSelected} onChange={togglePage} />
+                  </th>
+                )}
                 {columns.map((c, index) => {
                   const sortableCol = columnSortable(c);
                   const active = sortableCol && columnActive(c, index);
@@ -186,7 +217,14 @@ export function DataTable<T extends { id: string }>({
             </thead>
             <tbody>
               {displayRows.map((row) => (
-                <tr key={row.id}>{columns.map((c) => <td key={c.header}>{c.render(row)}</td>)}</tr>
+                <tr key={row.id} className={selection?.selectedIds.has(row.id) ? 'row-selected' : undefined}>
+                  {selection && (
+                    <td className="col-select">
+                      <input type="checkbox" aria-label="Select row" checked={selection.selectedIds.has(row.id)} onChange={() => toggleRow(row.id)} />
+                    </td>
+                  )}
+                  {columns.map((c) => <td key={c.header}>{c.render(row)}</td>)}
+                </tr>
               ))}
             </tbody>
           </table>

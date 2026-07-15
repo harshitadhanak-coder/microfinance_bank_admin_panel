@@ -3,6 +3,9 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
+import { FilterBar } from '../../components/FilterBar';
+import { Badge } from '../../components/Badge';
+import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { HandCoins, Pencil, Plus, Trash2 } from '../../components/icons';
 import { inr, titleCase, apiMessage } from '../../lib/format';
@@ -62,18 +65,20 @@ export default function SalaryAdvancesPage() {
     { header: 'Amount', render: (a) => <span className="num">{inr(a.amount)}</span>, sortValue: (a) => Number(a.amount) },
     { header: 'Monthly recovery', render: (a) => <span className="num">{inr(a.monthlyRecovery)}</span>, sortValue: (a) => Number(a.monthlyRecovery) },
     { header: 'Outstanding', render: (a) => <span className="num">{inr(a.outstandingAmount)}</span>, sortValue: (a) => Number(a.outstandingAmount) },
-    { header: 'Status', render: (a) => <span className={`pill pill-${a.status.toLowerCase()}`}>{titleCase(a.status)}</span>, sortValue: (a) => a.status },
+    { header: 'Status', render: (a) => <Badge status={a.status}>{titleCase(a.status)}</Badge>, sortValue: (a) => a.status },
     { header: 'Reason', render: (a) => a.reason ?? '—' },
   ];
 
   if (canManage) {
     columns.push({
-      header: 'Actions',
+      header: '',
       render: (a) =>
         a.status === 'ACTIVE' ? (
-          <div className="row-actions">
-            <button type="button" className="icon-btn" title="Edit" aria-label="Edit advance" onClick={() => setEditing(a)}><Pencil size={15} /></button>
-            <button type="button" className="icon-btn danger" title="Delete" aria-label="Delete advance" onClick={() => setDeleteFor(a)}><Trash2 size={15} /></button>
+          <div className="actions-cell">
+            <ActionMenu items={[
+              { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(a) },
+              { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleteFor(a) },
+            ]} />
           </div>
         ) : <span className="muted">—</span>,
     });
@@ -85,16 +90,16 @@ export default function SalaryAdvancesPage() {
         breadcrumb={[{ label: 'Payroll & Finance' }, { label: 'Salary Advances' }]}
         title="Salary Advances"
         subtitle="Staff advances recovered from monthly salary"
-        actions={canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
+        actions={canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
       />
 
-      <div className="filter-row">
-        {STATUS_FILTERS.map((s) => (
-          <button key={s} type="button" className={`sm ${status === s ? '' : 'ghost'}`} onClick={() => setStatus(s)}>
-            {s === 'ALL' ? 'All' : titleCase(s)}
-          </button>
-        ))}
-      </div>
+      <FilterBar chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${titleCase(status)}`, onRemove: () => setStatus('ALL') }] : []} onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}>
+        <label>Status
+          <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Filter by status">
+            {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All statuses' : titleCase(s)}</option>)}
+          </select>
+        </label>
+      </FilterBar>
 
       <DataTable
         columns={columns}

@@ -102,20 +102,20 @@ export default function DashboardPage() {
         subtitle={data ? `Live position · updated ${relTime(data.generatedAt)}` : 'Loading live position…'}
       />
 
-      {/* KPI ROW */}
+      {/* KPI ROW — each tile drills through to its source list */}
       <section className="dash-kpis">
-        <KpiTile icon={<Landmark size={16} />} label="Active Loans" value={k ? k.activeLoans.value.toLocaleString('en-IN') : '—'}
+        <KpiTile icon={<Landmark size={16} />} label="Active Loans" to="/loans" value={k ? k.activeLoans.value.toLocaleString('en-IN') : '—'}
           delta={k && <Delta value={k.activeLoans.value} previous={k.activeLoans.previous} goodDir="up" />} loading={isLoading} />
-        <KpiTile icon={<Wallet size={16} />} tone="brass" label="Outstanding Portfolio" value={k ? inrCompact(k.outstanding.value) : '—'}
+        <KpiTile icon={<Wallet size={16} />} tone="brass" label="Outstanding Portfolio" to="/loans" value={k ? inrCompact(k.outstanding.value) : '—'}
           delta={k && <Delta value={k.outstanding.value} previous={k.outstanding.previous} goodDir="up" />} loading={isLoading} />
-        <KpiTile icon={<Banknote size={16} />} tone="green" label="Today's Collection" value={k ? inrCompact(k.collectedToday.value) : '—'}
+        <KpiTile icon={<Banknote size={16} />} tone="green" label="Today's Collection" to="/collections" value={k ? inrCompact(k.collectedToday.value) : '—'}
           delta={k && <Delta value={k.collectedToday.value} previous={k.collectedToday.previous} goodDir="up" />} loading={isLoading} />
-        <KpiTile icon={<Target size={16} />} label="Collection Efficiency" value={k ? pct(k.collectionEfficiency.value) : '—'}
+        <KpiTile icon={<Target size={16} />} label="Collection Efficiency" to="/collections" value={k ? pct(k.collectionEfficiency.value) : '—'}
           delta={k && <Delta value={k.collectionEfficiency.value} previous={k.collectionEfficiency.previous} goodDir="up" />} loading={isLoading} />
-        <KpiTile icon={<AlertCircle size={16} />} tone={k && k.par30.value >= 10 ? 'red' : 'amber'} label="PAR > 30 Days" value={k ? pct(k.par30.value) : '—'}
+        <KpiTile icon={<AlertCircle size={16} />} tone={k && k.par30.value >= 10 ? 'red' : 'amber'} label="PAR > 30 Days" to="/loans" value={k ? pct(k.par30.value) : '—'}
           sub={k ? `${inrCompact(k.par30.amount)} · ${k.par30.accounts} acct` : undefined}
           delta={k && <Delta value={k.par30.accounts} previous={k.par30.accountsPrev} goodDir="down" />} loading={isLoading} />
-        <KpiTile icon={<UserCheck size={16} />} label="Active Borrowers" value={k ? k.activeBorrowers.value.toLocaleString('en-IN') : '—'}
+        <KpiTile icon={<UserCheck size={16} />} label="Active Borrowers" to="/loans" value={k ? k.activeBorrowers.value.toLocaleString('en-IN') : '—'}
           delta={k && <Delta value={k.activeBorrowers.value} previous={k.activeBorrowers.previous} goodDir="up" />} loading={isLoading} />
       </section>
 
@@ -267,19 +267,20 @@ export default function DashboardPage() {
   );
 }
 
-function KpiTile({ icon, label, value, delta, sub, tone, loading }: {
-  icon: ReactNode; label: string; value: string; delta?: ReactNode; sub?: string; tone?: 'brass' | 'green' | 'amber' | 'red'; loading?: boolean;
+function KpiTile({ icon, label, value, delta, sub, tone, loading, to }: {
+  icon: ReactNode; label: string; value: string; delta?: ReactNode; sub?: string; tone?: 'brass' | 'green' | 'amber' | 'red'; loading?: boolean; to?: string;
 }) {
-  return (
-    <div className="kpi-tile">
+  const inner = (
+    <>
       <div className="kpi-tile-head">
         <span className={`kpi-icon ${tone ?? ''}`}>{icon}</span>
         <span className="kpi-label">{label}</span>
       </div>
       <span className="kpi-value">{loading ? '…' : value}</span>
       <div className="kpi-foot">{delta}{sub && <span className="kpi-sub muted">{sub}</span>}</div>
-    </div>
+    </>
   );
+  return to ? <Link to={to} className="kpi-tile kpi-tile-link">{inner}</Link> : <div className="kpi-tile">{inner}</div>;
 }
 
 function ChartPlaceholder() { return <div className="chart-ph" aria-hidden />; }
