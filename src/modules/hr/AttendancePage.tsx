@@ -232,7 +232,7 @@ export default function AttendancePage() {
       <PageHeader
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Attendance' }]}
         title="Attendance"
-        subtitle="Daily check-in / check-out, derived from punches across all branches"
+        subtitle="Track daily employee attendance across all branches."
         actions={(
           <>
             <div className="hdr-period" role="group" aria-label="Reporting period">
@@ -260,37 +260,31 @@ export default function AttendancePage() {
           <FilterBar
             chips={chips}
             onReset={chips.length ? clearFilters : undefined}
-            actions={(
+            search={(
               <div className="filter-search">
                 <Search size={16} />
                 <input
                   value={table.search}
                   onChange={(e) => table.onSearchChange(e.target.value)}
-                  placeholder="Search employee, code, branch…"
+                  placeholder="Search by employee name, code, or branch…"
                   aria-label="Search attendance"
                 />
               </div>
             )}
           >
-            <label>From<input type="date" value={from} onChange={(e) => setFilter('from', e.target.value)} /></label>
-            <label>To<input type="date" value={to} onChange={(e) => setFilter('to', e.target.value)} /></label>
-            <label>Branch
-              <select value={branchId} onChange={(e) => setFilter('branch', e.target.value)}>
-                <option value="">All branches</option>
-                {branchesQuery.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
-              </select>
-            </label>
-            <label>Employee
-              <select value={employeeId} onChange={(e) => setFilter('employee', e.target.value)}>
-                <option value="">All employees</option>
-                {employeesQuery.data?.map((e) => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode})</option>)}
-              </select>
-            </label>
-            <label>Status
-              <select value={status} onChange={(e) => setFilter('status', e.target.value)}>
-                {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
-              </select>
-            </label>
+            <select className="filter-control" value={branchId} onChange={(e) => setFilter('branch', e.target.value)} aria-label="Branch" title="Branch">
+              <option value="">All branches</option>
+              {branchesQuery.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+            <select className="filter-control" value={employeeId} onChange={(e) => setFilter('employee', e.target.value)} aria-label="Employee" title="Employee">
+              <option value="">All employees</option>
+              {employeesQuery.data?.map((e) => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode})</option>)}
+            </select>
+            <select className="filter-control" value={status} onChange={(e) => setFilter('status', e.target.value)} aria-label="Status" title="Status">
+              {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+            <label className="filter-field"><span>From</span><input type="date" value={from} onChange={(e) => setFilter('from', e.target.value)} aria-label="From date" /></label>
+            <label className="filter-field"><span>To</span><input type="date" value={to} onChange={(e) => setFilter('to', e.target.value)} aria-label="To date" /></label>
           </FilterBar>
 
           <DataTable

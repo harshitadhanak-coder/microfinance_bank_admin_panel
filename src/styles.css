@@ -652,10 +652,16 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .error-box svg, .success-box svg, .info-box svg { flex: none; margin-top: 1px; }
 
 /* Tabbed detail (employee modal) */
-.tabs { display: flex; gap: 0.25rem; border-bottom: 1px solid var(--line); margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }
-.tab { background: transparent; color: var(--muted); border: none; border-bottom: 2px solid transparent; border-radius: 0; padding: 0.5rem 0.9rem; font-size: 0.9rem; }
-.tab:hover { background: transparent; color: inherit; }
-.tab.active { color: var(--ink); border-bottom-color: var(--brass); }
+.tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }
+.tab {
+  background: transparent; color: var(--muted); border: none;
+  border-bottom: 2px solid transparent; border-radius: 6px 6px 0 0;
+  padding: 0.32rem 0.7rem; min-height: 0; font-size: 0.86rem; font-weight: 500;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
+}
+.tab:hover { background: var(--color-surface-2); color: var(--ink); }
+.tab.active { color: var(--ink); border-bottom-color: var(--brass); font-weight: 600; }
+.tab.active:hover { background: transparent; }
 
 /* ── Login ── */
 .login-wrap { min-height: 100vh; display: grid; place-items: center; background: var(--ink); }
@@ -1184,12 +1190,14 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .page-header-badge { flex: none; }
 .page-header-subtitle { margin: 2px 0 0; color: var(--color-muted); font: 400 14px/1.45 var(--font-body); max-width: 72ch; }
 .page-header-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; flex-wrap: wrap; }
-/* Toolbar buttons: 14px/medium, 40px tall; the one primary keeps 44px weight. */
+/* Toolbar buttons: 14px/medium, 40px tall; the one primary keeps 44px weight.
+   Selects living in the toolbar (e.g. period pickers) match the same height. */
 .page-header-actions button { min-height: 40px; font-size: 14px; font-weight: 500; }
 .page-header-actions button.btn-lg { font-weight: 600; }
+.page-header-actions select { min-height: 40px; font-size: 14px; }
 .page-header-meta { display: flex; align-items: center; flex-wrap: wrap; gap: var(--space-2) var(--space-4); margin-top: var(--space-2); }
 /* Tabs sit on the header's bottom border so the active underline touches it. */
-.page-header .tabs { margin-top: var(--space-2); margin-bottom: calc(-1 * var(--space-3)); border-bottom-color: transparent; }
+.page-header .tabs { margin-top: var(--space-1); margin-bottom: calc(-1 * var(--space-3)); border-bottom-color: transparent; }
 /* Mobile: stack title and toolbar, keep left alignment and spacing. */
 @media (max-width: 640px) {
   .page-header-row { flex-direction: column; align-items: stretch; }
@@ -1273,12 +1281,32 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .form-actions { display: flex; justify-content: flex-end; gap: var(--space-3); }
 
 /* ── Filter bar ── (formalizes .filter-bar) */
-.filterbar { margin-bottom: var(--space-4); display: grid; gap: var(--space-3); }
-.filterbar-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-4); flex-wrap: wrap; }
+.filterbar { margin-bottom: var(--space-3); display: grid; gap: var(--space-2); }
+.filterbar-row { display: flex; align-items: flex-end; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+/* Leading search grows to fill the row; everything else keeps its size. */
+.filterbar-search { flex: 1 1 280px; min-width: 220px; }
+.filterbar-search .filter-search { min-width: 0; max-width: none; }
 .filterbar-controls { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .filterbar-controls label { font: var(--text-sm); font-weight: 500; gap: 0.3rem; }
+.filterbar-reset { flex: none; }
 .filterbar-actions { display: flex; align-items: center; gap: var(--space-2); }
 .filterbar-chips { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; }
+/* Label-less toolbar controls (aria-label/title instead): equal widths/heights. */
+.filter-control { width: 170px; }
+/* Date (or similar) field with a small inline prefix label, one control tall. */
+.filter-field { display: inline-flex; align-items: center; gap: 0.45rem; font: 500 12px/1.2 var(--font-body); color: var(--color-muted); }
+.filter-field input { width: 148px; }
+@media (max-width: 900px) {
+  .filterbar-search { flex-basis: 100%; }
+  .filter-control { flex: 1 1 160px; width: auto; min-width: 140px; }
+  .filter-field { flex: 1 1 180px; }
+  .filter-field input { flex: 1; width: auto; min-width: 0; }
+  .filterbar-controls { width: 100%; }
+}
+@media (max-width: 640px) {
+  .filter-control, .filter-field { flex-basis: 100%; }
+  .filterbar-reset { width: 100%; }
+}
 .filter-chip {
   display: inline-flex; align-items: center; gap: 0.4rem;
   background: var(--status-brass-bg); color: var(--status-brass-fg); border: none;
@@ -1355,13 +1383,13 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 
 /* ── Header period selector (compact inline month/year in the page header) ── */
 .hdr-period { display: inline-flex; align-items: stretch; gap: var(--space-2); }
-.hdr-period select { min-height: var(--control-h); }
+.hdr-period select { min-height: 40px; }
 .hdr-sep { width: 1px; align-self: stretch; min-height: var(--control-h); background: var(--color-line); margin: 0 var(--space-1); }
 @media (max-width: 640px) { .hdr-sep { display: none; } }
 
 /* ── Attendance page helpers ── */
 .att-tiles { margin-bottom: 0; }
-.att-summary-band { margin-bottom: var(--space-5); }
+.att-summary-band { margin-bottom: var(--space-4); }
 .att-summary-band-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap; }
 .att-summary-band-head h2 { margin: 0; font: var(--text-h3); }
 .att-summary-band-head .muted { font: var(--text-sm); }

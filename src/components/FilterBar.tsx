@@ -9,21 +9,25 @@ export interface FilterChip {
 }
 
 /**
- * A consistent filter surface: inline filter controls (`children`) with a row
- * of removable active-filter chips beneath and a one-click "Clear all". Replaces
- * the ad-hoc `.filter-bar` CSS class each page reinvented. The owner keeps the
+ * A consistent filter surface: one horizontal toolbar — leading search (grows
+ * to fill), inline filter controls (`children`), then a Reset button when any
+ * filter is active — with removable active-filter chips beneath. Replaces the
+ * ad-hoc `.filter-bar` CSS class each page reinvented. The owner keeps the
  * filter state (ideally reflected in the URL) and passes derived `chips`.
  */
 export function FilterBar({
   children,
   chips = [],
   onReset,
+  search,
   actions,
   className,
 }: {
   children: ReactNode;
   chips?: FilterChip[];
   onReset?: () => void;
+  /** Leading search field — first and largest element of the toolbar. */
+  search?: ReactNode;
   /** Right-aligned controls (e.g. density toggle, export). */
   actions?: ReactNode;
   /** Extra class on the root, e.g. `filterbar-compact` to tighten control widths. */
@@ -32,7 +36,11 @@ export function FilterBar({
   return (
     <div className={`filterbar${className ? ` ${className}` : ''}`}>
       <div className="filterbar-row">
+        {search && <div className="filterbar-search">{search}</div>}
         <div className="filterbar-controls">{children}</div>
+        {onReset && (
+          <button type="button" className="ghost filterbar-reset" onClick={onReset}>Reset</button>
+        )}
         {actions && <div className="filterbar-actions">{actions}</div>}
       </div>
       {chips.length > 0 && (
@@ -43,9 +51,6 @@ export function FilterBar({
               <X size={13} />
             </button>
           ))}
-          {onReset && (
-            <button type="button" className="filter-reset" onClick={onReset}>Clear all</button>
-          )}
         </div>
       )}
     </div>
