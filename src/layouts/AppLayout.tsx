@@ -5,7 +5,7 @@ import { navItems } from '../modules/auth/permissions';
 import type { ModuleKey } from '../modules/auth/permissions';
 import { Modal } from '../components/Modal';
 import {
-  Banknote, Briefcase, CalendarCheck, CalendarOff, ChevronDown, HandCoins,
+  Banknote, Briefcase, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
   Landmark, LayoutDashboard, ListChecks, LogOut, Settings2, Target, UserCheck,
   Users, Wallet,
 } from '../components/icons';
@@ -16,8 +16,12 @@ const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   hrDashboard: <LayoutDashboard />,
   employees: <Users />,
   attendance: <CalendarCheck />,
+  holidays: <CalendarOff />,
   leave: <CalendarOff />,
   payroll: <Wallet />,
+  salaryAdvances: <HandCoins />,
+  masters: <Settings2 />,
+  reports: <FileSpreadsheet />,
   employeeLoans: <Banknote />,
   branches: <Landmark />,
   loans: <ListChecks />,

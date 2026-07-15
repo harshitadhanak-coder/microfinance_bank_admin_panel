@@ -1,13 +1,15 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
-import { BrowserRouter, Navigate, Outlet, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import './styles.css';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { ToastProvider } from './components/Toast';
 import AppLayout from './layouts/AppLayout';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
 import LoginPage from './modules/auth/LoginPage';
+import ChangePasswordPage from './modules/auth/ChangePasswordPage';
 import { canAccessModule, ModuleKey, visibleModules } from './modules/auth/permissions';
 import BranchesPage from './modules/branches/BranchesPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
@@ -15,8 +17,12 @@ import DashboardPage from './modules/dashboard/DashboardPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import HrDashboardPage from './modules/hr/HrDashboardPage';
 import AttendancePage from './modules/hr/AttendancePage';
+import HolidaysPage from './modules/hr/HolidaysPage';
 import LeavePage from './modules/hr/LeavePage';
 import PayrollPage from './modules/hr/PayrollPage';
+import SalaryAdvancesPage from './modules/hr/SalaryAdvancesPage';
+import MastersPage from './modules/masters/MastersPage';
+import ReportsPage from './modules/reports/ReportsPage';
 import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
 import LeadsPage from './modules/leads/LeadsPage';
 import MyProfilePage from './modules/profile/MyProfilePage';
@@ -29,8 +35,12 @@ const queryClient = new QueryClient({
 });
 
 function RequireAuth() {
-  const { user } = useAuth();
-  return user ? <Outlet /> : <Navigate to="/login" replace />;
+  const { user, mustChangePassword } = useAuth();
+  const { pathname } = useLocation();
+  if (!user) return <Navigate to="/login" replace />;
+  // A forced password change pins the session to the change screen until done.
+  if (mustChangePassword && pathname !== '/change-password') return <Navigate to="/change-password" replace />;
+  return <Outlet />;
 }
 
 /** The first module the current role may open — used as their landing page. */
@@ -63,17 +73,23 @@ createRoot(document.getElementById('root')!).render(
       <BrowserRouter>
         <AuthProvider>
           <ErrorBoundary>
+          <ToastProvider>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<RequireAuth />}>
+              <Route path="change-password" element={<ChangePasswordPage />} />
               <Route element={<AppLayout />}>
                 <Route index element={<IndexRoute />} />
                 <Route path="profile" element={<MyProfilePage />} />
                 <Route path="hr-overview" element={<RequireModule module="hrDashboard"><HrDashboardPage /></RequireModule>} />
                 <Route path="employees" element={<RequireModule module="employees"><EmployeesPage /></RequireModule>} />
                 <Route path="attendance" element={<RequireModule module="attendance"><AttendancePage /></RequireModule>} />
+                <Route path="holidays" element={<RequireModule module="holidays"><HolidaysPage /></RequireModule>} />
                 <Route path="leave" element={<RequireModule module="leave"><LeavePage /></RequireModule>} />
                 <Route path="payroll" element={<RequireModule module="payroll"><PayrollPage /></RequireModule>} />
+                <Route path="salary-advances" element={<RequireModule module="salaryAdvances"><SalaryAdvancesPage /></RequireModule>} />
+                <Route path="masters" element={<RequireModule module="masters"><MastersPage /></RequireModule>} />
+                <Route path="reports" element={<RequireModule module="reports"><ReportsPage /></RequireModule>} />
                 <Route path="employee-loans" element={<RequireModule module="employeeLoans"><EmployeeLoansPage /></RequireModule>} />
                 <Route path="branches" element={<RequireModule module="branches"><BranchesPage /></RequireModule>} />
                 <Route path="loans" element={<RequireModule module="loans"><LoansPage /></RequireModule>} />
@@ -87,6 +103,7 @@ createRoot(document.getElementById('root')!).render(
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </ToastProvider>
           </ErrorBoundary>
         </AuthProvider>
       </BrowserRouter>

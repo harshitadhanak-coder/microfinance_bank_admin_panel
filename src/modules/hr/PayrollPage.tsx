@@ -1,5 +1,4 @@
 import { FormEvent, useState } from 'react';
-import { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -7,6 +6,8 @@ import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { Modal } from '../../components/Modal';
 import { Eye, Wallet } from '../../components/icons';
+import { inr, apiMessage } from '../../lib/format';
+import { useToast } from '../../components/Toast';
 import { SalarySlip } from './SalarySlip';
 
 interface PayrollRun {
@@ -15,29 +16,37 @@ interface PayrollRun {
   year: number;
   status: string;
   createdAt: string;
+  totalNetPay?: number;
+  totalGrossEarnings?: number;
   _count?: { payslips: number };
 }
 
 interface Payslip {
   id: string;
+  standardDays?: number | string;
   presentDays: string;
+  paidLeaveDays?: number | string;
+  lwpDays?: number | string;
+  lossOfPayDays?: number | string;
   grossEarnings: string;
+  totalDeductions?: string;
   providentFund: string;
   stateInsurance: string;
   professionalTax: string;
   loanDeduction: string;
   netPay: string;
+  lateCount?: number;
+  overtimeHours?: number | string;
+  incentive?: string;
+  bonus?: string;
   employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
 }
 
 const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const inr = (v?: string | number | null): string =>
-  v == null || v === '' ? '—' : `₹${Number(v).toLocaleString('en-IN', { maximumFractionDigits: 2 })}`;
-const apiMessage = (err: unknown, fallback: string): string =>
-  (err instanceof AxiosError && err.response?.data?.message) || fallback;
 
 export default function PayrollPage() {
   const qc = useQueryClient();
+  const toast = useToast();
   const { user } = useAuth();
   const now = new Date();
   const [showForm, setShowForm] = useState(false);
@@ -47,6 +56,7 @@ export default function PayrollPage() {
   const [error, setError] = useState('');
 
   const canRun = can(user?.role, 'payroll:run');
+  const canMarkPaid = can(user?.role, 'payroll:markPaid');
 
   const runsQuery = useQuery({
     queryKey: ['/human-resources/payroll/runs'],
@@ -60,7 +70,8 @@ export default function PayrollPage() {
   });
 
   const runPayroll = useMutation({
-    mutationFn: (body: { month: number; year: number }) => api.post('/human-resources/payroll/run', body),
+    mutationFn: (body: { month: number; year: number; adjustments: [] }) =>
+      api.post('/human-resources/payroll/run', body),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/human-resources/payroll/runs'] });
       setShowForm(false);
@@ -69,25 +80,64 @@ export default function PayrollPage() {
     onError: (err) => setError(apiMessage(err, 'Could not run payroll. A run may already exist for that month.')),
   });
 
+  const markPaid = useMutation({
+    mutationFn: (runId: string) => api.post(`/human-resources/payroll/runs/${runId}/mark-paid`),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/human-resources/payroll/runs'] });
+      toast.success('Payroll run marked as paid.');
+    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not mark the run as paid.')),
+  });
+
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setError('');
-    runPayroll.mutate({ month: Number(form.month), year: Number(form.year) });
+    runPayroll.mutate({ month: Number(form.month), year: Number(form.year), adjustments: [] });
   };
 
   const runColumns: Column<PayrollRun>[] = [
     { header: 'Period', render: (r) => <strong>{MONTHS[r.month - 1]} {r.year}</strong>, sortValue: (r) => r.year * 100 + r.month },
     { header: 'Status', render: (r) => <span className={`pill pill-${r.status.toLowerCase()}`}>{r.status}</span>, sortValue: (r) => r.status },
     { header: 'Payslips', render: (r) => r._count?.payslips ?? 0, sortValue: (r) => r._count?.payslips ?? 0 },
+    {
+      header: 'Total payroll',
+      render: (r) => (
+        <div>
+          <strong>{inr(r.totalNetPay)}</strong>
+          {r.totalGrossEarnings != null && <div className="muted sm">Gross {inr(r.totalGrossEarnings)}</div>}
+        </div>
+      ),
+      sortValue: (r) => r.totalNetPay ?? 0,
+    },
     { header: 'Run on', render: (r) => new Date(r.createdAt).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }), sortValue: (r) => r.createdAt },
-    { header: 'Actions', render: (r) => <button type="button" className="sm ghost" onClick={() => setOpenRun(r)}>View payslips</button> },
+    {
+      header: 'Actions',
+      render: (r) => (
+        <div className="row-actions">
+          <button type="button" className="sm ghost" onClick={() => setOpenRun(r)}>View payslips</button>
+          {r.status === 'PROCESSED' && canMarkPaid && (
+            <button
+              type="button"
+              className="sm"
+              disabled={markPaid.isPending && markPaid.variables === r.id}
+              onClick={() => markPaid.mutate(r.id)}
+            >
+              {markPaid.isPending && markPaid.variables === r.id ? 'Marking…' : 'Mark paid'}
+            </button>
+          )}
+          {r.status === 'PAID' && <span className="pill pill-paid">Paid</span>}
+        </div>
+      ),
+    },
   ];
 
   const slipColumns: Column<Payslip>[] = [
     { header: 'Employee', render: (p) => <strong>{p.employee.fullName}</strong>, sortValue: (p) => p.employee.fullName },
     { header: 'Branch', render: (p) => p.employee.branch?.name ?? '—', sortValue: (p) => p.employee.branch?.name ?? '' },
     { header: 'Present', render: (p) => p.presentDays, sortValue: (p) => Number(p.presentDays) },
+    { header: 'LOP days', render: (p) => (Number(p.lossOfPayDays) > 0 ? p.lossOfPayDays : '—'), sortValue: (p) => Number(p.lossOfPayDays) },
     { header: 'Gross', render: (p) => inr(p.grossEarnings), sortValue: (p) => Number(p.grossEarnings) },
+    { header: 'Deductions', render: (p) => inr(p.totalDeductions), sortValue: (p) => Number(p.totalDeductions) },
     { header: 'PF', render: (p) => inr(p.providentFund), sortValue: (p) => Number(p.providentFund) },
     { header: 'ESI', render: (p) => inr(p.stateInsurance), sortValue: (p) => Number(p.stateInsurance) },
     { header: 'Prof. tax', render: (p) => inr(p.professionalTax), sortValue: (p) => Number(p.professionalTax) },

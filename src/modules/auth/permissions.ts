@@ -25,8 +25,12 @@ export type ModuleKey =
   | 'hrDashboard'
   | 'employees'
   | 'attendance'
+  | 'holidays'
   | 'leave'
   | 'payroll'
+  | 'salaryAdvances'
+  | 'masters'
+  | 'reports'
   | 'employeeLoans'
   | 'branches'
   | 'loans'
@@ -76,9 +80,13 @@ export const MODULES: ModuleDef[] = [
   { key: 'hrDashboard', to: '/hr-overview', label: 'HR', end: true, roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'employees', to: '/employees', label: 'Employee Management', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loan', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'salaryAdvances', to: '/salary-advances', label: 'Salary Advances', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'hr' },
+  { key: 'reports', to: '/reports', label: 'HR Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
 
   // Operations
   { key: 'branches', to: '/branches', label: 'Branch Master', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
@@ -100,6 +108,16 @@ export const ACTION_ROLES = {
   'employee:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'leave:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'payroll:run': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  // Mark-paid, holiday management, leave accrual and HR policy edits are HR/HQ only.
+  'payroll:markPaid': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'holiday:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'leave:accrue': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'salaryAdvance:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  // Organization masters management is HR/HQ; document management includes branch managers.
+  'master:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'document:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  // Employee login-account management (send credentials, lock/unlock, etc.).
+  'account:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'employeeLoan:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
   'branch:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   'branch:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],

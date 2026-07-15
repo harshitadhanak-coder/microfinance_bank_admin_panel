@@ -11,9 +11,11 @@ import {
   Banknote, Briefcase, CalendarCheck, CalendarOff, HandCoins, Plus, UserCheck, Users, Wallet,
 } from '../../components/icons';
 
+interface CelebrationRow { id: string; fullName: string; employeeCode: string; date: string; inDays: number; years?: number }
 interface HrSummary {
-  headcount: number; presentToday: number; onLeaveToday: number;
-  pendingLeaves: number; pendingEmployeeLoans: number;
+  headcount: number; presentToday: number; absentToday: number; lateToday: number; onLeaveToday: number;
+  pendingLeaves: number; pendingEmployeeLoans: number; activeEmployeeLoans: number; pendingPayroll: boolean;
+  upcomingBirthdays: CelebrationRow[]; upcomingWorkAnniversaries: CelebrationRow[];
 }
 interface EmployeeRow {
   id: string; fullName: string; designation: string; joiningDate: string;
@@ -86,9 +88,11 @@ export default function HrDashboardPage() {
   const kpis: { label: string; value: number | string; hint: string; to: string; icon: ReactNode; tone: string }[] = [
     { label: 'Active employees', value: s?.headcount ?? '—', hint: 'Across all branches', to: '/employees', icon: <Users size={16} />, tone: '' },
     { label: 'Present today', value: s?.presentToday ?? '—', hint: `${attendanceRate}% of staff`, to: '/attendance', icon: <UserCheck size={16} />, tone: 'green' },
+    { label: 'Absent today', value: s?.absentToday ?? '—', hint: `${s?.lateToday ?? 0} arrived late`, to: '/attendance', icon: <CalendarOff size={16} />, tone: 'red' },
     { label: 'On leave today', value: s?.onLeaveToday ?? '—', hint: 'Approved leave', to: '/leave', icon: <CalendarOff size={16} />, tone: 'blue' },
     { label: 'Pending leave approvals', value: s?.pendingLeaves ?? '—', hint: 'Awaiting decision', to: '/leave', icon: <CalendarCheck size={16} />, tone: 'amber' },
-    { label: 'Employee loan requests', value: s?.pendingEmployeeLoans ?? '—', hint: 'Pending staff loans', to: '/employee-loans', icon: <Banknote size={16} />, tone: 'red' },
+    { label: 'Payroll this month', value: s?.pendingPayroll ? 'Pending' : 'Done', hint: s?.pendingPayroll ? 'Not yet run' : 'Processed', to: '/payroll', icon: <Wallet size={16} />, tone: s?.pendingPayroll ? 'amber' : 'green' },
+    { label: 'Active staff loans', value: s?.activeEmployeeLoans ?? '—', hint: `${s?.pendingEmployeeLoans ?? 0} pending requests`, to: '/employee-loans', icon: <Banknote size={16} />, tone: 'red' },
   ];
 
   // Today's attendance split — the single most-glanced HR chart.
@@ -249,6 +253,40 @@ export default function HrDashboardPage() {
                     ))}
                   </ul>
                 ) : <p className="dash-empty">No loan requests are awaiting a decision.</p>}
+              </DashCard>
+
+              <DashCard title="Upcoming birthdays" icon={<CalendarCheck size={16} />} linkTo="/employees">
+                {(s?.upcomingBirthdays ?? []).length ? (
+                  <ul className="person-list">
+                    {(s?.upcomingBirthdays ?? []).map((b) => (
+                      <li key={b.id} className="person-row">
+                        <span className="person-av">{initials(b.fullName)}</span>
+                        <span className="person-meta">
+                          <strong>{b.fullName}</strong>
+                          <span className="muted">🎂 {new Date(b.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                        </span>
+                        <span className="person-tag">{b.inDays === 0 ? 'Today' : `in ${b.inDays}d`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="dash-empty">No birthdays in the next 30 days.</p>}
+              </DashCard>
+
+              <DashCard title="Work anniversaries" icon={<Briefcase size={16} />} linkTo="/employees">
+                {(s?.upcomingWorkAnniversaries ?? []).length ? (
+                  <ul className="person-list">
+                    {(s?.upcomingWorkAnniversaries ?? []).map((a) => (
+                      <li key={a.id} className="person-row">
+                        <span className="person-av">{initials(a.fullName)}</span>
+                        <span className="person-meta">
+                          <strong>{a.fullName}</strong>
+                          <span className="muted">🎉 {a.years} {a.years === 1 ? 'year' : 'years'} · {new Date(a.date).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
+                        </span>
+                        <span className="person-tag">{a.inDays === 0 ? 'Today' : `in ${a.inDays}d`}</span>
+                      </li>
+                    ))}
+                  </ul>
+                ) : <p className="dash-empty">No anniversaries in the next 30 days.</p>}
               </DashCard>
 
               <DashCard title="Recent HR activity" icon={<Users size={16} />}>

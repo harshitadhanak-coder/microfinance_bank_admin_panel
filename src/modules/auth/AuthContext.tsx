@@ -17,7 +17,11 @@ interface AuthUser {
 
 interface AuthCtx {
   user: AuthUser | null;
-  login: (email: string, password: string) => Promise<void>;
+  /** True when the current session must change its password before continuing. */
+  mustChangePassword: boolean;
+  /** Clear the forced-change flag once the password has been changed. */
+  clearMustChangePassword: () => void;
+  login: (email: string, password: string) => Promise<boolean>;
   logout: () => void;
 }
 
@@ -29,6 +33,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const raw = localStorage.getItem('user');
     return raw ? JSON.parse(raw) : null;
   });
+  const [mustChangePassword, setMustChangePassword] = useState<boolean>(
+    () => localStorage.getItem('mustChangePassword') === 'true',
+  );
+
+  const clearMustChangePassword = () => {
+    localStorage.removeItem('mustChangePassword');
+    setMustChangePassword(false);
+  };
 
   /** Load the full profile (incl. assigned branch) for the current session. */
   const loadProfile = async () => {
@@ -48,23 +60,35 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  const login = async (email: string, password: string) => {
+  const login = async (email: string, password: string): Promise<boolean> => {
     // Portal lock: this is the Admin Panel website — field officers must use the
     // Field Officer site instead. The backend rejects a role/portal mismatch.
     const { data } = await api.post('/auth/login', { email, password, portal: 'ADMIN' });
     const { accessToken, refreshToken, user } = data.data;
+    const mustChange = data.data.mustChangePassword === true;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
     localStorage.setItem('user', JSON.stringify(user));
+    if (mustChange) localStorage.setItem('mustChangePassword', 'true');
+    else localStorage.removeItem('mustChangePassword');
+    setMustChangePassword(mustChange);
     setUser(user);
-    await loadProfile();
+    // Skip the profile refresh when a forced change is pending — the app will
+    // route straight to the change-password screen.
+    if (!mustChange) await loadProfile();
+    return mustChange;
   };
 
   const logout = () => {
     api.post('/auth/logout', { refreshToken: localStorage.getItem('refreshToken') }).catch(() => undefined);
     localStorage.clear();
     setUser(null);
+    setMustChangePassword(false);
   };
 
-  return <Ctx.Provider value={{ user, login, logout }}>{children}</Ctx.Provider>;
+  return (
+    <Ctx.Provider value={{ user, mustChangePassword, clearMustChangePassword, login, logout }}>
+      {children}
+    </Ctx.Provider>
+  );
 }

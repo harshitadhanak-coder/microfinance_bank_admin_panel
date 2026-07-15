@@ -17,8 +17,8 @@ export default function LoginPage() {
     e.preventDefault();
     setBusy(true); setError('');
     try {
-      await login(email, password);
-      navigate('/');
+      const mustChange = await login(email, password);
+      navigate(mustChange ? '/change-password' : '/');
     } catch (err) {
       // Surface the server's message (e.g. wrong-portal) when present, otherwise
       // a safe generic credentials error.
@@ -36,8 +36,9 @@ export default function LoginPage() {
         <h1>Microfinance HQ</h1>
         <p className="muted">Sign in to manage branches, loans and collections</p>
         <label>
-          Email
-          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
+          Email or username
+          {/* type=text (not email) so employees can sign in with their generated username too. */}
+          <input type="text" value={email} onChange={(e) => setEmail(e.target.value)} required autoFocus />
         </label>
         <label>
           Password
