@@ -3,6 +3,7 @@ import { AxiosError } from 'axios';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { Modal } from '../../components/Modal';
 import { CalendarCheck, ListChecks, Loader, Wallet } from '../../components/icons';
 import { fmtDate, fmtDayMonth, titleCase, apiMessage } from '../../lib/format';
@@ -114,21 +115,22 @@ export default function LeavePage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Leave requests</h1>
-          <p className="muted">Review and decide staff leave applications</p>
-        </div>
-        <div className="row-actions">
-          <button type="button" className={`sm ${view === 'list' ? '' : 'ghost'}`} onClick={() => setView('list')}><ListChecks size={15} /> List</button>
-          <button type="button" className={`sm ${view === 'calendar' ? '' : 'ghost'}`} onClick={() => setView('calendar')}><CalendarCheck size={15} /> Calendar</button>
-          {canAccrue && (
-            <button type="button" className="ghost" disabled={accrual.isPending} onClick={() => accrual.mutate()}>
-              {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
-            </button>
-          )}
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Human Resources' }, { label: 'Leave' }]}
+        title="Leave requests"
+        subtitle="Review and decide staff leave applications"
+        actions={(
+          <>
+            <button type="button" className={`sm ${view === 'list' ? '' : 'ghost'}`} onClick={() => setView('list')}><ListChecks size={15} /> List</button>
+            <button type="button" className={`sm ${view === 'calendar' ? '' : 'ghost'}`} onClick={() => setView('calendar')}><CalendarCheck size={15} /> Calendar</button>
+            {canAccrue && (
+              <button type="button" className="ghost" disabled={accrual.isPending} onClick={() => accrual.mutate()}>
+                {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
+              </button>
+            )}
+          </>
+        )}
+      />
 
       {view === 'list' ? (
         <>

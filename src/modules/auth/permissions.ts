@@ -40,7 +40,7 @@ export type ModuleKey =
   | 'collections'
   | 'settlements';
 
-export type ModuleGroup = 'hr' | 'operations';
+export type ModuleGroup = 'overview' | 'hr' | 'finance' | 'operations' | 'insights' | 'admin';
 
 export interface ModuleDef {
   key: ModuleKey;
@@ -73,33 +73,39 @@ const ALL_ROLES: Role[] = [
  * role can see). Labels follow the operating plan's wording.
  */
 export const MODULES: ModuleDef[] = [
-  // Top-level
-  { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'] },
+  // Overview
+  { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'overview' },
+  { key: 'hrDashboard', to: '/hr-overview', label: 'HR Dashboard', end: true, roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'overview' },
 
   // Human Resources
-  { key: 'hrDashboard', to: '/hr-overview', label: 'HR', end: true, roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'employees', to: '/employees', label: 'Employee Management', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loan', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'salaryAdvances', to: '/salary-advances', label: 'Salary Advances', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'hr' },
-  { key: 'reports', to: '/reports', label: 'HR Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+
+  // Payroll & Finance
+  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
+  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loans', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
+  { key: 'salaryAdvances', to: '/salary-advances', label: 'Salary Advances', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
 
   // Operations
-  { key: 'branches', to: '/branches', label: 'Branch Master', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
-  { key: 'leads', to: '/leads', label: 'Lead Review', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'leads', to: '/leads', label: 'Leads', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
   // Reached through the loan flow, so hidden from the sidebar (still routable).
   { key: 'applications', to: '/applications', label: 'Loan Applications', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations', hidden: true },
-  { key: 'loans', to: '/loans', label: 'Loan List', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
+  { key: 'loans', to: '/loans', label: 'Loans', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
   // Officer-linking now lives inside Collections & Settlements, so hidden here.
   { key: 'loanLink', to: '/loan-link', label: 'Loan Link with FO', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations', hidden: true },
   // Collections & Settlements — one screen: assign loans to field officers for
   // collection, and verify each officer's day-end cash (plus settlement offers
   // / NPA classification for HQ & accounts).
   { key: 'collections', to: '/collections', label: 'Collections & Settlements', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+
+  // Insights
+  { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'insights' },
+
+  // Administration
+  { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
 ];
 
 /** In-page actions, each mapped to the roles the backend permits. */
@@ -157,50 +163,34 @@ export const visibleModules = (role?: string | null): ModuleDef[] => {
 };
 
 const GROUP_LABEL: Record<ModuleGroup, string> = {
+  overview: 'Overview',
   hr: 'Human Resources',
+  finance: 'Payroll & Finance',
   operations: 'Operations',
+  insights: 'Insights',
+  admin: 'Administration',
 };
-const GROUP_ORDER: ModuleGroup[] = ['hr', 'operations'];
+const GROUP_ORDER: ModuleGroup[] = ['overview', 'hr', 'finance', 'operations', 'insights', 'admin'];
 
-export interface NavLinkItem {
-  type: 'link';
-  module: ModuleDef;
-}
-
-export interface NavGroupItem {
-  type: 'group';
-  key: string;
+export interface NavSection {
+  key: ModuleGroup;
   label: string;
-  children: ModuleDef[];
+  modules: ModuleDef[];
 }
-
-export type NavItem = NavLinkItem | NavGroupItem;
 
 /**
- * Sidebar navigation for a role: top-level links first (Dashboard), then a
- * collapsible group per section (Human Resources, Operations). The HR admin —
- * whose entire sidebar is HR — keeps a flat list instead of a single group.
+ * Sidebar navigation for a role: a flat, always-visible list organised under
+ * non-collapsible section headings (Overview · Human Resources · Payroll &
+ * Finance · Operations · Insights · Administration), in a fixed order. Only
+ * sections the role can see are returned. Hidden modules stay routable but never
+ * appear here. This replaces the old collapse-by-default accordion so the whole
+ * product is discoverable at a glance.
  */
-export const navItems = (role?: string | null): NavItem[] => {
-  // Hidden modules stay routable (see ModuleDef.hidden) but never appear in the sidebar.
+export const navSections = (role?: string | null): NavSection[] => {
   const mods = visibleModules(role).filter((m) => !m.hidden);
-  const r = asRole(role);
-
-  if (r === 'HUMAN_RESOURCES_ADMIN') {
-    return mods.map((module) => ({ type: 'link', module }));
-  }
-
-  const items: NavItem[] = mods.filter((m) => !m.group).map((module) => ({ type: 'link', module }));
-
-  for (const groupKey of GROUP_ORDER) {
-    const children = mods
-      .filter((m) => m.group === groupKey)
-      // The HR overview's own label is "Dashboard"; inside a group that clashes
-      // with the top-level Dashboard, so show it as "HR Dashboard" there.
-      .map((m) => (m.key === 'hrDashboard' ? { ...m, label: 'HR Dashboard' } : m));
-    if (children.length) items.push({ type: 'group', key: groupKey, label: GROUP_LABEL[groupKey], children });
-  }
-  return items;
+  return GROUP_ORDER
+    .map((key) => ({ key, label: GROUP_LABEL[key], modules: mods.filter((m) => m.group === key) }))
+    .filter((s) => s.modules.length > 0);
 };
 
 /** Whether a role may open a given module. SUPER_ADMIN may open anything. */

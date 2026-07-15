@@ -15,8 +15,12 @@ import BranchesPage from './modules/branches/BranchesPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
+import EmployeeCreatePage from './modules/employees/EmployeeCreatePage';
+import EmployeeDetailPage from './modules/employees/EmployeeDetailPage';
+import EmployeeEditPage from './modules/employees/EmployeeEditPage';
 import HrDashboardPage from './modules/hr/HrDashboardPage';
 import AttendancePage from './modules/hr/AttendancePage';
+import AttendanceEmployeePage from './modules/hr/AttendanceEmployeePage';
 import HolidaysPage from './modules/hr/HolidaysPage';
 import LeavePage from './modules/hr/LeavePage';
 import PayrollPage from './modules/hr/PayrollPage';
@@ -83,7 +87,11 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="profile" element={<MyProfilePage />} />
                 <Route path="hr-overview" element={<RequireModule module="hrDashboard"><HrDashboardPage /></RequireModule>} />
                 <Route path="employees" element={<RequireModule module="employees"><EmployeesPage /></RequireModule>} />
+                <Route path="employees/new" element={<RequireModule module="employees"><EmployeeCreatePage /></RequireModule>} />
+                <Route path="employees/:id" element={<RequireModule module="employees"><EmployeeDetailPage /></RequireModule>} />
+                <Route path="employees/:id/edit" element={<RequireModule module="employees"><EmployeeEditPage /></RequireModule>} />
                 <Route path="attendance" element={<RequireModule module="attendance"><AttendancePage /></RequireModule>} />
+                <Route path="attendance/:employeeId" element={<RequireModule module="attendance"><AttendanceEmployeePage /></RequireModule>} />
                 <Route path="holidays" element={<RequireModule module="holidays"><HolidaysPage /></RequireModule>} />
                 <Route path="leave" element={<RequireModule module="leave"><LeavePage /></RequireModule>} />
                 <Route path="payroll" element={<RequireModule module="payroll"><PayrollPage /></RequireModule>} />

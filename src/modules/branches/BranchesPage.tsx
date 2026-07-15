@@ -3,6 +3,7 @@ import { AxiosError } from 'axios';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { useAuth } from '../auth/AuthContext';
 import { can, canListAllBranches } from '../auth/permissions';
@@ -127,15 +128,12 @@ export default function BranchesPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Branches</h1>
-          <p className="muted">All operating branches in the network</p>
-        </div>
-        {canCreate && (
-          <button onClick={startCreate}>{showForm && !editing ? 'Close' : 'Add branch'}</button>
-        )}
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Branches' }]}
+        title="Branches"
+        subtitle="All operating branches in the network"
+        actions={canCreate && <button onClick={startCreate}>{showForm && !editing ? 'Close' : 'Add branch'}</button>}
+      />
 
       {showForm && (
         <form className="panel pad form-grid" onSubmit={submit}>

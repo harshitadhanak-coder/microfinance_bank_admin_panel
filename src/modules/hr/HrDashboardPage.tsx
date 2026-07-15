@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../../api/client';
 import { CardsSkeleton } from '../../components/Skeleton';
+import { PageHeader } from '../../components/PageHeader';
 import { Column, DataTable } from '../../components/DataTable';
 import { inr } from '../../components/StatCard';
 import { ChartLegend, DonutChart, type Slice } from '../../components/Charts';
@@ -156,17 +157,18 @@ export default function HrDashboardPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>HR Dashboard</h1>
-          <p className="muted">Welcome back, {user?.fullName?.split(' ')[0] ?? 'there'} — your people at a glance</p>
-        </div>
-        <div className="row-actions">
-          <button type="button" onClick={() => navigate('/employees')}><Plus size={15} /> Add employee</button>
-          <button type="button" className="ghost" onClick={() => navigate('/leave')}><CalendarCheck size={15} /> Approve leave</button>
-          <button type="button" className="ghost" onClick={() => navigate('/payroll')}><Wallet size={15} /> Process payroll</button>
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Overview' }, { label: 'HR Dashboard' }]}
+        title="HR Dashboard"
+        subtitle={`Welcome back, ${user?.fullName?.split(' ')[0] ?? 'there'} — your people at a glance`}
+        actions={(
+          <>
+            <button type="button" onClick={() => navigate('/employees')}><Plus size={15} /> Add employee</button>
+            <button type="button" className="ghost" onClick={() => navigate('/leave')}><CalendarCheck size={15} /> Approve leave</button>
+            <button type="button" className="ghost" onClick={() => navigate('/payroll')}><Wallet size={15} /> Process payroll</button>
+          </>
+        )}
+      />
 
       {loading ? (
         <CardsSkeleton count={5} />

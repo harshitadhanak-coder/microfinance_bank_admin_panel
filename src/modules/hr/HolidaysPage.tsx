@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { CalendarOff, Pencil, Plus, Trash2 } from '../../components/icons';
 import { fmtDate, titleCase, apiMessage } from '../../lib/format';
@@ -77,13 +78,12 @@ export default function HolidaysPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Holidays</h1>
-          <p className="muted">National, state and company holiday calendar</p>
-        </div>
-        {canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Human Resources' }, { label: 'Holidays' }]}
+        title="Holidays"
+        subtitle="National, state and company holiday calendar"
+        actions={canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
+      />
 
       <div className="filter-row">
         <label className="inline-field">Year

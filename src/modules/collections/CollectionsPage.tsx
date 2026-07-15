@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import axios from 'axios';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import ImportModal from '../../components/ImportModal';
@@ -89,21 +90,20 @@ export default function CollectionsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>Collections &amp; Settlements</h1>
-        <p className="muted">
-          Assign loans to field officers and verify their day-end cash.
-          {user?.branch ? ` — ${user.branch.name}` : ''}
-        </p>
-      </header>
-
-      <div className="tabs">
-        {tabs.map((t) => (
-          <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
-            {t.label}
-          </button>
-        ))}
-      </div>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Collections & Settlements' }]}
+        title="Collections & Settlements"
+        subtitle={<>Assign loans to field officers and verify their day-end cash.{user?.branch ? ` — ${user.branch.name}` : ''}</>}
+        tabs={(
+          <div className="tabs">
+            {tabs.map((t) => (
+              <button key={t.key} type="button" className={`tab ${tab === t.key ? 'active' : ''}`} onClick={() => setTab(t.key)}>
+                {t.label}
+              </button>
+            ))}
+          </div>
+        )}
+      />
 
       {tab === 'collections' && <CollectionsTab canLink={canLink} />}
       {tab === 'payments' && canRecord && <PaymentsTab branchScoped={!!user?.branchId} />}

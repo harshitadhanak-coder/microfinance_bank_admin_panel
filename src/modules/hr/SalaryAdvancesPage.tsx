@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { HandCoins, Pencil, Plus, Trash2 } from '../../components/icons';
 import { inr, titleCase, apiMessage } from '../../lib/format';
@@ -80,13 +81,12 @@ export default function SalaryAdvancesPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Salary Advances</h1>
-          <p className="muted">Staff advances recovered from monthly salary</p>
-        </div>
-        {canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Payroll & Finance' }, { label: 'Salary Advances' }]}
+        title="Salary Advances"
+        subtitle="Staff advances recovered from monthly salary"
+        actions={canManage && <button onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
+      />
 
       <div className="filter-row">
         {STATUS_FILTERS.map((s) => (

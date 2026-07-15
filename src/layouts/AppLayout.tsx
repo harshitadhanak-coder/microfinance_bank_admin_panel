@@ -1,128 +1,123 @@
-import { ReactNode, useState } from 'react';
+import { ReactNode, useEffect, useState } from 'react';
 import { Link, NavLink, Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../modules/auth/AuthContext';
-import { navItems } from '../modules/auth/permissions';
+import { navSections } from '../modules/auth/permissions';
 import type { ModuleKey } from '../modules/auth/permissions';
 import { Modal } from '../components/Modal';
 import {
-  Banknote, Briefcase, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
-  Landmark, LayoutDashboard, ListChecks, LogOut, Settings2, Target, UserCheck,
-  Users, Wallet,
+  Banknote, CalendarCheck, CalendarOff, FileSpreadsheet, HandCoins,
+  Landmark, LayoutDashboard, ListChecks, LogOut, Menu, PanelLeft, Settings2, Target, UserCheck,
+  Users, Wallet, Briefcase,
 } from '../components/icons';
 
 /** One icon per navigation module so the sidebar reads at a glance. */
 const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
-  dashboard: <LayoutDashboard />,
-  hrDashboard: <LayoutDashboard />,
-  employees: <Users />,
-  attendance: <CalendarCheck />,
-  holidays: <CalendarOff />,
-  leave: <CalendarOff />,
-  payroll: <Wallet />,
-  salaryAdvances: <HandCoins />,
-  masters: <Settings2 />,
-  reports: <FileSpreadsheet />,
-  employeeLoans: <Banknote />,
-  branches: <Landmark />,
-  loans: <ListChecks />,
-  loanLink: <UserCheck />,
-  applications: <ListChecks />,
-  leads: <Target />,
-  collections: <HandCoins />,
-  settlements: <HandCoins />,
+  dashboard: <LayoutDashboard size={20} />,
+  hrDashboard: <Briefcase size={20} />,
+  employees: <Users size={20} />,
+  attendance: <CalendarCheck size={20} />,
+  holidays: <CalendarOff size={20} />,
+  leave: <CalendarOff size={20} />,
+  payroll: <Wallet size={20} />,
+  salaryAdvances: <HandCoins size={20} />,
+  masters: <Settings2 size={20} />,
+  reports: <FileSpreadsheet size={20} />,
+  employeeLoans: <Banknote size={20} />,
+  branches: <Landmark size={20} />,
+  loans: <ListChecks size={20} />,
+  loanLink: <UserCheck size={20} />,
+  applications: <ListChecks size={20} />,
+  leads: <Target size={20} />,
+  collections: <HandCoins size={20} />,
+  settlements: <HandCoins size={20} />,
 };
 
-const GROUP_ICONS: Record<string, ReactNode> = {
-  hr: <Briefcase />,
-  operations: <Settings2 />,
-};
+const COLLAPSE_KEY = 'mf-sidebar-collapsed';
 
 export default function AppLayout() {
   const { user, logout } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [confirmSignOut, setConfirmSignOut] = useState(false);
-  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  // Rail collapse (desktop, persisted) and drawer open (mobile, transient).
+  const [collapsed, setCollapsed] = useState<boolean>(() => localStorage.getItem(COLLAPSE_KEY) === '1');
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const nav = navItems(user?.role);
-  const toggleGroup = (key: string) =>
-    setOpenGroups((prev) => ({ ...prev, [key]: !prev[key] }));
+  useEffect(() => { localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0'); }, [collapsed]);
+  // Close the mobile drawer whenever the route changes.
+  useEffect(() => { setDrawerOpen(false); }, [location.pathname]);
+
+  const sections = navSections(user?.role);
 
   const nameParts = (user?.fullName ?? '').trim().split(/\s+/).filter(Boolean);
   const initials = ((nameParts[0]?.[0] ?? '') + (nameParts.length > 1 ? nameParts[nameParts.length - 1][0] : '')).toUpperCase() || 'U';
-
   const roleLabel = (user?.role ?? '').replaceAll('_', ' ');
 
-  const signOut = () => {
-    logout();
-    navigate('/login');
-  };
+  const signOut = () => { logout(); navigate('/login'); };
 
   return (
-    <div className="shell">
+    <div className={`shell${collapsed ? ' shell-collapsed' : ''}${drawerOpen ? ' shell-drawer-open' : ''}`}>
+      {/* Mobile top bar — hamburger + brand. Hidden on lg+. */}
+      <header className="topbar">
+        <button type="button" className="icon-btn topbar-toggle" onClick={() => setDrawerOpen(true)} aria-label="Open menu">
+          <Menu size={20} />
+        </button>
+        <Link to="/" className="topbar-brand"><span className="brand-mark sm">MF</span> Microfinance</Link>
+      </header>
+
+      {/* Backdrop for the mobile drawer. */}
+      <div className="sidebar-backdrop" onClick={() => setDrawerOpen(false)} aria-hidden="true" />
+
       <aside className="sidebar">
-        <Link to="/" className="brand"><span className="brand-mark sm">MF</span> Microfinance</Link>
-        <nav>
-          {nav.map((item) => {
-            if (item.type === 'link') {
-              return (
-                <NavLink key={item.module.to} to={item.module.to} end={item.module.end}>
-                  {MODULE_ICONS[item.module.key]}
-                  <span>{item.module.label}</span>
+        <div className="sidebar-brand-row">
+          <Link to="/" className="brand" title="Microfinance">
+            <span className="brand-mark sm">MF</span>
+            <span className="brand-name">Microfinance</span>
+          </Link>
+          <button
+            type="button"
+            className="icon-btn sidebar-collapse"
+            onClick={() => setCollapsed((c) => !c)}
+            aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+            title={collapsed ? 'Expand' : 'Collapse'}
+          >
+            <PanelLeft size={18} />
+          </button>
+        </div>
+
+        <nav className="sidebar-nav">
+          {sections.map((section) => (
+            <div key={section.key} className="nav-section">
+              <p className="nav-section-label">{section.label}</p>
+              {section.modules.map((m) => (
+                <NavLink key={m.to} to={m.to} end={m.end} title={m.label} className="nav-item">
+                  <span className="nav-item-icon">{MODULE_ICONS[m.key]}</span>
+                  <span className="nav-item-label">{m.label}</span>
                 </NavLink>
-              );
-            }
-
-            const childActive = item.children.some((c) =>
-              c.end ? location.pathname === c.to : location.pathname.startsWith(c.to),
-            );
-            // Collapsed by default; the user opens a section explicitly.
-            const open = openGroups[item.key] ?? false;
-
-            return (
-              <div key={item.key} className="nav-group">
-                <button
-                  type="button"
-                  className={`nav-group-toggle${childActive ? ' has-active' : ''}`}
-                  aria-expanded={open}
-                  onClick={() => toggleGroup(item.key)}
-                >
-                  {GROUP_ICONS[item.key]}
-                  <span className="nav-label">{item.label}</span>
-                  {!open && childActive && <span className="nav-active-dot" aria-hidden="true" />}
-                  <span className={`nav-caret${open ? ' open' : ''}`} aria-hidden="true"><ChevronDown size={14} /></span>
-                </button>
-                {open && (
-                  <div className="nav-sub">
-                    {item.children.map((c) => (
-                      <NavLink key={c.to} to={c.to} end={c.end}>{c.label}</NavLink>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })}
+              ))}
+            </div>
+          ))}
         </nav>
+
         <div className="sidebar-foot">
-          <NavLink to="/profile" className="profile-link" title="View my profile">
+          <NavLink to="/profile" className="profile-link" title={user?.fullName ?? 'Profile'}>
             <span className="user-avatar" aria-hidden="true">{initials}</span>
             <span className="user-meta">
               <strong>{user?.fullName}</strong>
               <span className="user-role">{roleLabel}</span>
             </span>
           </NavLink>
-          <button type="button" className="signout-btn" onClick={() => setConfirmSignOut(true)}>
-            <LogOut size={15} /> Sign out
+          <button type="button" className="signout-btn" onClick={() => setConfirmSignOut(true)} title="Sign out">
+            <LogOut size={15} /> <span className="signout-label">Sign out</span>
           </button>
         </div>
       </aside>
+
       <main className="content"><Outlet /></main>
 
       {confirmSignOut && (
         <Modal size="sm" onClose={() => setConfirmSignOut(false)}>
-          <div className="modal-icon" aria-hidden="true">
-            <LogOut size={24} />
-          </div>
+          <div className="modal-icon" aria-hidden="true"><LogOut size={24} /></div>
           <h2>Sign out?</h2>
           <p className="muted">You will need to sign in again to access the admin panel.</p>
           <div className="modal-actions">

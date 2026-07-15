@@ -3,6 +3,7 @@ import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tansta
 import axios from 'axios';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import ImportModal from '../../components/ImportModal';
@@ -93,19 +94,20 @@ export default function LoansPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Loans</h1>
-          <p className="muted">{branchScoped ? `Loan book — ${user?.branch?.name ?? 'your branch'}` : 'Loan book across branches'}</p>
-        </div>
-        <div className="row-actions">
-          <select value={status} onChange={(e) => { setStatus(e.target.value); table.setPage(1); }}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s || 'All statuses'}</option>)}
-          </select>
-          {canCreate && <button type="button" className="ghost" onClick={() => setShowImport(true)}>Import</button>}
-          {canCreate && <button type="button" onClick={() => setShowCreate(true)}>New loan</button>}
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Loans' }]}
+        title="Loans"
+        subtitle={branchScoped ? `Loan book — ${user?.branch?.name ?? 'your branch'}` : 'Loan book across branches'}
+        actions={(
+          <>
+            <select value={status} onChange={(e) => { setStatus(e.target.value); table.setPage(1); }}>
+              {STATUSES.map((s) => <option key={s} value={s}>{s || 'All statuses'}</option>)}
+            </select>
+            {canCreate && <button type="button" className="ghost" onClick={() => setShowImport(true)}>Import</button>}
+            {canCreate && <button type="button" onClick={() => setShowCreate(true)}>New loan</button>}
+          </>
+        )}
+      />
       <DataTable
         columns={columns}
         rows={rows}

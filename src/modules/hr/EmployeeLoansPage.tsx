@@ -3,6 +3,7 @@ import { AxiosError } from 'axios';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { ActionMenu, type ActionItem } from '../../components/ActionMenu';
@@ -175,13 +176,12 @@ export default function EmployeeLoansPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Employee Loans</h1>
-          <p className="muted">Staff loans repaid via monthly salary deduction</p>
-        </div>
-        {canManage && <button onClick={() => { setShowForm((v) => !v); setError(''); setNotice(''); }}>{showForm ? 'Close' : 'New loan request'}</button>}
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Payroll & Finance' }, { label: 'Employee Loans' }]}
+        title="Employee Loans"
+        subtitle="Staff loans repaid via monthly salary deduction"
+        actions={canManage && <button onClick={() => { setShowForm((v) => !v); setError(''); setNotice(''); }}>{showForm ? 'Close' : 'New loan request'}</button>}
+      />
 
       {showForm && (
         <form className="panel pad form-grid" onSubmit={submitApply}>

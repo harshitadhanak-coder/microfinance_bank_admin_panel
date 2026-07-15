@@ -3,6 +3,7 @@ import { useQuery } from '@tanstack/react-query';
 import { Link } from 'react-router-dom';
 import { api } from '../../api/client';
 import { DonutChart, ChartLegend, LineChart, type Slice } from '../../components/Charts';
+import { PageHeader } from '../../components/PageHeader';
 import { TableSkeleton } from '../../components/Skeleton';
 import {
   AlertCircle, ArrowDown, ArrowUp, Banknote, Landmark, ListChecks, Target, UserCheck, Wallet,
@@ -95,14 +96,11 @@ export default function DashboardPage() {
 
   return (
     <div className="dash">
-      <header className="page-head row">
-        <div>
-          <h1>{title}</h1>
-          <p className="muted">
-            {data ? `Live position · updated ${relTime(data.generatedAt)}` : 'Loading live position…'}
-          </p>
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Overview' }, { label: 'Dashboard' }]}
+        title={title}
+        subtitle={data ? `Live position · updated ${relTime(data.generatedAt)}` : 'Loading live position…'}
+      />
 
       {/* KPI ROW */}
       <section className="dash-kpis">

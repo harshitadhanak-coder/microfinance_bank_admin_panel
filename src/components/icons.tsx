@@ -28,6 +28,9 @@ export const ChevronDown = (p: IconProps) => (
 export const ChevronRight = (p: IconProps) => (
   <svg {...base(p)}><path d="m9 18 6-6-6-6" /></svg>
 );
+export const ChevronLeft = (p: IconProps) => (
+  <svg {...base(p)}><path d="m15 18-6-6 6-6" /></svg>
+);
 export const ChevronUp = (p: IconProps) => (
   <svg {...base(p)}><path d="m18 15-6-6-6 6" /></svg>
 );
@@ -138,4 +141,10 @@ export const Eye = (p: IconProps) => (
 );
 export const EyeOff = (p: IconProps) => (
   <svg {...base(p)}><path d="M9.88 9.88a3 3 0 1 0 4.24 4.24" /><path d="M10.73 5.08A10.43 10.43 0 0 1 12 5c7 0 10 7 10 7a13.16 13.16 0 0 1-1.67 2.68" /><path d="M6.61 6.61A13.526 13.526 0 0 0 2 12s3 7 10 7a9.74 9.74 0 0 0 5.39-1.61" /><line x1="2" y1="2" x2="22" y2="22" /></svg>
+);
+export const Menu = (p: IconProps) => (
+  <svg {...base(p)}><line x1="4" y1="6" x2="20" y2="6" /><line x1="4" y1="12" x2="20" y2="12" /><line x1="4" y1="18" x2="20" y2="18" /></svg>
+);
+export const PanelLeft = (p: IconProps) => (
+  <svg {...base(p)}><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M9 3v18" /></svg>
 );

@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { Modal } from '../../components/Modal';
@@ -148,13 +149,12 @@ export default function PayrollPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Payroll</h1>
-          <p className="muted">Run monthly payroll and review generated payslips</p>
-        </div>
-        {canRun && <button onClick={() => { setShowForm((v) => !v); setError(''); }}>{showForm ? 'Close' : 'Run payroll'}</button>}
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Payroll & Finance' }, { label: 'Payroll' }]}
+        title="Payroll"
+        subtitle="Run monthly payroll and review generated payslips"
+        actions={canRun && <button onClick={() => { setShowForm((v) => !v); setError(''); }}>{showForm ? 'Close' : 'Run payroll'}</button>}
+      />
 
       {showForm && (
         <form className="panel pad form-grid" onSubmit={submit}>

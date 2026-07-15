@@ -1,107 +1,95 @@
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
-import { CardsSkeleton, TableSkeleton } from '../../components/Skeleton';
-import { CalendarCheck, ListChecks, LogOut, UserCheck } from '../../components/icons';
-import { fmtDate, titleCase, apiMessage } from '../../lib/format';
+import { PageHeader } from '../../components/PageHeader';
+import { Card, StatCard } from '../../components/Card';
+import { Badge } from '../../components/Badge';
+import { Tabs, TabDef } from '../../components/Tabs';
+import { FilterBar, FilterChip } from '../../components/FilterBar';
+import { EmptyState } from '../../components/EmptyState';
+import { Calendar, CalendarDayCell } from '../../components/Calendar';
+import { CardsSkeleton } from '../../components/Skeleton';
+import { CalendarCheck, ListChecks, LogOut, UserCheck, ArrowRight, FileSpreadsheet, Search } from '../../components/icons';
+import { fmtDate, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
+import {
+  AttendanceRow, SummaryRow, SummaryResponse, CalendarResponse, BranchOption, EmployeeOption,
+  MONTHS, STATUS_FILTERS, statusLabel, STATUS_TONE, statusText, STATUS_LEGEND,
+  fmtTime, fmtWorked, otHours, AttStatus,
+} from './attendanceShared';
 
-type AttStatus = 'PRESENT' | 'HALF_DAY' | 'ABSENT' | 'WEEKLY_OFF' | 'HOLIDAY' | 'ON_LEAVE';
-
-interface AttendanceRow {
-  id: string;
-  attendanceDate: string;
-  checkInAt?: string | null;
-  checkOutAt?: string | null;
-  workedMinutes: number;
-  source: string;
-  isHoliday: boolean;
-  status?: AttStatus;
-  isLate?: boolean;
-  lateMinutes?: number;
-  overtimeMinutes?: number;
-  earlyDepartureMinutes?: number;
-  employee: { id?: string; fullName: string; employeeCode: string; branch?: { name: string } | null };
-}
-
-interface SummaryEmployee { fullName: string; employeeCode: string; branch?: { name: string } | null }
-interface SummaryRow {
-  employeeId: string;
-  employee: SummaryEmployee;
-  present: number;
-  halfDay: number;
-  absent: number;
-  weeklyOff: number;
-  holiday: number;
-  onLeave: number;
-  lateCount: number;
-  overtimeHours: number;
-}
-interface SummaryResponse { month: number; year: number; rows: SummaryRow[] }
-
-interface CalendarDay {
-  date: string;
-  status?: AttStatus;
-  isLate?: boolean;
-  lateMinutes?: number;
-  overtimeMinutes?: number;
-  checkInAt?: string | null;
-  checkOutAt?: string | null;
-  leaveType?: string | null;
-  holidayName?: string | null;
-}
-interface CalendarSummary {
-  present: number;
-  halfDay: number;
-  absent: number;
-  weeklyOff: number;
-  holiday: number;
-  onLeave: number;
-  lateCount: number;
-  overtimeHours: number;
-}
-interface CalendarResponse { month: number; year: number; days: CalendarDay[]; summary: CalendarSummary }
-
-interface BranchOption { id: string; name: string; code: string }
-interface EmployeeOption { id: string; fullName: string; employeeCode: string }
-
-const STATUS_FILTERS = ['', 'PRESENT', 'ABSENT', 'HOLIDAY'] as const;
-const statusLabel = (s: string): string => (s ? s.charAt(0) + s.slice(1).toLowerCase() : 'All statuses');
-
-const fmtTime = (value?: string | null): string =>
-  value ? new Date(value).toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' }) : '—';
-const fmtWorked = (minutes: number): string =>
-  minutes > 0 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '—';
-const otHours = (minutes?: number): string =>
-  minutes && minutes > 0 ? `${(minutes / 60).toFixed(1)}h` : '—';
-
-const DOW = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/** Small colored status chip, reused by the list and per-employee summary table. */
-function StatusChip({ status }: { status?: AttStatus }) {
+/** Small day-status chip pair (status + optional "Late") used in list cells. */
+function StatusCell({ status, isLate, lateMinutes }: { status?: AttStatus; isLate?: boolean; lateMinutes?: number }) {
   if (!status) return <>—</>;
-  return <span className={`att-chip att-${status.toLowerCase()}`}>{titleCase(status)}</span>;
+  return (
+    <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
+      <Badge tone={STATUS_TONE[status]}>{statusText(status)}</Badge>
+      {isLate && <Badge tone="warning">Late {lateMinutes ?? 0}m</Badge>}
+    </span>
+  );
 }
 
+/** The punch-derivation legend, shown under the summary tiles. */
+function Legend() {
+  return (
+    <div className="att-legend">
+      <span className="att-legend-lead">Statuses are derived from punches:</span>
+      {STATUS_LEGEND.map((l) => (
+        <span key={l.status} className="att-legend-item" title={l.hint}>
+          <span className={`legend-swatch tone-${STATUS_TONE[l.status]}`} aria-hidden="true" />
+          {statusText(l.status)}
+        </span>
+      ))}
+    </div>
+  );
+}
+
+type ViewKey = 'list' | 'summary' | 'calendar';
+
+/**
+ * Attendance — List + Calendar. A single browse surface with a view switch:
+ * the daily records table and per-employee monthly summary (List), or a
+ * per-employee month grid (Calendar). Self-service punch in/out lives in the
+ * header; a full month drill-down opens at /attendance/:employeeId.
+ */
 export default function AttendancePage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const navigate = useNavigate();
   const now = new Date();
 
-  const [view, setView] = useState<'list' | 'calendar'>('list');
-  const [month, setMonth] = useState(now.getMonth() + 1);
-  const [year, setYear] = useState(now.getFullYear());
-  const [calEmployeeId, setCalEmployeeId] = useState('');
+  const [params, setParams] = useSearchParams();
+  const view = (params.get('view') as ViewKey) || 'list';
+  const month = Number(params.get('month')) || now.getMonth() + 1;
+  const year = Number(params.get('year')) || now.getFullYear();
+  const calEmployeeId = params.get('emp') || '';
+
+  const patchParams = (patch: Record<string, string | null>) =>
+    setParams((p) => {
+      Object.entries(patch).forEach(([k, v]) => (v == null ? p.delete(k) : p.set(k, v)));
+      return p;
+    }, { replace: true });
+
+  const setView = (v: ViewKey) => patchParams({ view: v });
+  const setMonth = (m: number) => patchParams({ month: String(m) });
+  const setYear = (y: number) => patchParams({ year: String(y) });
+  const setCalEmployeeId = (id: string) => patchParams({ emp: id || null });
+  const shiftMonth = (delta: number) => {
+    const d = new Date(year, month - 1 + delta, 1);
+    patchParams({ month: String(d.getMonth() + 1), year: String(d.getFullYear()) });
+  };
 
   const table = useServerTable({ initialSort: { key: 'attendanceDate', direction: 'desc' } });
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [branchId, setBranchId] = useState('');
-  const [status, setStatus] = useState('');
-  const [employeeId, setEmployeeId] = useState('');
+  const from = params.get('from') || '';
+  const to = params.get('to') || '';
+  const branchId = params.get('branch') || '';
+  const status = params.get('status') || '';
+  const employeeId = params.get('employee') || '';
+
+  const setFilter = (key: string, value: string) => { patchParams({ [key]: value || null }); table.setPage(1); };
 
   const branchesQuery = useQuery({
     queryKey: ['/branches', 'attendance-filter'],
@@ -124,6 +112,7 @@ export default function AttendancePage() {
     queryKey: [listUrl],
     queryFn: () => api.get(listUrl).then((r) => r.data),
     placeholderData: keepPreviousData,
+    enabled: view === 'list',
   });
   const rows = (query.data?.data ?? []) as AttendanceRow[];
   const totalItems = (query.data?.pagination?.totalItems ?? 0) as number;
@@ -136,19 +125,17 @@ export default function AttendancePage() {
   });
   const summaryRows = summaryQuery.data?.rows ?? [];
 
-  const totals = useMemo(() => {
-    return summaryRows.reduce(
-      (acc, r) => ({
-        present: acc.present + (r.present || 0),
-        halfDay: acc.halfDay + (r.halfDay || 0),
-        absent: acc.absent + (r.absent || 0),
-        onLeave: acc.onLeave + (r.onLeave || 0),
-        lateCount: acc.lateCount + (r.lateCount || 0),
-        overtimeHours: acc.overtimeHours + (r.overtimeHours || 0),
-      }),
-      { present: 0, halfDay: 0, absent: 0, onLeave: 0, lateCount: 0, overtimeHours: 0 },
-    );
-  }, [summaryRows]);
+  const totals = useMemo(() => summaryRows.reduce(
+    (acc, r) => ({
+      present: acc.present + (r.present || 0),
+      halfDay: acc.halfDay + (r.halfDay || 0),
+      absent: acc.absent + (r.absent || 0),
+      onLeave: acc.onLeave + (r.onLeave || 0),
+      lateCount: acc.lateCount + (r.lateCount || 0),
+      overtimeHours: acc.overtimeHours + (r.overtimeHours || 0),
+    }),
+    { present: 0, halfDay: 0, absent: 0, onLeave: 0, lateCount: 0, overtimeHours: 0 },
+  ), [summaryRows]);
 
   const calUrl = `/human-resources/attendance/calendar?month=${month}&year=${year}&employeeId=${calEmployeeId}`;
   const calendarQuery = useQuery({
@@ -159,9 +146,7 @@ export default function AttendancePage() {
   });
 
   const invalidateAttendance = () => {
-    queryClient.invalidateQueries({ queryKey: [listUrl] });
-    queryClient.invalidateQueries({ queryKey: [summaryUrl] });
-    queryClient.invalidateQueries({ queryKey: [calUrl] });
+    queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/attendance') });
   };
 
   const punchIn = useMutation({
@@ -175,215 +160,215 @@ export default function AttendancePage() {
     onError: (err) => toast.error(apiMessage(err, 'Check-out failed')),
   });
 
+  const openEmployee = (id?: string) => id && navigate(`/attendance/${id}?month=${month}&year=${year}`);
+
   const columns: Column<AttendanceRow>[] = [
-    { header: 'Employee', render: (a) => <strong>{a.employee.fullName}</strong>, sortKey: 'employee' },
+    { header: 'Employee', render: (a) => <a className="cell-link" onClick={() => openEmployee(a.employee.id)}>{a.employee.fullName}</a>, sortKey: 'employee' },
     { header: 'Code', render: (a) => <code>{a.employee.employeeCode}</code>, sortKey: 'employeeCode' },
     { header: 'Branch', render: (a) => a.employee.branch?.name ?? '—', sortKey: 'branch' },
     { header: 'Date', render: (a) => fmtDate(a.attendanceDate), sortKey: 'attendanceDate' },
-    {
-      header: 'Status',
-      render: (a) => (
-        <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
-          <StatusChip status={a.status} />
-          {a.isLate && <span className="att-chip att-late">Late {a.lateMinutes ?? 0}m</span>}
-        </span>
-      ),
-    },
+    { header: 'Status', render: (a) => <StatusCell status={a.status} isLate={a.isLate} lateMinutes={a.lateMinutes} /> },
     { header: 'Check in', render: (a) => fmtTime(a.checkInAt), sortKey: 'checkInAt' },
     { header: 'Check out', render: (a) => fmtTime(a.checkOutAt), sortKey: 'checkOutAt' },
     { header: 'Worked', render: (a) => fmtWorked(a.workedMinutes), sortKey: 'workedMinutes' },
     { header: 'Late by', render: (a) => (a.lateMinutes ? `${a.lateMinutes}m` : '—'), sortKey: 'lateMinutes' },
     { header: 'OT', render: (a) => otHours(a.overtimeMinutes), sortKey: 'overtimeMinutes' },
-    { header: 'Source', render: (a) => <span className="pill pill-active">{a.source.replaceAll('_', ' ')}</span>, sortKey: 'source' },
+    { header: 'Source', render: (a) => <Badge tone="neutral">{a.source.replaceAll('_', ' ')}</Badge>, sortKey: 'source' },
   ];
 
-  const resetPage = () => table.setPage(1);
-  const clearFilters = () => { setFrom(''); setTo(''); setBranchId(''); setStatus(''); setEmployeeId(''); resetPage(); };
-  const hasFilters = !!(from || to || branchId || status || employeeId);
+  const summaryColumns: Column<SummaryRow & { id: string }>[] = [
+    { header: 'Employee', render: (r) => <a className="cell-link" onClick={() => openEmployee(r.employeeId)}>{r.employee.fullName}</a>, sortValue: (r) => r.employee.fullName },
+    { header: 'Code', render: (r) => <code>{r.employee.employeeCode}</code>, sortValue: (r) => r.employee.employeeCode },
+    { header: 'Present', render: (r) => <span className="num">{r.present}</span>, sortValue: (r) => r.present },
+    { header: 'Half', render: (r) => <span className="num">{r.halfDay}</span>, sortValue: (r) => r.halfDay },
+    { header: 'Absent', render: (r) => <span className="num">{r.absent}</span>, sortValue: (r) => r.absent },
+    { header: 'Leave', render: (r) => <span className="num">{r.onLeave}</span>, sortValue: (r) => r.onLeave },
+    { header: 'Late', render: (r) => <span className="num">{r.lateCount}</span>, sortValue: (r) => r.lateCount },
+    { header: 'OT (hrs)', render: (r) => <span className="num">{r.overtimeHours.toFixed(1)}</span>, sortValue: (r) => r.overtimeHours },
+    { header: '', render: (r) => <button type="button" className="sm ghost" onClick={() => openEmployee(r.employeeId)}>Month <ArrowRight size={13} /></button> },
+  ];
+  const summaryTableRows = summaryRows.map((r) => ({ ...r, id: r.employeeId }));
+
+  const clearFilters = () => { patchParams({ from: null, to: null, branch: null, status: null, employee: null }); table.setPage(1); };
+  const employeeName = (id: string) => employeesQuery.data?.find((e) => e.id === id);
+  const chips: FilterChip[] = [
+    ...(from ? [{ key: 'from', label: `From ${from}`, onRemove: () => setFilter('from', '') }] : []),
+    ...(to ? [{ key: 'to', label: `To ${to}`, onRemove: () => setFilter('to', '') }] : []),
+    ...(branchId ? [{ key: 'branch', label: `Branch: ${branchesQuery.data?.find((b) => b.id === branchId)?.name ?? '…'}`, onRemove: () => setFilter('branch', '') }] : []),
+    ...(employeeId ? [{ key: 'employee', label: `Employee: ${employeeName(employeeId)?.fullName ?? '…'}`, onRemove: () => setFilter('employee', '') }] : []),
+    ...(status ? [{ key: 'status', label: `Status: ${statusLabel(status)}`, onRemove: () => setFilter('status', '') }] : []),
+  ];
 
   const yearOptions = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
 
   const cal = calendarQuery.data;
-  const leadingEmpty = cal && cal.days.length ? new Date(cal.days[0]!.date).getUTCDay() : 0;
+  const calendarDays: CalendarDayCell[] = (cal?.days ?? []).map((d) => ({
+    date: d.date,
+    primary: d.status ? { label: statusText(d.status), tone: STATUS_TONE[d.status] } : undefined,
+    extra: d.isLate ? [{ label: 'Late', tone: 'warning' as const }] : undefined,
+    title: d.status === 'HOLIDAY' ? d.holidayName ?? undefined : d.status === 'ON_LEAVE' ? d.leaveType ?? undefined : undefined,
+    dim: d.status === 'UPCOMING',
+  }));
 
-  const renderSummaryTiles = (t: { present: number; halfDay: number; absent: number; onLeave: number; lateCount: number; overtimeHours: number }) => (
-    <div className="att-summary">
-      <div className="sum-tile"><div className="sum-val">{t.present}</div><div className="sum-lbl">Present</div></div>
-      <div className="sum-tile"><div className="sum-val">{t.halfDay}</div><div className="sum-lbl">Half-day</div></div>
-      <div className="sum-tile"><div className="sum-val">{t.absent}</div><div className="sum-lbl">Absent</div></div>
-      <div className="sum-tile"><div className="sum-val">{t.onLeave}</div><div className="sum-lbl">On leave</div></div>
-      <div className="sum-tile"><div className="sum-val">{t.lateCount}</div><div className="sum-lbl">Late</div></div>
-      <div className="sum-tile"><div className="sum-val">{t.overtimeHours.toFixed(1)}</div><div className="sum-lbl">Overtime (hrs)</div></div>
+  const tiles = (t: typeof totals) => (
+    <div className="stat-grid att-tiles">
+      <StatCard label="Present" value={t.present} tone="success" icon={<UserCheck size={16} />} />
+      <StatCard label="Half-day" value={t.halfDay} tone="warning" />
+      <StatCard label="Absent" value={t.absent} tone="danger" />
+      <StatCard label="On leave" value={t.onLeave} tone="info" />
+      <StatCard label="Late" value={t.lateCount} tone="warning" />
+      <StatCard label="Overtime (hrs)" value={t.overtimeHours.toFixed(1)} tone="brass" />
     </div>
   );
 
+  const viewTabs: TabDef[] = [
+    { key: 'list', label: <><ListChecks size={15} /> List</> },
+    { key: 'summary', label: <><FileSpreadsheet size={15} /> Monthly summary</> },
+    { key: 'calendar', label: <><CalendarCheck size={15} /> Calendar</> },
+  ];
+
   return (
     <>
-      <header className="page-head">
-        <h1>Attendance</h1>
-        <p className="muted">Daily check-in / check-out records across all branches</p>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Human Resources' }, { label: 'Attendance' }]}
+        title="Attendance"
+        subtitle="Daily check-in / check-out, derived from punches across all branches"
+        actions={(
+          <>
+            <div className="hdr-period" role="group" aria-label="Reporting period">
+              <select aria-label="Month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+              <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
+                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+            <span className="hdr-sep" aria-hidden="true" />
+            <button type="button" className="ghost" disabled={punchOut.isPending} onClick={() => punchOut.mutate()}>
+              <LogOut size={15} /> {punchOut.isPending ? 'Checking out…' : 'Check out'}
+            </button>
+            <button type="button" className="btn-lg" disabled={punchIn.isPending} onClick={() => punchIn.mutate()}>
+              <UserCheck size={16} /> {punchIn.isPending ? 'Checking in…' : 'Check in'}
+            </button>
+          </>
+        )}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as ViewKey)} />}
+      />
 
-      <div className="card" style={{ display: 'flex', alignItems: 'center', gap: 12, flexWrap: 'wrap', marginBottom: 16 }}>
-        <strong style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}><UserCheck /> My attendance</strong>
-        <span className="muted" style={{ fontSize: 13 }}>Mark your own check-in / check-out for today.</span>
-        <span style={{ flex: 1 }} />
-        <button type="button" className="primary sm" disabled={punchIn.isPending} onClick={() => punchIn.mutate()}>
-          <UserCheck /> {punchIn.isPending ? 'Checking in…' : 'Check in'}
-        </button>
-        <button type="button" className="ghost sm" disabled={punchOut.isPending} onClick={() => punchOut.mutate()}>
-          <LogOut /> {punchOut.isPending ? 'Checking out…' : 'Check out'}
-        </button>
-      </div>
-
-      <div className="filter-bar">
-        <label>Month
-          <select value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-            {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-          </select>
-        </label>
-        <label>Year
-          <select value={year} onChange={(e) => setYear(Number(e.target.value))}>
-            {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-          </select>
-        </label>
-        <span style={{ flex: 1 }} />
-        <div className="pill-toggle" role="group" style={{ display: 'inline-flex', gap: 6 }}>
-          <button type="button" className={view === 'list' ? 'primary sm' : 'ghost sm'} onClick={() => setView('list')}>
-            <ListChecks /> List
-          </button>
-          <button type="button" className={view === 'calendar' ? 'primary sm' : 'ghost sm'} onClick={() => setView('calendar')}>
-            <CalendarCheck /> Calendar
-          </button>
-        </div>
-      </div>
-
-      {summaryQuery.isLoading ? (
-        <CardsSkeleton count={6} />
-      ) : (
+      {view === 'list' && (
         <>
-          {renderSummaryTiles(totals)}
-        </>
-      )}
-
-      {view === 'list' ? (
-        <>
-          <div className="filter-bar">
-            <label>From<input type="date" value={from} onChange={(e) => { setFrom(e.target.value); resetPage(); }} /></label>
-            <label>To<input type="date" value={to} onChange={(e) => { setTo(e.target.value); resetPage(); }} /></label>
+          <FilterBar
+            chips={chips}
+            onReset={chips.length ? clearFilters : undefined}
+            actions={(
+              <div className="filter-search">
+                <Search size={16} />
+                <input
+                  value={table.search}
+                  onChange={(e) => table.onSearchChange(e.target.value)}
+                  placeholder="Search employee, code, branch…"
+                  aria-label="Search attendance"
+                />
+              </div>
+            )}
+          >
+            <label>From<input type="date" value={from} onChange={(e) => setFilter('from', e.target.value)} /></label>
+            <label>To<input type="date" value={to} onChange={(e) => setFilter('to', e.target.value)} /></label>
             <label>Branch
-              <select value={branchId} onChange={(e) => { setBranchId(e.target.value); resetPage(); }}>
+              <select value={branchId} onChange={(e) => setFilter('branch', e.target.value)}>
                 <option value="">All branches</option>
                 {branchesQuery.data?.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
               </select>
             </label>
             <label>Employee
-              <select value={employeeId} onChange={(e) => { setEmployeeId(e.target.value); resetPage(); }}>
+              <select value={employeeId} onChange={(e) => setFilter('employee', e.target.value)}>
                 <option value="">All employees</option>
                 {employeesQuery.data?.map((e) => <option key={e.id} value={e.id}>{e.fullName} ({e.employeeCode})</option>)}
               </select>
             </label>
             <label>Status
-              <select value={status} onChange={(e) => { setStatus(e.target.value); resetPage(); }}>
+              <select value={status} onChange={(e) => setFilter('status', e.target.value)}>
                 {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
               </select>
             </label>
-            {hasFilters && <button type="button" className="ghost sm" onClick={clearFilters}>Clear</button>}
-          </div>
+          </FilterBar>
 
           <DataTable
             columns={columns}
             rows={rows}
             loading={query.isLoading}
+            searchable={false}
             empty="No attendance records for the selected filters."
-            searchPlaceholder="Search by employee, code, branch or source…"
             server={{
               page: table.page, pageSize: table.pageSize, totalItems,
               onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
               search: table.search, onSearchChange: table.onSearchChange,
             }}
           />
-
-          <section className="card" style={{ marginTop: 16 }}>
-            <h2 style={{ marginTop: 0 }}>Monthly summary — {MONTHS[month - 1]} {year}</h2>
-            {summaryQuery.isLoading ? (
-              <TableSkeleton rows={6} columns={7} />
-            ) : summaryRows.length === 0 ? (
-              <p className="muted">No summary data for this month.</p>
-            ) : (
-              <div style={{ overflowX: 'auto' }}>
-                <table className="table">
-                  <thead>
-                    <tr>
-                      <th>Employee</th><th>Present</th><th>Half</th><th>Absent</th>
-                      <th>Leave</th><th>Late</th><th>OT (hrs)</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {summaryRows.map((r) => (
-                      <tr key={r.employeeId}>
-                        <td><strong>{r.employee.fullName}</strong> <code>{r.employee.employeeCode}</code></td>
-                        <td>{r.present}</td>
-                        <td>{r.halfDay}</td>
-                        <td>{r.absent}</td>
-                        <td>{r.onLeave}</td>
-                        <td>{r.lateCount}</td>
-                        <td>{r.overtimeHours.toFixed(1)}</td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </section>
         </>
-      ) : (
-        <section className="card" style={{ marginTop: 4 }}>
-          <div className="filter-bar">
-            <label>Employee
+      )}
+
+      {view === 'summary' && (
+        <>
+          <section className="att-summary-band">
+            <div className="att-summary-band-head">
+              <h2>Overview</h2>
+              <span className="muted">{MONTHS[month - 1]} {year} · all branches</span>
+            </div>
+            {summaryQuery.isLoading ? <CardsSkeleton count={6} /> : tiles(totals)}
+          </section>
+
+          <Card title={`Per-employee summary — ${MONTHS[month - 1]} ${year}`}>
+            <DataTable
+              columns={summaryColumns}
+              rows={summaryTableRows}
+              loading={summaryQuery.isLoading}
+              empty="No summary data for this month."
+              searchPlaceholder="Search employees…"
+              pageSize={25}
+            />
+          </Card>
+        </>
+      )}
+
+      {view === 'calendar' && (
+        <Card
+          title="Employee month calendar"
+          action={(
+            <label className="inline-select">Employee
               <select value={calEmployeeId} onChange={(e) => setCalEmployeeId(e.target.value)}>
                 <option value="">Select an employee…</option>
                 {summaryRows.map((r) => (
-                  <option key={r.employeeId} value={r.employeeId}>
-                    {r.employee.fullName} ({r.employee.employeeCode})
-                  </option>
+                  <option key={r.employeeId} value={r.employeeId}>{r.employee.fullName} ({r.employee.employeeCode})</option>
                 ))}
               </select>
             </label>
-          </div>
-
+          )}
+        >
           {!calEmployeeId ? (
-            <p className="muted">Select an employee to view their monthly calendar.</p>
+            <EmptyState variant="no-data" title="No employee selected" message="Choose an employee to view their monthly attendance calendar." />
           ) : calendarQuery.isLoading ? (
-            <CardsSkeleton count={6} />
+            <CardsSkeleton count={3} />
           ) : !cal ? (
-            <p className="muted">No calendar data available.</p>
+            <EmptyState variant="no-data" title="No calendar data" message="Nothing on record for this month." />
           ) : (
             <>
-              {renderSummaryTiles(cal.summary)}
-              <div className="att-cal">
-                {DOW.map((d) => <div key={d} className="cal-dow">{d}</div>)}
-                {Array.from({ length: leadingEmpty }).map((_, i) => <div key={`empty-${i}`} className="cal-cell empty" />)}
-                {cal.days.map((day) => {
-                  const dom = new Date(day.date).getUTCDate();
-                  const tagTitle = day.status === 'HOLIDAY' ? day.holidayName ?? undefined
-                    : day.status === 'ON_LEAVE' ? day.leaveType ?? undefined : undefined;
-                  return (
-                    <div key={day.date} className="cal-cell">
-                      <span className="cal-day">{dom}</span>
-                      {day.status && (
-                        <span className={`cal-tag att-${day.status.toLowerCase()}`} title={tagTitle}>
-                          {titleCase(day.status)}
-                        </span>
-                      )}
-                      {day.isLate && <span className="cal-tag att-late" title={`${day.lateMinutes ?? 0}m late`}>Late</span>}
-                    </div>
-                  );
-                })}
-              </div>
+              <Calendar
+                month={cal.month}
+                year={cal.year}
+                days={calendarDays}
+                onPrev={() => shiftMonth(-1)}
+                onNext={() => shiftMonth(1)}
+                aside={(
+                  <button type="button" className="sm ghost" onClick={() => openEmployee(calEmployeeId)}>
+                    Open full detail <ArrowRight size={13} />
+                  </button>
+                )}
+                legend={<Legend />}
+              />
             </>
           )}
-        </section>
+        </Card>
       )}
     </>
   );

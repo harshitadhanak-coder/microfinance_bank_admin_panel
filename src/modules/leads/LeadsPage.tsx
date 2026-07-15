@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { keepPreviousData, useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { inr } from '../../components/StatCard';
 import { useAuth } from '../auth/AuthContext';
@@ -66,19 +67,20 @@ export default function LeadsPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Leads</h1>
-          <p className="muted">Field pipeline from capture to conversion</p>
-        </div>
-        <div className="row-actions">
-          <select value={stage} onChange={(e) => { setStage(e.target.value); table.setPage(1); }} aria-label="Filter by stage">
-            <option value="">All stages</option>
-            {STAGE_ORDER.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
-          </select>
-          {canCreate && <button onClick={() => setFormLead('new')}>New lead</button>}
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Operations' }, { label: 'Leads' }]}
+        title="Leads"
+        subtitle="Field pipeline from capture to conversion"
+        actions={(
+          <>
+            <select value={stage} onChange={(e) => { setStage(e.target.value); table.setPage(1); }} aria-label="Filter by stage">
+              <option value="">All stages</option>
+              {STAGE_ORDER.map((s) => <option key={s} value={s}>{s.replaceAll('_', ' ')}</option>)}
+            </select>
+            {canCreate && <button onClick={() => setFormLead('new')}>New lead</button>}
+          </>
+        )}
+      />
 
       <div className="funnel">
         {STAGE_ORDER.map((s) => (

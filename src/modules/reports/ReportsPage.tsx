@@ -4,6 +4,7 @@ import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { FileSpreadsheet, Download, Printer } from '../../components/icons';
 import { inr, fmtDate, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
@@ -359,10 +360,11 @@ export default function ReportsPage() {
 
   return (
     <>
-      <header className="page-head">
-        <h1>Reports</h1>
-        <p className="muted">Generate, preview and export HR reports across employees, attendance, leave and payroll</p>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Insights' }, { label: 'Reports' }]}
+        title="Reports"
+        subtitle="Generate, preview and export HR reports across employees, attendance, leave and payroll"
+      />
 
       <div className="report-layout">
         <nav className="report-nav">

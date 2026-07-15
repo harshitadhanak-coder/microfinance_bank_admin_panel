@@ -2,6 +2,7 @@ import { FormEvent, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
+import { PageHeader } from '../../components/PageHeader';
 import { useServerTable } from '../../components/useServerTable';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { ActionMenu, type ActionItem } from '../../components/ActionMenu';
@@ -141,12 +142,11 @@ export default function MastersPage() {
 
   return (
     <>
-      <header className="page-head row">
-        <div>
-          <h1>Organization Masters</h1>
-          <p className="muted">Departments, designations, grades, employment types, shifts and holiday groups</p>
-        </div>
-      </header>
+      <PageHeader
+        breadcrumb={[{ label: 'Administration' }, { label: 'Organization Masters' }]}
+        title="Organization Masters"
+        subtitle="Departments, designations, grades, employment types, shifts and holiday groups"
+      />
 
       <div className="master-tabs" role="tablist">
         {TAB_ORDER.map((key) => (
