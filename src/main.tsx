@@ -18,6 +18,7 @@ import BranchEditPage from './modules/branches/BranchEditPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
 import CollectionImportPage from './modules/collections/CollectionImportPage';
 import CollectionRecordsPage from './modules/collections/CollectionRecordsPage';
+import CollectionSettlementPage from './modules/collections/CollectionSettlementPage';
 import SettlementsPage from './modules/collections/SettlementsPage';
 import SettlementOffersPage from './modules/collections/SettlementOffersPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
@@ -156,6 +157,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="leads/:id/edit" element={<RequireModule module="leads"><LeadFormPage /></RequireModule>} />
                 <Route path="collections/import" element={<RequireModule module="collectionImport"><CollectionImportPage /></RequireModule>} />
                 <Route path="collections/records" element={<RequireModule module="collectionRecords"><CollectionRecordsPage /></RequireModule>} />
+                <Route path="collections/settlement" element={<RequireModule module="collectionSettlement"><CollectionSettlementPage /></RequireModule>} />
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
                 <Route path="settlements" element={<RequireModule module="settlements"><SettlementsPage /></RequireModule>} />
                 <Route path="settlements/offers" element={<RequireModule module="settlements"><SettlementOffersPage /></RequireModule>} />

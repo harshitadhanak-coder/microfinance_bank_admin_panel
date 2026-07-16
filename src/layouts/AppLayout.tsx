@@ -32,6 +32,7 @@ const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   collections: <HandCoins size={18} />,
   collectionImport: <FileSpreadsheet size={18} />,
   collectionRecords: <ListChecks size={18} />,
+  collectionSettlement: <Landmark size={18} />,
   settlements: <HandCoins size={18} />,
   users: <UserCheck size={18} />,
   documents: <FileSpreadsheet size={18} />,

@@ -41,6 +41,7 @@ export type ModuleKey =
   | 'collections'
   | 'collectionImport'
   | 'collectionRecords'
+  | 'collectionSettlement'
   | 'settlements'
   | 'users'
   | 'documents'
@@ -109,6 +110,8 @@ export const MODULES: ModuleDef[] = [
   { key: 'collectionImport', to: '/collections/import', label: 'Import Collections', roles: ['SUPER_ADMIN'], group: 'operations' },
   // Browse the imported BC collection ledger (separate from internal loan payments).
   { key: 'collectionRecords', to: '/collections/records', label: 'Collection Records', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
+  // Bank-deposit settlement summary (opening/closing/deposits) from the imported workbook.
+  { key: 'collectionSettlement', to: '/collections/settlement', label: 'Collection Settlement', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
   // Day-End Settlements — verify each field officer's day-end cash (own route,
   // was a tab on the Collections mega-page). Settlement offers / NPA live under
   // /settlements/offers, reached from this page.
