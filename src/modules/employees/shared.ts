@@ -18,7 +18,7 @@ export interface EmployeeRow {
   employmentStatus: string;
   joiningDate: string;
   branchId?: string | null;
-  branch?: { name: string } | null;
+  branch?: { name: string; manager?: { id: string; fullName: string } | null } | null;
 }
 
 export interface BranchOption { id: string; name: string; code: string }
@@ -43,13 +43,14 @@ export const LOGIN_ROLES: { value: string; label: string; portal: string }[] = [
 
 // ── Salary components (sum to gross / CTC) ──
 export type SalaryComponentKey =
-  | 'basicSalary' | 'houseRentAllowance' | 'dearnessAllowance' | 'specialAllowance'
+  | 'basicSalary' | 'houseRentAllowance' | 'monthlyBonus' | 'dearnessAllowance' | 'specialAllowance'
   | 'conveyanceAllowance' | 'medicalAllowance' | 'travelAllowance' | 'foodAllowance'
   | 'mobileAllowance' | 'otherAllowance';
 
 export const SALARY_COMPONENTS: { key: SalaryComponentKey; label: string }[] = [
   { key: 'basicSalary', label: 'Basic' },
   { key: 'houseRentAllowance', label: 'House rent allowance' },
+  { key: 'monthlyBonus', label: 'Monthly bonus' },
   { key: 'dearnessAllowance', label: 'Dearness allowance' },
   { key: 'specialAllowance', label: 'Special allowance' },
   { key: 'conveyanceAllowance', label: 'Conveyance allowance' },

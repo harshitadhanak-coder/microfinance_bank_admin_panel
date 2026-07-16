@@ -16,11 +16,14 @@ import BranchCreatePage from './modules/branches/BranchCreatePage';
 import BranchDetailPage from './modules/branches/BranchDetailPage';
 import BranchEditPage from './modules/branches/BranchEditPage';
 import CollectionsPage from './modules/collections/CollectionsPage';
+import CollectionImportPage from './modules/collections/CollectionImportPage';
+import CollectionRecordsPage from './modules/collections/CollectionRecordsPage';
 import SettlementsPage from './modules/collections/SettlementsPage';
 import SettlementOffersPage from './modules/collections/SettlementOffersPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import EmployeeCreatePage from './modules/employees/EmployeeCreatePage';
+import EmployeeImportPage from './modules/employees/EmployeeImportPage';
 import EmployeeDetailPage from './modules/employees/EmployeeDetailPage';
 import EmployeeEditPage from './modules/employees/EmployeeEditPage';
 import HrDashboardPage from './modules/hr/HrDashboardPage';
@@ -110,6 +113,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="hr-overview" element={<RequireModule module="hrDashboard"><HrDashboardPage /></RequireModule>} />
                 <Route path="employees" element={<RequireModule module="employees"><EmployeesPage /></RequireModule>} />
                 <Route path="employees/new" element={<RequireModule module="employees"><EmployeeCreatePage /></RequireModule>} />
+                <Route path="employees/import" element={<RequireModule module="employeeImport"><EmployeeImportPage /></RequireModule>} />
                 <Route path="employees/:id" element={<RequireModule module="employees"><EmployeeDetailPage /></RequireModule>} />
                 <Route path="employees/:id/edit" element={<RequireModule module="employees"><EmployeeEditPage /></RequireModule>} />
                 <Route path="attendance" element={<RequireModule module="attendance"><AttendancePage /></RequireModule>} />
@@ -150,6 +154,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="leads/new" element={<RequireModule module="leads"><LeadFormPage /></RequireModule>} />
                 <Route path="leads/:id" element={<RequireModule module="leads"><LeadDetailPage /></RequireModule>} />
                 <Route path="leads/:id/edit" element={<RequireModule module="leads"><LeadFormPage /></RequireModule>} />
+                <Route path="collections/import" element={<RequireModule module="collectionImport"><CollectionImportPage /></RequireModule>} />
+                <Route path="collections/records" element={<RequireModule module="collectionRecords"><CollectionRecordsPage /></RequireModule>} />
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
                 <Route path="settlements" element={<RequireModule module="settlements"><SettlementsPage /></RequireModule>} />
                 <Route path="settlements/offers" element={<RequireModule module="settlements"><SettlementOffersPage /></RequireModule>} />

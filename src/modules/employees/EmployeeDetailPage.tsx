@@ -24,16 +24,24 @@ interface MasterRef { id: string; name: string; code?: string | null }
 interface SalaryStructure {
   basicSalary: string; houseRentAllowance: string; dearnessAllowance: string; specialAllowance: string;
   conveyanceAllowance: string; medicalAllowance: string; travelAllowance: string; foodAllowance: string;
-  mobileAllowance: string; otherAllowance: string;
+  mobileAllowance: string; otherAllowance: string; monthlyBonus: string; mediclaimDeduction: string;
   isProvidentFundApplicable: boolean; isStateInsuranceApplicable: boolean; isProfessionalTaxApplicable: boolean;
   effectiveFrom: string;
+}
+interface SalaryBreakdown {
+  gross: number; monthlyBonus: number; providentFund: number; stateInsurance: number;
+  professionalTax: number; mediclaim: number; totalDeductions: number; takeHome: number;
+  advanceRecovery: number; finalPayable: number;
 }
 interface EmployeeDetail {
   id: string; employeeCode: string; fullName: string; phoneNumber: string; email?: string | null;
   designation: string; employmentStatus: string; joiningDate: string; branchId?: string | null;
-  branch?: { name: string; code?: string | null; city?: string | null; state?: string | null } | null;
+  branch?: { name: string; code?: string | null; city?: string | null; state?: string | null; manager?: { id: string; fullName: string; designation?: string | null } | null } | null;
   bankIfscCode?: string | null; bankAccountMasked?: string | null; panMasked?: string | null;
+  bankAccountNumber?: string | null; panNumber?: string | null; aadhaarNumber?: string | null;
+  bankName?: string | null; bankAccountHolderName?: string | null;
   salaryStructure?: SalaryStructure | null;
+  salaryBreakdown?: SalaryBreakdown | null;
   department?: string | null; reportsToId?: string | null;
   dateOfBirth?: string | null; gender?: string | null; maritalStatus?: string | null; addressLine?: string | null;
   emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelation?: string | null;
@@ -63,7 +71,7 @@ interface CredentialResult { username: string; officialEmail: string; delivery: 
 const emptySalary = {
   basicSalary: '', houseRentAllowance: '', dearnessAllowance: '', specialAllowance: '',
   conveyanceAllowance: '', medicalAllowance: '', travelAllowance: '', foodAllowance: '',
-  mobileAllowance: '', otherAllowance: '', effectiveFrom: '',
+  mobileAllowance: '', otherAllowance: '', monthlyBonus: '', mediclaimDeduction: '', effectiveFrom: '',
   isProvidentFundApplicable: true, isStateInsuranceApplicable: false, isProfessionalTaxApplicable: true,
 };
 type SalaryForm = typeof emptySalary;
@@ -112,6 +120,7 @@ export default function EmployeeDetailPage() {
       conveyanceAllowance: String(s.conveyanceAllowance ?? ''), medicalAllowance: String(s.medicalAllowance ?? ''),
       travelAllowance: String(s.travelAllowance ?? ''), foodAllowance: String(s.foodAllowance ?? ''),
       mobileAllowance: String(s.mobileAllowance ?? ''), otherAllowance: String(s.otherAllowance ?? ''),
+      monthlyBonus: String(s.monthlyBonus ?? ''), mediclaimDeduction: String(s.mediclaimDeduction ?? ''),
       effectiveFrom: s.effectiveFrom ? s.effectiveFrom.slice(0, 10) : '',
       isProvidentFundApplicable: s.isProvidentFundApplicable ?? true,
       isStateInsuranceApplicable: s.isStateInsuranceApplicable ?? false,
@@ -123,6 +132,7 @@ export default function EmployeeDetailPage() {
   const reviseSalary = useMutation({
     mutationFn: () => api.put(`/employees/${id}/salary`, {
       ...Object.fromEntries(SALARY_COMPONENTS.map((c) => [c.key, Number(salaryForm[c.key] || 0)])),
+      mediclaimDeduction: Number(salaryForm.mediclaimDeduction || 0),
       isProvidentFundApplicable: salaryForm.isProvidentFundApplicable,
       isStateInsuranceApplicable: salaryForm.isStateInsuranceApplicable,
       isProfessionalTaxApplicable: salaryForm.isProfessionalTaxApplicable,
@@ -275,6 +285,7 @@ export default function EmployeeDetailPage() {
   });
 
   const salary = detail?.salaryStructure;
+  const breakdown = detail?.salaryBreakdown;
   const salaryGross = salary ? SALARY_COMPONENTS.reduce((sum, c) => sum + (Number(salary[c.key]) || 0), 0) : 0;
 
   const tabs: TabDef[] = [
@@ -327,11 +338,14 @@ export default function EmployeeDetailPage() {
                   <div><dt>Emergency contact</dt><dd>{detail.emergencyContactName
                     ? `${detail.emergencyContactName}${detail.emergencyContactRelation ? ` (${detail.emergencyContactRelation})` : ''}${detail.emergencyContactPhone ? ` · ${detail.emergencyContactPhone}` : ''}`
                     : '—'}</dd></div>
+                  <div><dt>Aadhaar</dt><dd>{detail.aadhaarNumber ?? '—'}</dd></div>
+                  <div><dt>PAN</dt><dd>{detail.panNumber ?? detail.panMasked ?? '—'}</dd></div>
                   <div><dt>UAN</dt><dd>{detail.uanNumber ?? '—'}</dd></div>
                   <div><dt>PF number</dt><dd>{detail.providentFundNumber ?? '—'}</dd></div>
                   <div><dt>ESI number</dt><dd>{detail.stateInsuranceNumber ?? '—'}</dd></div>
-                  <div><dt>PAN</dt><dd>{detail.panMasked ?? '—'}</dd></div>
-                  <div><dt>Bank account</dt><dd>{detail.bankAccountMasked ?? '—'}</dd></div>
+                  <div><dt>Bank name</dt><dd>{detail.bankName ?? '—'}</dd></div>
+                  <div><dt>Bank account</dt><dd>{detail.bankAccountNumber ?? detail.bankAccountMasked ?? '—'}</dd></div>
+                  <div><dt>Account holder</dt><dd>{detail.bankAccountHolderName ?? '—'}</dd></div>
                   <div><dt>IFSC</dt><dd>{detail.bankIfscCode ?? '—'}</dd></div>
                 </dl>
               </Card>
@@ -342,6 +356,9 @@ export default function EmployeeDetailPage() {
                     <div><dt>Branch code</dt><dd>{detail.branch.code ? <code>{detail.branch.code}</code> : '—'}</dd></div>
                     <div><dt>City</dt><dd>{detail.branch.city ?? '—'}</dd></div>
                     <div><dt>State</dt><dd>{detail.branch.state ?? '—'}</dd></div>
+                    <div><dt>Branch manager</dt><dd>{detail.branch.manager
+                      ? `${detail.branch.manager.fullName}${detail.branch.manager.designation ? ` · ${titleCase(detail.branch.manager.designation)}` : ''}`
+                      : '—'}</dd></div>
                   </dl>
                 ) : (
                   <p className="muted">Not assigned to a branch yet.{canManage ? ' Use Edit to assign one.' : ''}</p>
@@ -414,7 +431,8 @@ export default function EmployeeDetailPage() {
                     {SALARY_COMPONENTS.map((c) => (
                       <div key={c.key}><dt>{c.label}</dt><dd className="num">{inr(salary[c.key])}</dd></div>
                     ))}
-                    <div><dt>Gross (monthly)</dt><dd><strong className="num">{inr(salaryGross)}</strong></dd></div>
+                    <div><dt>Gross (monthly)</dt><dd><strong className="num">{inr(breakdown?.gross ?? salaryGross)}</strong></dd></div>
+                    <div><dt>Mediclaim deduction</dt><dd className="num">{inr(salary.mediclaimDeduction)}</dd></div>
                     <div><dt>PF applicable</dt><dd>{salary.isProvidentFundApplicable ? 'Yes' : 'No'}</dd></div>
                     <div><dt>ESI applicable</dt><dd>{salary.isStateInsuranceApplicable ? 'Yes' : 'No'}</dd></div>
                     <div><dt>Professional tax</dt><dd>{salary.isProfessionalTaxApplicable ? 'Yes' : 'No'}</dd></div>
@@ -422,6 +440,21 @@ export default function EmployeeDetailPage() {
                   </dl>
                 ) : <p className="muted">No salary structure on record.{canManage ? ' Use the form to create one.' : ''}</p>}
               </Card>
+              {salary && breakdown && (
+                <Card title="Monthly salary calculation">
+                  <dl className="detail-list one-col">
+                    <div><dt>Gross earnings</dt><dd><strong className="num">{inr(breakdown.gross)}</strong></dd></div>
+                    <div><dt>PF (employee)</dt><dd className="num">− {inr(breakdown.providentFund)}</dd></div>
+                    <div><dt>ESIC (employee)</dt><dd className="num">− {inr(breakdown.stateInsurance)}</dd></div>
+                    <div><dt>Professional tax</dt><dd className="num">− {inr(breakdown.professionalTax)}</dd></div>
+                    <div><dt>Mediclaim</dt><dd className="num">− {inr(breakdown.mediclaim)}</dd></div>
+                    <div><dt>Total deductions</dt><dd className="num">− {inr(breakdown.totalDeductions)}</dd></div>
+                    <div><dt>Take home</dt><dd><strong className="num">{inr(breakdown.takeHome)}</strong></dd></div>
+                    <div><dt>Salary advance recovery</dt><dd className="num">− {inr(breakdown.advanceRecovery)}</dd></div>
+                    <div><dt>Final payable</dt><dd><strong className="num">{inr(breakdown.finalPayable)}</strong></dd></div>
+                  </dl>
+                </Card>
+              )}
               {canManage && (
                 <Card title="Revise salary" action={<span className="muted sm-text">New gross: <strong className="num">{inr(salaryFormGross)}</strong></span>}>
                   <Form onSubmit={submitSalary}>
@@ -431,6 +464,9 @@ export default function EmployeeDetailPage() {
                           <input type="number" min="0" value={salaryForm[c.key]} onChange={(e) => setSalaryForm({ ...salaryForm, [c.key]: e.target.value })} required={c.key === 'basicSalary'} />
                         </Field>
                       ))}
+                      <Field label="Mediclaim deduction">
+                        <input type="number" min="0" value={salaryForm.mediclaimDeduction} onChange={(e) => setSalaryForm({ ...salaryForm, mediclaimDeduction: e.target.value })} />
+                      </Field>
                       <Field label="Effective from" required><input type="date" value={salaryForm.effectiveFrom} onChange={(e) => setSalaryForm({ ...salaryForm, effectiveFrom: e.target.value })} required /></Field>
                     </FormGrid>
                     <div className="check-row">

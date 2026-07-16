@@ -24,6 +24,7 @@ export type ModuleKey =
   | 'dashboard'
   | 'hrDashboard'
   | 'employees'
+  | 'employeeImport'
   | 'attendance'
   | 'holidays'
   | 'leave'
@@ -38,6 +39,8 @@ export type ModuleKey =
   | 'applications'
   | 'leads'
   | 'collections'
+  | 'collectionImport'
+  | 'collectionRecords'
   | 'settlements'
   | 'users'
   | 'documents'
@@ -82,6 +85,7 @@ export const MODULES: ModuleDef[] = [
 
   // Human Resources
   { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'employeeImport', to: '/employees/import', label: 'Import Employees', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'hr' },
   { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
@@ -101,6 +105,10 @@ export const MODULES: ModuleDef[] = [
   { key: 'loanLink', to: '/loans/assignments', label: 'Loan Assignments', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'operations' },
   // Collections — the payment ledger (record / edit / import collections).
   { key: 'collections', to: '/collections', label: 'Collections', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  // Import the client's Business-Correspondent collection workbook — Super Admin only.
+  { key: 'collectionImport', to: '/collections/import', label: 'Import Collections', roles: ['SUPER_ADMIN'], group: 'operations' },
+  // Browse the imported BC collection ledger (separate from internal loan payments).
+  { key: 'collectionRecords', to: '/collections/records', label: 'Collection Records', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'], group: 'operations' },
   // Day-End Settlements — verify each field officer's day-end cash (own route,
   // was a tab on the Collections mega-page). Settlement offers / NPA live under
   // /settlements/offers, reached from this page.

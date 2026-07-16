@@ -23,7 +23,7 @@ const emptyForm = {
   confirmationDate: '', uanNumber: '', providentFundNumber: '', stateInsuranceNumber: '',
   basicSalary: '', houseRentAllowance: '', dearnessAllowance: '', specialAllowance: '',
   conveyanceAllowance: '', medicalAllowance: '', travelAllowance: '', foodAllowance: '',
-  mobileAllowance: '', otherAllowance: '', effectiveFrom: '',
+  mobileAllowance: '', otherAllowance: '', monthlyBonus: '', mediclaimDeduction: '', effectiveFrom: '',
   isProvidentFundApplicable: true, isStateInsuranceApplicable: false, isProfessionalTaxApplicable: true,
   createLoginAccount: true, accountRoleName: 'FIELD_OFFICER',
 };
@@ -71,6 +71,7 @@ export default function EmployeeCreatePage() {
             conveyanceAllowance: num(f.conveyanceAllowance), medicalAllowance: num(f.medicalAllowance),
             travelAllowance: num(f.travelAllowance), foodAllowance: num(f.foodAllowance),
             mobileAllowance: num(f.mobileAllowance), otherAllowance: num(f.otherAllowance),
+            monthlyBonus: num(f.monthlyBonus), mediclaimDeduction: num(f.mediclaimDeduction),
             effectiveFrom: f.effectiveFrom || f.joiningDate,
           }),
           isProvidentFundApplicable: f.isProvidentFundApplicable,

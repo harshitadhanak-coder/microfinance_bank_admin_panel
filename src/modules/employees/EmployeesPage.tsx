@@ -58,6 +58,7 @@ export default function EmployeesPage() {
     { header: 'Name', render: (e) => <a className="cell-link" onClick={() => open(e.id)}>{e.fullName}</a>, sortKey: 'fullName' },
     { header: 'Designation', render: (e) => e.designation, sortKey: 'designation' },
     { header: 'Branch', render: (e) => e.branch?.name ?? '—', sortKey: 'branch' },
+    { header: 'Branch Manager', render: (e) => e.branch?.manager?.fullName ?? '—' },
     { header: 'Phone', render: (e) => e.phoneNumber },
     { header: 'Joined', render: (e) => fmtDate(e.joiningDate), sortKey: 'joiningDate' },
     { header: 'Status', render: (e) => <Badge status={e.employmentStatus} />, sortKey: 'employmentStatus' },
