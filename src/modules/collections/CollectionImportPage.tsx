@@ -37,6 +37,27 @@ const ACTION_TONE: Record<string, BadgeTone> = { CREATE: 'success', UPDATE: 'inf
 const STATUS_TONE: Record<string, BadgeTone> = { COLLECTED: 'success', REJECTED: 'warning' };
 const ROW_CAP = 100; // preview can be 10k+ rows — cap what we render to the DOM
 const inr = (n: number) => `₹${Number(n).toLocaleString('en-IN')}`;
+const isDuplicateError = (msg: string) => /duplicate/i.test(msg);
+
+/** CSV cell escaping. */
+const csvCell = (v: unknown) => {
+  const s = v === null || v === undefined ? '' : String(v);
+  return /[",\n\r]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+};
+
+/** Builds a CSV blob from a header + rows and triggers a download. */
+const downloadCsv = (filename: string, header: string[], rows: (string | number)[][]) => {
+  const body = [header, ...rows].map((r) => r.map(csvCell).join(',')).join('\r\n');
+  const blob = new Blob(['﻿' + body], { type: 'text/csv;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  URL.revokeObjectURL(url);
+};
 
 /**
  * Collections — Import. Super Admin uploads the client's Business-Correspondent
@@ -129,15 +150,31 @@ export default function CollectionImportPage() {
 
       {s && (
         <Card title="Preview">
-          <div className="stat-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 12 }}>
+          <div className="stat-row" style={{ display: 'flex', flexWrap: 'wrap', gap: 16, marginBottom: 12, alignItems: 'center' }}>
             <span>Total: <strong>{s.total}</strong></span>
+            <span className="num">Valid: <strong>{s.valid}</strong></span>
             <span className="num">New: <strong>{s.create}</strong></span>
             <span className="num">Update: <strong>{s.update}</strong></span>
-            <span className="num">Skip: <strong>{s.invalid}</strong></span>
+            <span className="num">Invalid: <strong>{s.invalid}</strong></span>
+            <span className="num">Duplicates: <strong>{preview!.rows.filter((r) => r.errors.some(isDuplicateError)).length}</strong></span>
             <span className="num">With warnings: <strong>{s.warnings}</strong></span>
             <span className="num">Rejected rows: <strong>{s.rejected}</strong></span>
             <span className="num">Unmatched officers: <strong>{s.unmatchedOfficers}</strong></span>
             <span className="num">Unmatched branches: <strong>{s.unmatchedBranches}</strong></span>
+            {s.invalid > 0 && (
+              <button
+                type="button"
+                className="ghost sm"
+                style={{ marginLeft: 'auto' }}
+                onClick={() => downloadCsv(
+                  'collection-import-errors.csv',
+                  ['Sheet', 'Row', 'Transaction ID', 'Customer', 'Amount', 'Errors'],
+                  preview!.rows.filter((r) => r.errors.length > 0).map((r) => [r.sheetName, r.rowNumber, r.transactionId ?? '', r.customerName ?? '', r.amount, r.errors.join('; ')]),
+                )}
+              >
+                Download validation errors
+              </button>
+            )}
           </div>
           {preview!.unresolvedOfficers.length > 0 && (
             <p className="muted sm-text">Unmatched executive codes (imported without an officer link): {preview!.unresolvedOfficers.join(', ')}</p>
@@ -191,7 +228,20 @@ export default function CollectionImportPage() {
           </div>
           {result.errors.length > 0 && (
             <div style={{ marginTop: 12 }}>
-              <p className="muted sm-text">Rows not imported:</p>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
+                <p className="muted sm-text" style={{ margin: 0 }}>Rows not imported:</p>
+                <button
+                  type="button"
+                  className="ghost sm"
+                  onClick={() => downloadCsv(
+                    'collection-import-error-log.csv',
+                    ['Row', 'Transaction ID', 'Errors'],
+                    result.errors.map((e) => [e.rowNumber, e.transactionId ?? '', e.messages.join('; ')]),
+                  )}
+                >
+                  Download error log
+                </button>
+              </div>
               {result.errors.slice(0, 100).map((e, i) => (
                 <div key={`${e.rowNumber}-${i}`} className="sm-text" style={{ color: 'var(--red)' }}>Row {e.rowNumber}{e.transactionId ? ` (${e.transactionId})` : ''}: {e.messages.join('; ')}</div>
               ))}

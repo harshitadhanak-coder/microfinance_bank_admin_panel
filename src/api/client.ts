@@ -44,3 +44,22 @@ api.interceptors.response.use(
     return Promise.reject(error);
   },
 );
+
+/**
+ * A transient failure is a network drop (no HTTP response — e.g. the dev backend
+ * restarting) or a 5xx; these are worth retrying. A 4xx is deterministic and
+ * must not be retried. Used by the query client so a brief backend blip
+ * self-heals instead of surfacing an error across the page.
+ */
+export const isTransientError = (error: unknown): boolean => {
+  if (!axios.isAxiosError(error)) return false;
+  const status = error.response?.status;
+  return status === undefined || status >= 500;
+};
+
+/** React-Query `retry` predicate: retry transient errors up to `max` times. */
+export const retryTransient = (max = 4) => (failureCount: number, error: unknown): boolean =>
+  isTransientError(error) && failureCount < max;
+
+/** Exponential backoff (0.5s → 1s → 2s → 4s cap) for retried requests. */
+export const retryBackoff = (attempt: number): number => Math.min(500 * 2 ** attempt, 4000);

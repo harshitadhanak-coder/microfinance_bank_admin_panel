@@ -4,7 +4,7 @@ import { api } from '../../api/client';
 import { Modal, ConfirmDialog } from '../../components/Modal';
 import { useToast } from '../../components/Toast';
 import { Skeleton } from '../../components/Skeleton';
-import { Briefcase, Loader, Plus, Upload, Trash2, Lock } from '../../components/icons';
+import { Briefcase, Loader, Plus, Upload, Trash2, Lock, Pencil } from '../../components/icons';
 import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
@@ -78,13 +78,9 @@ interface AccountInfo {
   hasAccount: boolean;
   userId?: string; username?: string; officialEmail?: string; role?: string;
   status?: 'ACTIVE' | 'INACTIVE'; isLocked?: boolean; forcePasswordChange?: boolean;
+  passwordIsDefault?: boolean; defaultPassword?: string | null;
   failedLoginAttempts?: number; lastLoginAt?: string | null; passwordChangedAt?: string | null;
   loginHistory?: LoginHistoryEntry[];
-}
-/** Shape returned by send/resend/reset-password — carries a temp password in dev. */
-interface CredentialResult {
-  username: string; officialEmail: string;
-  delivery: 'SMTP' | 'DEV_FALLBACK'; temporaryPassword?: string;
 }
 
 const DOCUMENT_TYPES = [
@@ -323,23 +319,22 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
     enabled: tab === 'account',
   });
   const account = accountQuery.data;
-  const [tempCred, setTempCred] = useState<CredentialResult | null>(null);
+  const [editingEmail, setEditingEmail] = useState(false);
+  const [emailDraft, setEmailDraft] = useState('');
+  const refreshAccount = () => qc.invalidateQueries({ queryKey: ['/employees', employeeId, 'account'] });
 
-  /** Runs any /account/:action POST; surfaces the temp password when returned. */
+  /** Runs a suffixed /account POST (create / reset-default / activate / … ). */
   const accountAction = useMutation({
-    mutationFn: (action: string) => api.post(`/employees/${employeeId}/account/${action}`),
-    onSuccess: (res) => {
-      qc.invalidateQueries({ queryKey: ['/employees', employeeId, 'account'] });
-      const data = res.data.data as Partial<CredentialResult> | undefined;
-      if (data?.temporaryPassword) {
-        setTempCred(data as CredentialResult);
-      } else {
-        setTempCred(null);
-      }
-      toast.success(res.data.message ?? 'Done.');
-    },
+    mutationFn: (action: string) => api.post(`/employees/${employeeId}/account${action ? `/${action}` : ''}`),
+    onSuccess: (res) => { refreshAccount(); toast.success(res.data.message ?? 'Done.'); },
     onError: (err) => toast.error(apiMessage(err, 'The account action could not be completed.')),
   });
+  const updateEmail = useMutation({
+    mutationFn: (email: string) => api.patch(`/employees/${employeeId}/account/email`, { email }),
+    onSuccess: (res) => { refreshAccount(); setEditingEmail(false); toast.success(res.data.message ?? 'Login email updated.'); },
+    onError: (err) => toast.error(apiMessage(err, 'The email could not be updated.')),
+  });
+  const copyText = (value: string, label: string) => { navigator.clipboard?.writeText(value); toast.success(`${label} copied.`); };
 
   // ── KYC documents ──
   const documentsQuery = useQuery({
@@ -761,10 +756,10 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
                   <p className="muted">Could not load the login account.</p>
                 ) : !account.hasAccount ? (
                   <div style={{ textAlign: 'center', padding: '1.5rem 0' }}>
-                    <p className="muted">No login account yet. Create one and email the sign-in credentials to the employee.</p>
+                    <p className="muted">No login account yet. Create a login — the employee signs in with the default password and changes it on first login.</p>
                     {canAccount && (
-                      <button type="button" disabled={accountAction.isPending} onClick={() => accountAction.mutate('send-credentials')}>
-                        {accountAction.isPending ? 'Working…' : 'Send credentials'}
+                      <button type="button" disabled={accountAction.isPending} onClick={() => accountAction.mutate('')}>
+                        {accountAction.isPending ? 'Working…' : 'Create login account'}
                       </button>
                     )}
                   </div>
@@ -772,7 +767,43 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
                   <>
                     <dl className="detail-list">
                       <div><dt>Username</dt><dd><code>{account.username}</code></dd></div>
-                      <div><dt>Official email</dt><dd>{account.officialEmail ?? '—'}</dd></div>
+                      <div>
+                        <dt>Official email</dt>
+                        <dd>
+                          {editingEmail ? (
+                            <span style={{ display: 'inline-flex', gap: '0.4rem', alignItems: 'center', flexWrap: 'wrap' }}>
+                              <input
+                                type="email" value={emailDraft} autoFocus style={{ minWidth: '15rem' }}
+                                onChange={(e) => setEmailDraft(e.target.value)}
+                                onKeyDown={(e) => { if (e.key === 'Enter' && emailDraft.trim()) updateEmail.mutate(emailDraft.trim()); if (e.key === 'Escape') setEditingEmail(false); }}
+                              />
+                              <button type="button" className="sm" disabled={updateEmail.isPending || !emailDraft.trim()} onClick={() => updateEmail.mutate(emailDraft.trim())}>Save</button>
+                              <button type="button" className="sm ghost" disabled={updateEmail.isPending} onClick={() => setEditingEmail(false)}>Cancel</button>
+                            </span>
+                          ) : (
+                            <span style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                              {account.officialEmail ?? '—'}
+                              {canAccount && (
+                                <button type="button" className="icon-btn" title="Edit login email" onClick={() => { setEmailDraft(account.officialEmail ?? ''); setEditingEmail(true); }}><Pencil size={14} /></button>
+                              )}
+                            </span>
+                          )}
+                        </dd>
+                      </div>
+                      <div>
+                        <dt>Password</dt>
+                        <dd>
+                          {account.passwordIsDefault && account.defaultPassword ? (
+                            <span style={{ display: 'inline-flex', gap: '0.5rem', alignItems: 'center' }}>
+                              <code style={{ fontSize: '1rem' }}>{account.defaultPassword}</code>
+                              <button type="button" className="sm ghost" onClick={() => copyText(account.defaultPassword ?? '', 'Password')}>Copy</button>
+                              <span className="muted sm-text">(default — employee changes it at first login)</span>
+                            </span>
+                          ) : (
+                            <span className="muted">Changed by the employee — not visible. Use “Reset to default password”.</span>
+                          )}
+                        </dd>
+                      </div>
                       <div><dt>Login role</dt><dd>{account.role ? titleCase(account.role) : '—'}</dd></div>
                       <div><dt>Status</dt><dd><span className={`pill ${account.status === 'ACTIVE' ? 'pill-active' : 'pill-pending'}`}>{account.status ?? '—'}</span></dd></div>
                       <div><dt>Locked</dt><dd>{account.isLocked ? 'Yes' : 'No'}</dd></div>
@@ -784,9 +815,7 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
 
                     {canAccount && (
                       <div className="row-actions" style={{ flexWrap: 'wrap', gap: '0.5rem', marginTop: '0.75rem' }}>
-                        <button type="button" className="sm ghost" disabled={accountAction.isPending} onClick={() => accountAction.mutate('resend-credentials')}>Resend credentials</button>
-                        <button type="button" className="sm ghost" disabled={accountAction.isPending} onClick={() => accountAction.mutate('reset-password')}>Reset password</button>
-                        <button type="button" className="sm ghost" disabled={accountAction.isPending || account.forcePasswordChange} onClick={() => accountAction.mutate('force-reset')}>Force password reset</button>
+                        <button type="button" className="sm ghost" disabled={accountAction.isPending} onClick={() => accountAction.mutate('reset-default')}>Reset to default password</button>
                         {account.status === 'ACTIVE'
                           ? <button type="button" className="sm ghost" disabled={accountAction.isPending} onClick={() => accountAction.mutate('deactivate')}>Deactivate</button>
                           : <button type="button" className="sm ghost" disabled={accountAction.isPending} onClick={() => accountAction.mutate('activate')}>Activate</button>}
@@ -796,19 +825,6 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
                       </div>
                     )}
                   </>
-                )}
-
-                {tempCred && (
-                  <div className="success-box" style={{ marginTop: '0.75rem' }}>
-                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: '0.75rem' }}>
-                      <div style={{ minWidth: 0 }}>
-                        <strong>Temporary password</strong>
-                        <div className="sm-text">{tempCred.delivery === 'SMTP' ? 'Emailed to the employee.' : 'No email configured (dev) — share this manually.'}</div>
-                        <div style={{ marginTop: '0.35rem' }}>User <code>{tempCred.username}</code> · <code style={{ fontSize: '1rem' }}>{tempCred.temporaryPassword}</code></div>
-                      </div>
-                      <button type="button" className="sm ghost" onClick={() => { navigator.clipboard?.writeText(tempCred.temporaryPassword ?? ''); toast.success('Password copied.'); }}>Copy</button>
-                    </div>
-                  </div>
                 )}
 
                 {account?.hasAccount && account.loginHistory && account.loginHistory.length > 0 && (

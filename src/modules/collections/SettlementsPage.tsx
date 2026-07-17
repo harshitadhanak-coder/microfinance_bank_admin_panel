@@ -14,10 +14,23 @@ import { AlertCircle, Check, Eye, HandCoins, X } from '../../components/icons';
 import { inr, fmtDate, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { DayCloseStatus, DayEndSettlement, SETTLEMENT_STATUSES, settlementStatusLabel } from './shared';
+import { DayCloseStatus, DayEndSettlement, SETTLEMENT_ATTACHMENT_LABEL, SETTLEMENT_STATUSES, settlementStatusLabel } from './shared';
 
 const fmtDateTime = (iso?: string | null) =>
   iso ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', year: 'numeric', hour: 'numeric', minute: '2-digit' }) : '—';
+
+/** Streams a settlement attachment through the authenticated API and saves it. */
+const downloadSettlementAttachment = async (settlementId: string, documentId: string, fileName: string) => {
+  const res = await api.get(`/collections/settlements/${settlementId}/attachments/${documentId}/download`, { responseType: 'blob' });
+  const objectUrl = window.URL.createObjectURL(res.data as Blob);
+  const link = document.createElement('a');
+  link.href = objectUrl;
+  link.download = fileName;
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.URL.revokeObjectURL(objectUrl);
+};
 
 /** Ordered lifecycle for the timeline; REJECTED is rendered as a branch. */
 const LIFECYCLE: { key: DayCloseStatus; label: string }[] = [
@@ -62,19 +75,14 @@ export default function SettlementsPage() {
     onError: (err) => { setConfirm(null); toast.error(apiMessage(err, 'Could not update the settlement.')); },
   });
 
-  const variance = (s: DayEndSettlement) => {
-    const v = Number(s.varianceAmount);
-    if (v === 0) return <span className="muted">—</span>;
-    return v > 0 ? <Badge tone="danger">Short {inr(Math.abs(v))}</Badge> : <Badge tone="warning">Excess {inr(Math.abs(v))}</Badge>;
-  };
-
   const columns: Column<DayEndSettlement>[] = [
     { header: 'Field officer', render: (s) => <a className="cell-link" onClick={() => setPeek(s)}><strong>{s.employee.fullName}</strong><div className="muted sm-text">{s.employee.employeeCode}</div></a>, sortValue: (s) => s.employee.fullName },
     ...(branchScoped ? [] : [{ header: 'Branch', render: (s) => s.employee.branch?.name ?? '—', sortValue: (s) => s.employee.branch?.name ?? '' } satisfies Column<DayEndSettlement>]),
     { header: 'Date', render: (s) => fmtDate(s.businessDate), sortValue: (s) => new Date(s.businessDate) },
-    { header: 'System cash', render: (s) => <span className="num">{inr(s.totalCashCollected)}</span>, sortValue: (s) => Number(s.totalCashCollected) },
-    { header: 'Handed over', render: (s) => <span className="num">{inr(s.totalCashDeposited)}</span>, sortValue: (s) => Number(s.totalCashDeposited) },
-    { header: 'Short / Excess', render: variance, sortValue: (s) => Number(s.varianceAmount) },
+    { header: 'Opening', render: (s) => <span className="num">{inr(s.openingBalance)}</span>, sortValue: (s) => Number(s.openingBalance) },
+    { header: 'Collection', render: (s) => <span className="num">{inr(s.totalCashCollected)}</span>, sortValue: (s) => Number(s.totalCashCollected) },
+    { header: 'Total deposit', render: (s) => <span className="num">{inr(s.totalCashDeposited)}</span>, sortValue: (s) => Number(s.totalCashDeposited) },
+    { header: 'Closing', render: (s) => <span className="num"><strong>{inr(s.closingBalance)}</strong></span>, sortValue: (s) => Number(s.closingBalance) },
     { header: 'Submitted', render: (s) => s.submittedAt ? fmtDateTime(s.submittedAt) : '—', sortValue: (s) => s.submittedAt ?? '' },
     { header: 'Status', render: (s) => <Badge status={s.status} />, sortValue: (s) => s.status },
     {
@@ -126,13 +134,39 @@ export default function SettlementsPage() {
           headerAside={<Badge status={peek.status} />}
           footer={<button onClick={() => setPeek(null)}>Close</button>}
         >
-          <dl className="detail-list one-col">
-            <div><dt>System cash</dt><dd className="num">{inr(peek.totalCashCollected)}</dd></div>
-            <div><dt>Handed over</dt><dd className="num">{inr(peek.totalCashDeposited)}</dd></div>
-            <div><dt>Short / Excess</dt><dd>{variance(peek)}</dd></div>
+          <dl className="detail-list two-col">
+            <div><dt>Opening balance</dt><dd className="num">{inr(peek.openingBalance)}</dd></div>
+            <div><dt>Today's collection</dt><dd className="num">{inr(peek.totalCashCollected)}</dd></div>
+            <div><dt>Hospicash</dt><dd className="num">{inr(peek.hospicash)}</dd></div>
+            <div><dt>AXIS Bank</dt><dd className="num">{inr(peek.axisDeposit)}</dd></div>
+            <div><dt>SBI Bank</dt><dd className="num">{inr(peek.sbiDeposit)}</dd></div>
+            <div><dt>HDFC Bank</dt><dd className="num">{inr(peek.hdfcDeposit)}</dd></div>
+            <div><dt>Total deposit</dt><dd className="num">{inr(peek.totalCashDeposited)}</dd></div>
+            <div><dt>Closing balance</dt><dd className="num"><strong>{inr(peek.closingBalance)}</strong></dd></div>
             <div><dt>Deposit reference</dt><dd>{peek.depositReference || '—'}</dd></div>
             {peek.reviewNote && <div><dt>Review note</dt><dd>{peek.reviewNote}</dd></div>}
           </dl>
+
+          {peek.attachments && peek.attachments.length > 0 && (
+            <>
+              <h4 className="section-title">Attachments</h4>
+              <ul className="attachment-list">
+                {peek.attachments.map((a) => (
+                  <li key={a.id}>
+                    <Badge tone="neutral">{SETTLEMENT_ATTACHMENT_LABEL[a.documentType] ?? a.documentType}</Badge>
+                    <span className="attachment-name">{a.fileName}</span>
+                    <button
+                      type="button"
+                      className="sm ghost"
+                      onClick={() => downloadSettlementAttachment(peek.id, a.id, a.fileName)}
+                    >
+                      Download
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           <h4 className="section-title">Lifecycle</h4>
           <ul className="timeline">
@@ -204,7 +238,7 @@ function RejectSettlementModal({
       onClose={onClose}
       icon={<AlertCircle size={20} />}
       title="Reject settlement"
-      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · system cash ${inr(settlement.totalCashCollected)}, handed over ${inr(settlement.totalCashDeposited)}. The officer will see this note and must resubmit.`}
+      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · collection ${inr(settlement.totalCashCollected)}, total deposit ${inr(settlement.totalCashDeposited)}, closing ${inr(settlement.closingBalance)}. The officer will see this note and must resubmit.`}
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>

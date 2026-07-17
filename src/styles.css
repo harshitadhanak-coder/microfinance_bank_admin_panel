@@ -848,6 +848,11 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 
 .section-title { margin: 0.6rem 0 0; font-size: 0.95rem; color: var(--ink-2); }
 
+/* Settlement attachment list (branch review drawer). */
+.attachment-list { list-style: none; margin: 0.5rem 0 0; padding: 0; display: grid; gap: 0.4rem; }
+.attachment-list li { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.6rem; border: 1px solid var(--line); border-radius: 8px; }
+.attachment-name { flex: 1; font-size: 0.85rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* ── Lead detail — Actions panel ──
    A single bordered card that groups every workflow action under clear,
    left-aligned sub-sections (pre-screening, stage advance, ownership, manage)
@@ -1317,6 +1322,43 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .filter-chip svg { opacity: 0.7; }
 .filter-reset { background: none; border: none; color: var(--color-muted); min-height: var(--control-h-sm); padding: 0 0.4rem; font: var(--text-sm); font-weight: 600; text-decoration: underline; }
 .filter-reset:hover { background: none; color: var(--color-ink); }
+
+/* ── Advanced filter panel (Collection Records) ────────────────────────────
+   A standalone surface (NOT .panel, which clips dropdowns via overflow:hidden).
+   A single tidy grid of equal-width fields + a bordered action footer. */
+.adv-panel {
+  margin-top: var(--space-2);
+  background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius);
+  overflow: visible; padding: var(--space-5); display: grid; gap: var(--space-4);
+  box-shadow: var(--shadow-1);
+}
+.adv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: var(--space-4) var(--space-4); align-items: end; }
+/* Direct-child only — must NOT leak into the multi-select option labels. */
+.adv-field, .adv-grid > label { display: grid; gap: 0.35rem; font-size: 0.82rem; font-weight: 600; color: var(--ink); margin: 0; }
+.adv-grid > label > input, .adv-grid > label > select { width: 100%; }
+.adv-hint { grid-column: 1 / -1; font: var(--text-xs); color: var(--muted); margin-top: calc(-1 * var(--space-2)); }
+.adv-foot { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; padding-top: var(--space-4); border-top: 1px solid var(--line); }
+.adv-saved { display: flex; align-items: center; gap: var(--space-2); flex-wrap: wrap; margin-left: auto; }
+.adv-saved-tag { display: inline-flex; align-items: center; gap: 0.35rem; background: var(--status-brass-bg); color: var(--status-brass-fg); border-radius: var(--radius-pill); padding: 0.15rem 0.3rem 0.15rem 0.65rem; font: var(--text-xs); font-weight: 600; }
+.adv-saved-tag button { background: none; border: none; padding: 0 0.2rem; min-height: 0; color: inherit; font-weight: 700; }
+.adv-saved-tag button:hover { background: none; }
+
+/* Multi-select dropdown (branches, etc.) */
+.multiselect { position: relative; }
+button.ms-trigger { width: 100%; justify-content: space-between; gap: 0.5rem; background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 500; padding: 0.5rem 0.75rem; }
+button.ms-trigger:hover { background: #fff; border-color: #cfccbf; }
+.ms-trigger .ms-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ms-trigger.has-value .ms-label { color: var(--ink); }
+.ms-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2); padding: var(--space-2); display: grid; gap: var(--space-2); }
+.ms-actions { display: flex; justify-content: space-between; }
+.ms-actions button { background: none; border: none; color: var(--brass-dark); font-weight: 600; padding: 0; min-height: 0; font-size: 0.8rem; }
+.ms-actions button:hover { background: none; text-decoration: underline; }
+.ms-search { width: 100%; }
+.ms-list { max-height: 210px; overflow-y: auto; display: grid; gap: 1px; }
+.ms-opt { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.5rem; border-radius: 7px; font-weight: 500; font-size: 0.85rem; cursor: pointer; margin: 0; }
+.ms-opt:hover { background: #f2f0ea; }
+.ms-opt input[type="checkbox"] { width: 16px; height: 16px; min-height: 0; margin: 0; flex: 0 0 auto; }
+.ms-opt > span { flex: 1 1 auto; }
 
 /* ── Drawer ── (right slide-over) */
 .drawer-overlay {

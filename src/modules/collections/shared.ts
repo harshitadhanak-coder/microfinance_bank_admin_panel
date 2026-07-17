@@ -12,11 +12,23 @@ export interface ActiveLoanOption {
 
 export type DayCloseStatus = 'DRAFT' | 'SUBMITTED' | 'VERIFIED' | 'APPROVED' | 'REJECTED';
 
+export interface SettlementAttachment {
+  id: string;
+  documentType: string;
+  fileName: string;
+}
+
 export interface DayEndSettlement {
   id: string;
   businessDate: string;
+  openingBalance: string;
+  hospicash: string;
   totalCashCollected: string;
+  axisDeposit: string;
+  sbiDeposit: string;
+  hdfcDeposit: string;
   totalCashDeposited: string;
+  closingBalance: string;
   varianceAmount: string;
   status: DayCloseStatus;
   depositReference: string | null;
@@ -24,7 +36,35 @@ export interface DayEndSettlement {
   reviewNote: string | null;
   approvedById: string | null;
   employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
+  attachments: SettlementAttachment[];
 }
+
+/** One aggregated branch row of the Branch Closing Report. */
+export interface BranchClosingRow {
+  branchId: string | null;
+  branchName: string;
+  officerCount: number;
+  settlementCount: number;
+  openingBalance: number;
+  hospicash: number;
+  collection: number;
+  axisDeposit: number;
+  sbiDeposit: number;
+  hdfcDeposit: number;
+  totalDeposit: number;
+  closingBalance: number;
+}
+
+export interface BranchClosingReport {
+  rows: BranchClosingRow[];
+  totals: Omit<BranchClosingRow, 'branchId' | 'branchName'>;
+}
+
+export const SETTLEMENT_ATTACHMENT_LABEL: Record<string, string> = {
+  DEPOSIT_SLIP: 'Deposit slip',
+  BANK_RECEIPT: 'Bank receipt',
+  CASH_RECEIPT: 'Cash receipt',
+};
 
 export interface SettlementOffer {
   id: string; settlementType: string; status: string; settlementAmount: string; waiverAmount: string;

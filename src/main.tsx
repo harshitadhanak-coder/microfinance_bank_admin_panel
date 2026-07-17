@@ -3,6 +3,7 @@ import { StrictMode } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import './styles.css';
+import { retryBackoff, retryTransient } from './api/client';
 
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { ToastProvider } from './components/Toast';
@@ -60,8 +61,17 @@ import LoanImportPage from './modules/loans/LoanImportPage';
 import LoanDetailPage from './modules/loans/LoanDetailPage';
 import LoanLinkPage from './modules/loans/LoanLinkPage';
 
+// Retry transient failures (network drop while the dev backend restarts, or a
+// 5xx) with backoff so a brief blip self-heals instead of surfacing an error.
+// 4xx are never retried; a 401 is handled by the axios interceptor (refresh).
 const queryClient = new QueryClient({
-  defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } },
+  defaultOptions: {
+    queries: {
+      retry: retryTransient(4),
+      retryDelay: retryBackoff,
+      refetchOnWindowFocus: false,
+    },
+  },
 });
 
 function RequireAuth() {

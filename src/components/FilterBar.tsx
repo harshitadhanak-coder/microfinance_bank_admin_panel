@@ -19,6 +19,7 @@ export function FilterBar({
   children,
   chips = [],
   onReset,
+  onClearAll,
   search,
   actions,
   className,
@@ -26,6 +27,12 @@ export function FilterBar({
   children: ReactNode;
   chips?: FilterChip[];
   onReset?: () => void;
+  /**
+   * When set, renders a single "Clear all" reset at the end of the active-filter
+   * chip row — where users look to clear filters — instead of a button up in the
+   * toolbar. The row appears whenever there are chips OR this is set.
+   */
+  onClearAll?: () => void;
   /** Leading search field — first and largest element of the toolbar. */
   search?: ReactNode;
   /** Right-aligned controls (e.g. density toggle, export). */
@@ -43,7 +50,7 @@ export function FilterBar({
         )}
         {actions && <div className="filterbar-actions">{actions}</div>}
       </div>
-      {chips.length > 0 && (
+      {(chips.length > 0 || onClearAll) && (
         <div className="filterbar-chips">
           {chips.map((c) => (
             <button key={c.key} type="button" className="filter-chip" onClick={c.onRemove}>
@@ -51,6 +58,9 @@ export function FilterBar({
               <X size={13} />
             </button>
           ))}
+          {onClearAll && (
+            <button type="button" className="filter-reset" onClick={onClearAll}>Clear all</button>
+          )}
         </div>
       )}
     </div>
