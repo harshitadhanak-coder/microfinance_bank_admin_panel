@@ -15,6 +15,7 @@ import { Loader, Plus, Upload, Trash2, Lock, Pencil, Briefcase } from '../../com
 import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import EmployeeRolesTab from '../roles/EmployeeRolesTab';
 import {
   SALARY_COMPONENTS, DOCUMENT_CATEGORIES, isExpiringSoon,
 } from './shared';
@@ -76,7 +77,7 @@ const emptySalary = {
 };
 type SalaryForm = typeof emptySalary;
 
-type TabKey = 'overview' | 'documents' | 'salary' | 'leave' | 'account';
+type TabKey = 'overview' | 'documents' | 'salary' | 'leave' | 'account' | 'roles';
 
 /** Employee — Details. Tabbed profile page (replaces the detail modal). */
 export default function EmployeeDetailPage() {
@@ -86,6 +87,7 @@ export default function EmployeeDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canManage = can(user?.role, 'employee:update');
+  const canRoles = can(user?.role, 'role:assign');
   const canDocs = can(user?.role, 'document:manage');
   const canAccount = can(user?.role, 'account:manage');
 
@@ -299,6 +301,7 @@ export default function EmployeeDetailPage() {
     { key: 'salary', label: 'Salary' },
     ...(canManage ? [{ key: 'leave', label: 'Leave' }] : []),
     ...(canManage ? [{ key: 'account', label: 'Account & Access' }] : []),
+    ...(canRoles ? [{ key: 'roles', label: 'Roles' }] : []),
   ];
 
   return (
@@ -506,6 +509,10 @@ export default function EmployeeDetailPage() {
                 <EmptyState variant="no-data" title="No leave balances" message={leaveQuery.data ? `Nothing on record for ${leaveQuery.data.year}.` : undefined} />
               )}
             </Card>
+          )}
+
+          {tab === 'roles' && canRoles && id && (
+            <EmployeeRolesTab employeeId={id} />
           )}
 
           {tab === 'account' && canManage && (

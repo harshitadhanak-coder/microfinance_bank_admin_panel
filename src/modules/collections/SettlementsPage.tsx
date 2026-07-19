@@ -53,7 +53,8 @@ export default function SettlementsPage() {
   const { user } = useAuth();
   const [status, setStatus] = useState('PENDING');
   const [peek, setPeek] = useState<DayEndSettlement | null>(null);
-  const [confirm, setConfirm] = useState<{ s: DayEndSettlement; action: 'verify' | 'accept' } | null>(null);
+  const [confirm, setConfirm] = useState<{ s: DayEndSettlement; action: 'accept' } | null>(null);
+  const [verifying, setVerifying] = useState<DayEndSettlement | null>(null);
   const [rejecting, setRejecting] = useState<DayEndSettlement | null>(null);
 
   const branchScoped = !!user?.branchId;
@@ -69,9 +70,12 @@ export default function SettlementsPage() {
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/collections/settlements') });
 
   const act = useMutation({
-    mutationFn: ({ id, action, note }: { id: string; action: 'verify' | 'accept' | 'reject'; note?: string }) =>
-      api.post(`/collections/settlements/${id}/${action}`, note ? { note } : undefined),
-    onSuccess: (res) => { toast.success(res.data?.message ?? 'Settlement updated.'); setConfirm(null); setRejecting(null); void refresh(); },
+    mutationFn: ({ id, action, note, countedCash }: { id: string; action: 'verify' | 'accept' | 'reject'; note?: string; countedCash?: number }) =>
+      api.post(
+        `/collections/settlements/${id}/${action}`,
+        action === 'verify' ? { countedCash } : action === 'reject' ? { note, countedCash } : undefined,
+      ),
+    onSuccess: (res) => { toast.success(res.data?.message ?? 'Settlement updated.'); setConfirm(null); setVerifying(null); setRejecting(null); void refresh(); },
     onError: (err) => { setConfirm(null); toast.error(apiMessage(err, 'Could not update the settlement.')); },
   });
 
@@ -89,7 +93,7 @@ export default function SettlementsPage() {
       header: '',
       render: (s) => {
         const items: ActionItem[] = [{ key: 'view', label: 'View lifecycle', icon: <Eye size={15} />, onSelect: () => setPeek(s) }];
-        if (canVerify && s.status === 'SUBMITTED') items.push({ key: 'verify', label: 'Verify cash', icon: <Check size={15} />, onSelect: () => setConfirm({ s, action: 'verify' }) });
+        if (canVerify && s.status === 'SUBMITTED') items.push({ key: 'verify', label: 'Verify cash', icon: <Check size={15} />, onSelect: () => setVerifying(s) });
         if (canVerify && s.status === 'VERIFIED') items.push({ key: 'approve', label: 'Approve & lock', icon: <Check size={15} />, onSelect: () => setConfirm({ s, action: 'accept' }) });
         if (canVerify && (s.status === 'SUBMITTED' || s.status === 'VERIFIED')) items.push({ key: 'reject', label: 'Reject', icon: <X size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setRejecting(s) });
         return <div className="actions-cell"><ActionMenu items={items} /></div>;
@@ -143,9 +147,30 @@ export default function SettlementsPage() {
             <div><dt>HDFC Bank</dt><dd className="num">{inr(peek.hdfcDeposit)}</dd></div>
             <div><dt>Total deposit</dt><dd className="num">{inr(peek.totalCashDeposited)}</dd></div>
             <div><dt>Closing balance</dt><dd className="num"><strong>{inr(peek.closingBalance)}</strong></dd></div>
+            {Number(peek.varianceAmount) !== 0 && (
+              <>
+                <div><dt>Branch counted</dt><dd className="num">{inr(Number(peek.closingBalance) + Number(peek.varianceAmount))}</dd></div>
+                <div><dt>Difference</dt><dd className="num" style={{ color: 'var(--status-danger-fg)' }}>{Number(peek.varianceAmount) < 0 ? 'Short' : 'Excess'} {inr(Math.abs(Number(peek.varianceAmount)))}</dd></div>
+              </>
+            )}
             <div><dt>Deposit reference</dt><dd>{peek.depositReference || '—'}</dd></div>
             {peek.reviewNote && <div><dt>Review note</dt><dd>{peek.reviewNote}</dd></div>}
           </dl>
+
+          {peek.deposits && peek.deposits.length > 0 && (
+            <>
+              <h4 className="section-title">Deposit entries</h4>
+              <ul className="attachment-list">
+                {peek.deposits.map((d) => (
+                  <li key={d.id}>
+                    <Badge tone="neutral">{d.bank}</Badge>
+                    <span className="attachment-name num">{inr(d.amount)}</span>
+                    {(d.slipNumber || d.reference) && <span className="muted sm-text">{d.slipNumber || d.reference}</span>}
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
 
           {peek.attachments && peek.attachments.length > 0 && (
             <>
@@ -192,7 +217,7 @@ export default function SettlementsPage() {
 
           {canVerify && (peek.status === 'SUBMITTED' || peek.status === 'VERIFIED') && (
             <div className="row-actions" style={{ marginTop: '0.75rem', flexWrap: 'wrap' }}>
-              {peek.status === 'SUBMITTED' && <button className="sm" onClick={() => { setConfirm({ s: peek, action: 'verify' }); setPeek(null); }}>Verify cash</button>}
+              {peek.status === 'SUBMITTED' && <button className="sm" onClick={() => { setVerifying(peek); setPeek(null); }}>Verify cash</button>}
               {peek.status === 'VERIFIED' && <button className="sm" onClick={() => { setConfirm({ s: peek, action: 'accept' }); setPeek(null); }}>Approve & lock</button>}
               <button className="sm ghost danger" onClick={() => { setRejecting(peek); setPeek(null); }}>Reject</button>
             </div>
@@ -203,14 +228,22 @@ export default function SettlementsPage() {
       {confirm && (
         <ConfirmDialog
           icon={<Check size={20} />}
-          title={confirm.action === 'verify' ? 'Verify counted cash?' : 'Approve & lock settlement?'}
-          message={confirm.action === 'verify'
-            ? `Confirm the counted cash for ${confirm.s.employee.fullName} on ${fmtDate(confirm.s.businessDate)} matches the ledger (${inr(confirm.s.totalCashCollected)}).`
-            : `This approves and locks ${confirm.s.employee.fullName}'s settlement for ${fmtDate(confirm.s.businessDate)}. It cannot be changed afterwards.`}
-          confirmLabel={confirm.action === 'verify' ? 'Verify' : 'Approve & lock'}
+          title="Approve & lock settlement?"
+          message={`This approves and locks ${confirm.s.employee.fullName}'s settlement for ${fmtDate(confirm.s.businessDate)}. It cannot be changed afterwards.`}
+          confirmLabel="Approve & lock"
           loading={act.isPending}
           onConfirm={() => act.mutate({ id: confirm.s.id, action: confirm.action })}
           onCancel={() => setConfirm(null)}
+        />
+      )}
+
+      {verifying && (
+        <VerifySettlementModal
+          settlement={verifying}
+          pending={act.isPending}
+          onClose={() => setVerifying(null)}
+          onVerify={(countedCash) => act.mutate({ id: verifying.id, action: 'verify', countedCash })}
+          onReject={() => { const s = verifying; setVerifying(null); setRejecting(s); }}
         />
       )}
 
@@ -219,36 +252,95 @@ export default function SettlementsPage() {
           settlement={rejecting}
           pending={act.isPending}
           onClose={() => setRejecting(null)}
-          onReject={(note) => act.mutate({ id: rejecting.id, action: 'reject', note })}
+          onReject={(note, countedCash) => act.mutate({ id: rejecting.id, action: 'reject', note, countedCash })}
         />
       )}
     </>
   );
 }
 
+/**
+ * Branch verifies the counted cash. The amount must equal the officer's declared
+ * closing to verify; a short/excess can't be verified and is steered to a reject
+ * so the officer recounts and resubmits.
+ */
+function VerifySettlementModal({
+  settlement, pending, onClose, onVerify, onReject,
+}: {
+  settlement: DayEndSettlement; pending: boolean; onClose: () => void; onVerify: (countedCash: number) => void; onReject: () => void;
+}) {
+  const declared = Number(settlement.closingBalance);
+  const [counted, setCounted] = useState(declared ? String(declared) : '');
+  const countedNum = Number(counted);
+  const valid = counted.trim() !== '' && Number.isFinite(countedNum) && countedNum >= 0;
+  const diff = valid ? Math.round((countedNum - declared) * 100) / 100 : 0;
+  const matches = valid && Math.abs(diff) < 0.005;
+  return (
+    <Modal
+      size="md"
+      onClose={onClose}
+      icon={<Check size={20} />}
+      title="Verify counted cash"
+      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)}. Count the cash handed over and enter it — it must match the declared closing of ${inr(settlement.closingBalance)} to verify.`}
+      footer={
+        <>
+          <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+          {valid && !matches && <button type="button" className="danger" onClick={onReject}>Reject instead</button>}
+          <button type="button" disabled={pending || !matches} onClick={() => onVerify(countedNum)}>
+            {pending ? 'Verifying…' : 'Verify cash'}
+          </button>
+        </>
+      }
+    >
+      <label>Cash counted
+        <input value={counted} onChange={(e) => setCounted(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" data-autofocus />
+      </label>
+      {valid && !matches && (
+        <p className="sm-text" style={{ marginTop: '0.4rem', color: 'var(--status-danger-fg)' }}>
+          {diff < 0 ? 'Short' : 'Excess'} {inr(Math.abs(diff))} vs the declared {inr(settlement.closingBalance)}. You can’t verify a mismatch — reject it so the officer recounts and resubmits.
+        </p>
+      )}
+      {matches && <p className="muted sm-text" style={{ marginTop: '0.4rem' }}>Matches the declared closing — ready to verify.</p>}
+    </Modal>
+  );
+}
+
 function RejectSettlementModal({
   settlement, pending, onClose, onReject,
 }: {
-  settlement: DayEndSettlement; pending: boolean; onClose: () => void; onReject: (note: string) => void;
+  settlement: DayEndSettlement; pending: boolean; onClose: () => void; onReject: (note: string, countedCash?: number) => void;
 }) {
   const [note, setNote] = useState('');
+  const [counted, setCounted] = useState('');
+  const declared = Number(settlement.closingBalance);
+  const countedNum = Number(counted);
+  const hasCounted = counted.trim() !== '' && Number.isFinite(countedNum) && countedNum >= 0;
+  const diff = hasCounted ? Math.round((countedNum - declared) * 100) / 100 : 0;
   return (
     <Modal
       size="md"
       onClose={onClose}
       icon={<AlertCircle size={20} />}
       title="Reject settlement"
-      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · collection ${inr(settlement.totalCashCollected)}, total deposit ${inr(settlement.totalCashDeposited)}, closing ${inr(settlement.closingBalance)}. The officer will see this note and must resubmit.`}
+      subtitle={`${settlement.employee.fullName} · ${fmtDate(settlement.businessDate)} · declared closing ${inr(settlement.closingBalance)}. The officer will see the counted amount and note, and must resubmit.`}
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" className="danger" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim())}>
+          <button type="button" className="danger" disabled={pending || note.trim().length < 3} onClick={() => onReject(note.trim(), hasCounted ? countedNum : undefined)}>
             {pending ? 'Rejecting…' : 'Reject settlement'}
           </button>
         </>
       }
     >
-      <label>Reason
+      <label>Cash counted (optional)
+        <input value={counted} onChange={(e) => setCounted(e.target.value.replace(/[^0-9.]/g, ''))} inputMode="decimal" placeholder={`Declared ${inr(settlement.closingBalance)}`} />
+      </label>
+      {hasCounted && diff !== 0 && (
+        <p className="sm-text" style={{ marginTop: '0.35rem', color: 'var(--status-danger-fg)' }}>
+          {diff < 0 ? 'Short' : 'Excess'} {inr(Math.abs(diff))} vs the declared closing — the officer will see this.
+        </p>
+      )}
+      <label style={{ marginTop: '0.6rem' }}>Reason
         <input value={note} onChange={(e) => setNote(e.target.value)} maxLength={255} placeholder="e.g. Cash short by ₹500 — recount and resubmit" data-autofocus />
       </label>
     </Modal>

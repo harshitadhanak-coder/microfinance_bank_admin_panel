@@ -43,6 +43,8 @@ export type ModuleKey =
   | 'collectionRecords'
   | 'collectionSettlement'
   | 'settlements'
+  | 'bankDeposits'
+  | 'bankReconciliation'
   | 'users'
   | 'documents'
   | 'settings';
@@ -116,6 +118,10 @@ export const MODULES: ModuleDef[] = [
   // was a tab on the Collections mega-page). Settlement offers / NPA live under
   // /settlements/offers, reached from this page.
   { key: 'settlements', to: '/settlements', label: 'Day-End Settlements', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  // Branch-custody cash trail (stages 5–7): consolidated bank deposits, then
+  // reconciliation of those deposits against the uploaded bank statement.
+  { key: 'bankDeposits', to: '/reconciliation/deposits', label: 'Bank Deposits', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'bankReconciliation', to: '/reconciliation', label: 'Bank Reconciliation', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
 
   // Insights
   { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'insights' },
@@ -166,6 +172,13 @@ export const ACTION_ROLES = {
   'settlement:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   'settlement:complete': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
   'collection:classify': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT'],
+  // Bank deposits + statement reconciliation (record deposit / match / unmatch).
+  'reconcile:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'],
+  // RBAC — role administration (create/edit/configure the permission matrix) is
+  // HQ / Super Admin; assigning existing roles to employees additionally
+  // includes the staff managers (HR, Branch Manager).
+  'role:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
+  'role:assign': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
 } satisfies Record<string, Role[]>;
 
 export type Action = keyof typeof ACTION_ROLES;

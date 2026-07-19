@@ -16,7 +16,7 @@ export default function SettingsHubPage() {
 
   const tiles: { to: string; icon: ReactNode; title: string; desc: string; show: boolean }[] = [
     { to: '/settings/hr-policy', icon: <CalendarCheck size={20} />, title: 'HR Policy', desc: 'Attendance rules (office hours, grace, workweek) and payroll rates (PF, ESI, professional tax).', show: canPolicy },
-    { to: '/settings/roles', icon: <Lock size={20} />, title: 'Roles & permissions', desc: 'Which roles can open each module and perform each action. Read-only view of the access model.', show: true },
+    { to: '/settings/roles', icon: <Lock size={20} />, title: 'Roles & permissions', desc: 'Create roles, configure their permission matrix, set data scope, and manage assignments.', show: true },
   ].filter((t) => t.show);
 
   return (

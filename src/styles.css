@@ -1450,3 +1450,27 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .inline-select { display: inline-flex; align-items: center; gap: 0.4rem; font: var(--text-sm); font-weight: 500; }
 .inline-select select { min-width: 12rem; }
 
+
+/* ── RBAC — Roles administration ──────────────────────────────────────────── */
+.perm-matrix { display: flex; flex-direction: column; gap: 1rem; }
+.perm-module-head { display: inline-flex; align-items: center; gap: 0.5rem; }
+.perm-select-all { display: inline-flex; align-items: center; gap: 0.4rem; font: var(--text-sm); color: var(--muted); cursor: pointer; }
+.perm-select-all input { accent-color: var(--brass); }
+.perm-actions { display: grid; grid-template-columns: repeat(auto-fill, minmax(15rem, 1fr)); gap: 0.5rem; }
+.perm-chk { display: flex; align-items: center; gap: 0.55rem; padding: 0.5rem 0.7rem; border: 1px solid var(--line); border-radius: var(--radius-sm); cursor: pointer; transition: background var(--dur-fast) var(--ease), border-color var(--dur-fast) var(--ease); }
+.perm-chk:hover { border-color: var(--brass); }
+.perm-chk.on { background: var(--status-brass-bg); border-color: var(--brass); }
+.perm-chk input { accent-color: var(--brass); flex: none; }
+.perm-chk > span { flex: 1; font: var(--text-sm); font-weight: 500; color: var(--ink); }
+.perm-chk code { flex: none; }
+.perm-chk input:disabled { cursor: not-allowed; }
+
+/* Employee → roles assignment tab */
+.assign-row { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 1rem; }
+.assign-row label { display: flex; flex-direction: column; gap: 0.3rem; font: var(--text-sm); font-weight: 500; }
+.assign-row select { min-width: 18rem; }
+.chk-inline { flex-direction: row !important; align-items: center; gap: 0.45rem; }
+.chk-inline input { accent-color: var(--brass); }
+.row-btns { display: inline-flex; gap: 0.4rem; justify-content: flex-end; }
+.btn.sm.danger, button.sm.danger, .ghost.sm.danger { color: var(--red); }
+.ghost.sm { padding: 0.3rem 0.6rem; font: var(--text-sm); }

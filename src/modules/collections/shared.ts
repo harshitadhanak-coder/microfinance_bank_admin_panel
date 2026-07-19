@@ -18,6 +18,15 @@ export interface SettlementAttachment {
   fileName: string;
 }
 
+/** One itemised bank pay-in within a day-end settlement. */
+export interface SettlementDeposit {
+  id: string;
+  bank: 'AXIS' | 'SBI' | 'HDFC';
+  amount: string;
+  slipNumber: string | null;
+  reference: string | null;
+}
+
 export interface DayEndSettlement {
   id: string;
   businessDate: string;
@@ -37,6 +46,8 @@ export interface DayEndSettlement {
   approvedById: string | null;
   employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
   attachments: SettlementAttachment[];
+  /** Itemised deposits that sum into the per-bank + total figures above. */
+  deposits?: SettlementDeposit[];
 }
 
 /** One aggregated branch row of the Branch Closing Report. */
@@ -64,6 +75,9 @@ export const SETTLEMENT_ATTACHMENT_LABEL: Record<string, string> = {
   DEPOSIT_SLIP: 'Deposit slip',
   BANK_RECEIPT: 'Bank receipt',
   CASH_RECEIPT: 'Cash receipt',
+  AXIS_DEPOSIT_SLIP: 'AXIS deposit slip',
+  SBI_DEPOSIT_SLIP: 'SBI deposit slip',
+  HDFC_DEPOSIT_SLIP: 'HDFC deposit slip',
 };
 
 export interface SettlementOffer {

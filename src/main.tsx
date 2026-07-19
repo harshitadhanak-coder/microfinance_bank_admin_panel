@@ -22,6 +22,8 @@ import CollectionRecordsPage from './modules/collections/CollectionRecordsPage';
 import CollectionSettlementPage from './modules/collections/CollectionSettlementPage';
 import SettlementsPage from './modules/collections/SettlementsPage';
 import SettlementOffersPage from './modules/collections/SettlementOffersPage';
+import BranchDepositsPage from './modules/reconciliation/BranchDepositsPage';
+import BankReconciliationPage from './modules/reconciliation/BankReconciliationPage';
 import DashboardPage from './modules/dashboard/DashboardPage';
 import EmployeesPage from './modules/employees/EmployeesPage';
 import EmployeeCreatePage from './modules/employees/EmployeeCreatePage';
@@ -44,7 +46,9 @@ import UsersPage from './modules/users/UsersPage';
 import DocumentCenterPage from './modules/documents/DocumentCenterPage';
 import SettingsHubPage from './modules/settings/SettingsHubPage';
 import HrPolicyPage from './modules/settings/HrPolicyPage';
-import RolesPage from './modules/settings/RolesPage';
+import RolesListPage from './modules/roles/RolesListPage';
+import RoleFormPage from './modules/roles/RoleFormPage';
+import RolePermissionMatrixPage from './modules/roles/RolePermissionMatrixPage';
 import ReportsCatalogPage from './modules/reports/ReportsCatalogPage';
 import ReportRunnerPage from './modules/reports/ReportRunnerPage';
 import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
@@ -142,7 +146,10 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="documents" element={<RequireModule module="documents"><DocumentCenterPage /></RequireModule>} />
                 <Route path="settings" element={<RequireModule module="settings"><SettingsHubPage /></RequireModule>} />
                 <Route path="settings/hr-policy" element={<RequireModule module="settings"><HrPolicyPage /></RequireModule>} />
-                <Route path="settings/roles" element={<RequireModule module="settings"><RolesPage /></RequireModule>} />
+                <Route path="settings/roles" element={<RequireModule module="settings"><RolesListPage /></RequireModule>} />
+                <Route path="settings/roles/new" element={<RequireModule module="settings"><RoleFormPage /></RequireModule>} />
+                <Route path="settings/roles/:id/edit" element={<RequireModule module="settings"><RoleFormPage /></RequireModule>} />
+                <Route path="settings/roles/:id/permissions" element={<RequireModule module="settings"><RolePermissionMatrixPage /></RequireModule>} />
                 <Route path="reports" element={<RequireModule module="reports"><ReportsCatalogPage /></RequireModule>} />
                 <Route path="reports/:reportKey" element={<RequireModule module="reports"><ReportRunnerPage /></RequireModule>} />
                 <Route path="employee-loans" element={<RequireModule module="employeeLoans"><EmployeeLoansPage /></RequireModule>} />
@@ -171,6 +178,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
                 <Route path="settlements" element={<RequireModule module="settlements"><SettlementsPage /></RequireModule>} />
                 <Route path="settlements/offers" element={<RequireModule module="settlements"><SettlementOffersPage /></RequireModule>} />
+                <Route path="reconciliation/deposits" element={<RequireModule module="bankDeposits"><BranchDepositsPage /></RequireModule>} />
+                <Route path="reconciliation" element={<RequireModule module="bankReconciliation"><BankReconciliationPage /></RequireModule>} />
               </Route>
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
