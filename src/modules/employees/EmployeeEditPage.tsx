@@ -11,7 +11,8 @@ import { Loader } from '../../components/icons';
 import { apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { compact, useEmployeeMasters } from './shared';
+import { compact, portalForRole, useEmployeeMasters } from './shared';
+import { roleLabel } from '../roles/shared';
 
 interface MasterRef { id: string }
 interface EmployeeDetail {
@@ -20,14 +21,15 @@ interface EmployeeDetail {
   bankIfscCode?: string | null;
   departmentRef?: MasterRef | null; designationRef?: MasterRef | null; grade?: MasterRef | null;
   employmentTypeRef?: MasterRef | null; shift?: MasterRef | null;
+  role?: { id: string; name: string; displayName: string | null } | null;
   departmentId?: string | null; designationId?: string | null; gradeId?: string | null;
-  employmentTypeId?: string | null; shiftId?: string | null;
+  employmentTypeId?: string | null; shiftId?: string | null; roleId?: string | null;
 }
 
 const emptyEdit = {
-  fullName: '', phoneNumber: '', email: '', designation: '', branchId: '',
+  fullName: '', phoneNumber: '', email: '', branchId: '',
   joiningDate: '', employmentStatus: 'ACTIVE', bankAccountNumber: '', bankIfscCode: '', panNumber: '',
-  departmentId: '', designationId: '', gradeId: '', employmentTypeId: '', shiftId: '',
+  departmentId: '', designationId: '', roleId: '', gradeId: '', employmentTypeId: '', shiftId: '',
 };
 type EditForm = typeof emptyEdit;
 
@@ -60,11 +62,14 @@ export default function EmployeeEditPage() {
     setForm({
       ...emptyEdit,
       fullName: detail.fullName, phoneNumber: detail.phoneNumber, email: detail.email ?? '',
-      designation: detail.designation, branchId: detail.branchId ?? '',
+      branchId: detail.branchId ?? '',
       joiningDate: detail.joiningDate ? detail.joiningDate.slice(0, 10) : '',
       employmentStatus: detail.employmentStatus, bankIfscCode: detail.bankIfscCode ?? '',
       departmentId: detail.departmentRef?.id ?? detail.departmentId ?? '',
       designationId: detail.designationRef?.id ?? detail.designationId ?? '',
+      // Stays empty when the employee has no role — the form must show "not set"
+      // rather than silently proposing one.
+      roleId: detail.role?.id ?? detail.roleId ?? '',
       gradeId: detail.grade?.id ?? detail.gradeId ?? '',
       employmentTypeId: detail.employmentTypeRef?.id ?? detail.employmentTypeId ?? '',
       shiftId: detail.shift?.id ?? detail.shiftId ?? '',
@@ -74,11 +79,11 @@ export default function EmployeeEditPage() {
   const updateEmployee = useMutation({
     mutationFn: () => api.patch(`/employees/${id}`, compact({
       fullName: form.fullName, phoneNumber: form.phoneNumber, email: form.email,
-      designation: form.designation, branchId: form.branchId, joiningDate: form.joiningDate,
+      branchId: form.branchId, joiningDate: form.joiningDate,
       employmentStatus: form.employmentStatus, bankAccountNumber: form.bankAccountNumber,
       bankIfscCode: form.bankIfscCode, panNumber: form.panNumber,
-      departmentId: form.departmentId, designationId: form.designationId, gradeId: form.gradeId,
-      employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
+      departmentId: form.departmentId, designationId: form.designationId, roleId: form.roleId,
+      gradeId: form.gradeId, employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
     })),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/employees'] });
@@ -111,7 +116,6 @@ export default function EmployeeEditPage() {
               <Field label="Full name" required><input value={form.fullName} onChange={(e) => set({ fullName: e.target.value })} required /></Field>
               <Field label="Phone" required><input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: e.target.value })} required /></Field>
               <Field label="Email"><input type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>
-              <Field label="Designation (label)" required={!form.designationId}><input value={form.designation} onChange={(e) => set({ designation: e.target.value })} required={!form.designationId} /></Field>
               <Field label="Branch">
                 <select value={form.branchId} onChange={(e) => set({ branchId: e.target.value })}>
                   <option value="">— Unassigned —</option>
@@ -130,10 +134,24 @@ export default function EmployeeEditPage() {
                   {masters.departments.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
                 </select>
               </Field>
-              <Field label="Designation">
-                <select value={form.designationId} onChange={(e) => set({ designationId: e.target.value })}>
+              <Field label="Designation" required help="Job title. Does not grant any access.">
+                <select value={form.designationId} onChange={(e) => set({ designationId: e.target.value })} required>
                   <option value="">— Select —</option>
                   {designationOptions.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
+                </select>
+              </Field>
+              <Field
+                label="Role"
+                required
+                help={form.roleId
+                  ? `Signs in to the ${portalForRole(masters.roles.find((r) => r.id === form.roleId)?.name)}`
+                  : 'Not set — assign a role to grant permissions and portal access'}
+              >
+                <select value={form.roleId} onChange={(e) => set({ roleId: e.target.value })} required>
+                  <option value="">— Select a role —</option>
+                  {masters.roles.map((r) => (
+                    <option key={r.id} value={r.id}>{roleLabel(r)} — {portalForRole(r.name)}</option>
+                  ))}
                 </select>
               </Field>
               <Field label="Grade">

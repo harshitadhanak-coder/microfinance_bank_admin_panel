@@ -9,15 +9,21 @@ import { Check, Loader, Plus, Trash2 } from '../../components/icons';
 import { apiMessage, fmtDate } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { EmployeeRoleAssignment, RoleOption, roleLabel, scopeLabel, scopeTone } from './shared';
+import { EmployeeRoleAssignment, RoleOption, portalForRole, roleLabel, scopeLabel, scopeTone } from './shared';
+
+interface PrimaryRole { id: string; name: string; displayName: string | null }
 
 /**
  * Employee → roles tab. Shows the multi-role assignments (active + history),
  * lets a manager assign an additional role, mark one primary (mirrored into the
  * login/token), and revoke. Effective permissions are the union of all active
  * roles; the primary role drives the portal the employee signs in to.
+ *
+ * The employee's main role lives on the employee record itself, not in this
+ * table, so it is surfaced at the top: without it the tab reads "No roles
+ * assigned" for someone who plainly has one.
  */
-export default function EmployeeRolesTab({ employeeId }: { employeeId: string }) {
+export default function EmployeeRolesTab({ employeeId, primaryRole }: { employeeId: string; primaryRole?: PrimaryRole | null }) {
   const qc = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
@@ -68,7 +74,12 @@ export default function EmployeeRolesTab({ employeeId }: { employeeId: string })
       {error && <div className="error-box">{error}</div>}
 
       {canAssign && (
-        <Card title="Assign a role">
+        <Card title="Assign an additional role">
+          <p className="muted sm-text" style={{ marginTop: 0 }}>
+            {primaryRole
+              ? <>This employee already has every permission of their role, <strong>{roleLabel(primaryRole)}</strong> (shown above). Only add a role here to grant something <strong>extra</strong>.</>
+              : <>This employee has no role yet — set that first on the Edit page. Roles added here only grant <strong>extra</strong> permissions on top of it.</>}
+          </p>
           <div className="assign-row">
             <label>Role
               <select value={roleId} onChange={(e) => setRoleId(e.target.value)}>
@@ -92,11 +103,17 @@ export default function EmployeeRolesTab({ employeeId }: { employeeId: string })
         </Card>
       )}
 
-      <Card title="Active roles">
+      <Card title="Additional roles">
         {assignmentsQuery.isLoading ? (
           <p className="muted">Loading…</p>
         ) : active.length === 0 ? (
-          <EmptyState variant="no-data" title="No roles assigned" message="This employee inherits only their primary login role. Assign roles to grant additional permissions." />
+          <EmptyState
+            variant="no-data"
+            title="No additional roles"
+            message={primaryRole
+              ? `This employee has the permissions of their primary role (${roleLabel(primaryRole)}). Assign a role here only to grant extra permissions on top.`
+              : 'Assign a role here only to grant extra permissions on top of the primary role.'}
+          />
         ) : (
           <div className="table-scroll">
             <table className="perm-table">

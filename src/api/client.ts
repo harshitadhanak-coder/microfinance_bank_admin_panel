@@ -14,6 +14,20 @@ api.interceptors.request.use((config) => {
   return config;
 });
 
+/**
+ * Endpoints where a 401 means "these credentials are wrong", not "this session
+ * expired". They must bypass the refresh-and-redirect below: signing in with a
+ * bad password would otherwise trigger a failed token refresh, redirect to
+ * /login, and reload the page — wiping the very error the form is showing.
+ *
+ * Authenticated password flows are deliberately absent: the backend answers a
+ * wrong current password on /auth/change-password with a 400, not a 401, so the
+ * session is never mistaken for expired.
+ */
+const CREDENTIAL_PATHS = ['/auth/login', '/auth/refresh-token', '/auth/forgot-password', '/auth/reset-password'];
+const isCredentialRequest = (url?: string): boolean =>
+  !!url && CREDENTIAL_PATHS.some((path) => url.includes(path));
+
 // Auto-refresh on 401, single retry
 let refreshing: Promise<string> | null = null;
 
@@ -21,7 +35,7 @@ api.interceptors.response.use(
   (res) => res,
   async (error) => {
     const original = error.config;
-    if (error.response?.status === 401 && !original._retry) {
+    if (error.response?.status === 401 && !original._retry && !isCredentialRequest(original.url)) {
       original._retry = true;
       try {
         refreshing ??= axios
@@ -38,7 +52,8 @@ api.interceptors.response.use(
         return api(original);
       } catch {
         localStorage.clear();
-        window.location.href = '/login';
+        // Already on the sign-in screen? Reloading it would only discard state.
+        if (window.location.pathname !== '/login') window.location.href = '/login';
       }
     }
     return Promise.reject(error);

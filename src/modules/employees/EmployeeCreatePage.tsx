@@ -11,13 +11,18 @@ import { apiMessage, inr } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import {
-  LOGIN_ROLES, SALARY_COMPONENTS, compact, num, useEmployeeMasters,
+  SALARY_COMPONENTS, compact, num, portalForRole, useEmployeeMasters,
 } from './shared';
+import { roleLabel } from '../roles/shared';
 
 const emptyForm = {
-  fullName: '', phoneNumber: '', email: '', designation: '', branchId: '', joiningDate: '',
+  fullName: '', phoneNumber: '', email: '', branchId: '', joiningDate: '',
   bankAccountNumber: '', bankIfscCode: '', panNumber: '',
-  departmentId: '', designationId: '', gradeId: '', employmentTypeId: '', shiftId: '',
+  // Designation = job title, roleId = permissions. Both start empty and are
+  // mandatory: a role is never pre-selected, so nobody is granted access by
+  // simply not touching a dropdown.
+  departmentId: '', designationId: '', roleId: '',
+  gradeId: '', employmentTypeId: '', shiftId: '',
   reportsToId: '', dateOfBirth: '', gender: '', maritalStatus: '',
   addressLine: '', emergencyContactName: '', emergencyContactPhone: '', emergencyContactRelation: '',
   confirmationDate: '', uanNumber: '', providentFundNumber: '', stateInsuranceNumber: '',
@@ -25,7 +30,7 @@ const emptyForm = {
   conveyanceAllowance: '', medicalAllowance: '', travelAllowance: '', foodAllowance: '',
   mobileAllowance: '', otherAllowance: '', monthlyBonus: '', mediclaimDeduction: '', effectiveFrom: '',
   isProvidentFundApplicable: true, isStateInsuranceApplicable: false, isProfessionalTaxApplicable: true,
-  createLoginAccount: true, accountRoleName: 'FIELD_OFFICER',
+  createLoginAccount: true,
 };
 type Form = typeof emptyForm;
 
@@ -52,10 +57,10 @@ export default function EmployeeCreatePage() {
     mutationFn: (f: Form) =>
       api.post('/employees', {
         ...compact({
-          fullName: f.fullName, phoneNumber: f.phoneNumber, email: f.email, designation: f.designation,
+          fullName: f.fullName, phoneNumber: f.phoneNumber, email: f.email,
           branchId: f.branchId, joiningDate: f.joiningDate,
           bankAccountNumber: f.bankAccountNumber, bankIfscCode: f.bankIfscCode, panNumber: f.panNumber,
-          departmentId: f.departmentId, designationId: f.designationId, gradeId: f.gradeId,
+          departmentId: f.departmentId, designationId: f.designationId, roleId: f.roleId, gradeId: f.gradeId,
           employmentTypeId: f.employmentTypeId, shiftId: f.shiftId,
           reportsToId: f.reportsToId, dateOfBirth: f.dateOfBirth,
           gender: f.gender, maritalStatus: f.maritalStatus, addressLine: f.addressLine,
@@ -79,7 +84,6 @@ export default function EmployeeCreatePage() {
           isProfessionalTaxApplicable: f.isProfessionalTaxApplicable,
         },
         createLoginAccount: f.createLoginAccount,
-        ...(f.createLoginAccount ? { accountRoleName: f.accountRoleName } : {}),
       }),
     onSuccess: (res) => {
       qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/employees') });
@@ -110,7 +114,6 @@ export default function EmployeeCreatePage() {
             <Field label="Full name" required><input value={form.fullName} onChange={(e) => set({ fullName: e.target.value })} required /></Field>
             <Field label="Phone" required><input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: e.target.value })} placeholder="+9198XXXXXXXX" required /></Field>
             <Field label="Email"><input type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>
-            <Field label="Designation (label)" required={!form.designationId} help="Free-text title; or pick a designation master below"><input value={form.designation} onChange={(e) => set({ designation: e.target.value })} required={!form.designationId} /></Field>
             <Field label="Branch">
               <select value={form.branchId} onChange={(e) => set({ branchId: e.target.value, reportsToId: '' })}>
                 <option value="">— Unassigned —</option>
@@ -132,10 +135,22 @@ export default function EmployeeCreatePage() {
                 {masters.departments.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
               </select>
             </Field>
-            <Field label="Designation">
-              <select value={form.designationId} onChange={(e) => set({ designationId: e.target.value })}>
+            <Field label="Designation" required help="The employee's job title. Does not grant any access.">
+              <select value={form.designationId} onChange={(e) => set({ designationId: e.target.value })} required>
                 <option value="">— Select —</option>
                 {designationOptions.map((d) => <option key={d.id} value={d.id}>{d.name} ({d.code})</option>)}
+              </select>
+            </Field>
+            <Field
+              label="Role"
+              required
+              help={form.roleId ? `Signs in to the ${portalForRole(masters.roles.find((r) => r.id === form.roleId)?.name)}` : 'Decides permissions and which portal they sign in to'}
+            >
+              <select value={form.roleId} onChange={(e) => set({ roleId: e.target.value })} required>
+                <option value="">— Select a role —</option>
+                {masters.roles.map((r) => (
+                  <option key={r.id} value={r.id}>{roleLabel(r)} — {portalForRole(r.name)}</option>
+                ))}
               </select>
             </Field>
             <Field label="Grade">
@@ -209,16 +224,11 @@ export default function EmployeeCreatePage() {
           <div className="check-row">
             <label className="check"><input type="checkbox" checked={form.createLoginAccount} onChange={(e) => set({ createLoginAccount: e.target.checked })} /> Create login account</label>
           </div>
-          <FormGrid cols={2}>
-            <Field label="Login role">
-              <select value={form.accountRoleName} onChange={(e) => set({ accountRoleName: e.target.value })} disabled={!form.createLoginAccount}>
-                {LOGIN_ROLES.map((r) => <option key={r.value} value={r.value}>{r.label} — {r.portal}</option>)}
-              </select>
-            </Field>
-          </FormGrid>
           <p className="muted sm-text" style={{ margin: 0 }}>
             When enabled, a sign-in is created and the credentials are emailed to the employee (a temporary password is shown on the profile in dev).
-            Branch Managers sign into the admin panel; Field Officers and Accountants use the Field Officer app.
+            {' '}The account uses the <strong>Role</strong> chosen under Organization above — {form.roleId
+              ? <>this employee will sign in to the <strong>{portalForRole(masters.roles.find((r) => r.id === form.roleId)?.name)}</strong>.</>
+              : <>pick a role to decide which portal they reach.</>}
           </p>
         </Card>
 

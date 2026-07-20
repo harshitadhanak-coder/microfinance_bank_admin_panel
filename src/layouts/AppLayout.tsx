@@ -21,6 +21,7 @@ const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   leave: <CalendarOff size={18} />,
   payroll: <Wallet size={18} />,
   salaryAdvances: <HandCoins size={18} />,
+  hrPolicy: <Settings2 size={18} />,
   masters: <Settings2 size={18} />,
   reports: <FileSpreadsheet size={18} />,
   employeeLoans: <Banknote size={18} />,

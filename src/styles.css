@@ -672,13 +672,20 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .login-card h1 { font-size: 1.3rem; }
 .login-card p { margin: -0.6rem 0 0.4rem; }
 
-/* Password field with show/hide toggle */
+/* Password field with show/hide toggle.
+   The toggle fills the whole gutter the input reserves — full height, flush to
+   the inner edge of the border. A smaller icon-sized button leaves dead strips
+   around it where clicks land on the input instead, which reads as "the eye
+   button sometimes doesn't work". Insets match the input's border width so the
+   hover fill nests inside its rounded corner. */
 .password-field { position: relative; display: flex; }
 .password-field input { flex: 1; padding-right: 2.6rem; width: 100%; }
 .password-toggle {
-  position: absolute; right: 4px; top: 50%; transform: translateY(-50%);
-  background: transparent; border: none; padding: 0.35rem; min-height: 0;
-  color: var(--muted); display: inline-flex; align-items: center; border-radius: 6px;
+  position: absolute; right: 1px; top: 1px; bottom: 1px; width: 2.45rem;
+  background: transparent; border: none; padding: 0; min-height: 0;
+  color: var(--muted);
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 0 7px 7px 0;
 }
 .password-toggle:hover { background: #efede6; color: var(--ink); }
 
@@ -898,6 +905,43 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .detail-list dt { color: var(--muted); }
 .detail-list dd { margin: 0; text-align: right; }
 @media (max-width: 640px) { .detail-list { grid-template-columns: 1fr; } }
+
+/* ── Designation / Role / Portal explainer ──────────────────────────────────
+   The three are routinely confused, so they sit together above the tabs. The
+   layout encodes the rule: a rule-off separates the job title (which grants
+   nothing) from access, and an arrow shows portal being derived from role. */
+.access-summary {
+  display: grid;
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+  align-items: stretch;
+  gap: 0 1.15rem;
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.85rem 1.1rem;
+  margin-bottom: 1rem;
+}
+.access-item { display: grid; gap: 0.2rem; align-content: start; min-width: 0; }
+.access-label {
+  display: inline-flex; align-items: center; gap: 0.35rem;
+  font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.06em;
+  color: var(--muted); font-weight: 600;
+}
+.access-value {
+  font-family: 'Archivo', 'Inter', sans-serif;
+  font-size: 1.1rem; font-weight: 700; line-height: 1.25; overflow-wrap: anywhere;
+}
+.access-hint { font-size: 0.74rem; color: var(--muted); line-height: 1.35; }
+/* Unset / inherited roles read as a gap to close, not a value. */
+.access-warn { color: var(--amber); font-weight: 700; }
+.access-value .access-warn { font-size: 0.95rem; }
+.access-split { width: 1px; background: var(--line); }
+.access-arrow { display: flex; align-items: center; color: var(--brass); font-size: 1.1rem; }
+@media (max-width: 860px) {
+  .access-summary { grid-template-columns: 1fr; gap: 0.75rem; }
+  .access-split { width: auto; height: 1px; }
+  .access-arrow { display: none; }
+}
 
 /* Employee-loan status pills (Prisma EmployeeLoanStatus enum) */
 .pill-pending { background: #fdf2dd; color: var(--amber); }

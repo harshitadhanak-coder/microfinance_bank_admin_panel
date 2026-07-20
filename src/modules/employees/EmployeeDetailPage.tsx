@@ -16,6 +16,8 @@ import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import EmployeeRolesTab from '../roles/EmployeeRolesTab';
+import { type EmployeeRoleAssignment } from '../roles/shared';
+import { AccessSummary } from './AccessSummary';
 import {
   SALARY_COMPONENTS, DOCUMENT_CATEGORIES, isExpiringSoon,
 } from './shared';
@@ -50,6 +52,8 @@ interface EmployeeDetail {
   uanNumber?: string | null; providentFundNumber?: string | null; stateInsuranceNumber?: string | null;
   departmentRef?: MasterRef | null; designationRef?: MasterRef | null; grade?: MasterRef | null;
   employmentTypeRef?: MasterRef | null; shift?: MasterRef | null;
+  /** Access role. Null when unassigned — shown as "Not set", never defaulted. */
+  role?: { id: string; name: string; displayName: string | null } | null;
 }
 interface EmployeeLite { id: string; fullName: string }
 interface EmployeeDocument {
@@ -162,12 +166,25 @@ export default function EmployeeDetailPage() {
   });
 
   // ── Account ──
+  // Not gated on the active tab: the access summary sits above every tab and
+  // needs the login's role to flag a legacy account whose role was never
+  // recorded on the employee.
   const accountQuery = useQuery({
     queryKey: ['/employees', id, 'account'],
     queryFn: () => api.get(`/employees/${id}/account`).then((r) => r.data.data as AccountInfo),
-    enabled: canManage && tab === 'account',
+    enabled: canManage,
   });
   const account = accountQuery.data;
+
+  // Same query key the Roles tab uses, so the two share one fetch.
+  const roleAssignmentsQuery = useQuery({
+    queryKey: ['/employees', id, 'roles'],
+    queryFn: () => api.get(`/employees/${id}/roles`).then((r) => r.data.data as EmployeeRoleAssignment[]),
+    enabled: canRoles,
+  });
+  const activeExtraRoles = (roleAssignmentsQuery.data ?? [])
+    .filter((a) => !a.revokedAt && !a.isPrimary)
+    .map((a) => a.role);
   const [editingEmail, setEditingEmail] = useState(false);
   const [emailDraft, setEmailDraft] = useState('');
   const refreshAccount = () => qc.invalidateQueries({ queryKey: ['/employees', id, 'account'] });
@@ -324,12 +341,24 @@ export default function EmployeeDetailPage() {
         <Card><Skeleton height={20} /><Skeleton height={14} style={{ marginTop: 12 }} /><Skeleton height={14} style={{ marginTop: 8 }} /></Card>
       ) : (
         <>
+          {/* Sits above the tabs so designation / role / portal have exactly one
+              home, instead of being restated with different labels on three of
+              them. Every tab below shows detail, never these three again. */}
+          <AccessSummary
+            designation={detail.designationRef?.name ?? detail.designation}
+            role={detail.role}
+            inheritedRoleName={account?.role ?? null}
+            additionalRoles={activeExtraRoles}
+          />
+
           {tab === 'overview' && (
             <div className="detail-cols">
               <Card title="Personal details">
                 <dl className="detail-list">
                   <div><dt>Employee code</dt><dd><code>{detail.employeeCode}</code></dd></div>
-                  <div><dt>Designation</dt><dd>{detail.designationRef?.name ?? detail.designation}</dd></div>
+                  {/* Designation and role deliberately live only in the summary
+                      above — repeating them here is what made the two read as
+                      interchangeable. */}
                   <div><dt>Department</dt><dd>{detail.departmentRef?.name ?? detail.department ?? '—'}</dd></div>
                   <div><dt>Grade</dt><dd>{detail.grade?.name ?? '—'}</dd></div>
                   <div><dt>Reporting manager</dt><dd>{reportsToName}</dd></div>
@@ -512,7 +541,7 @@ export default function EmployeeDetailPage() {
           )}
 
           {tab === 'roles' && canRoles && id && (
-            <EmployeeRolesTab employeeId={id} />
+            <EmployeeRolesTab employeeId={id} primaryRole={detail.role ?? null} />
           )}
 
           {tab === 'account' && canManage && (
@@ -570,7 +599,8 @@ export default function EmployeeDetailPage() {
                         )}
                       </dd>
                     </div>
-                    <div><dt>Login role</dt><dd>{account.role ? titleCase(account.role) : '—'}</dd></div>
+                    {/* Role and portal are shown once, in the summary above — this
+                        card stays about the credentials themselves. */}
                     <div><dt>Status</dt><dd><Badge status={account.status ?? 'INACTIVE'} /></dd></div>
                     <div><dt>Locked</dt><dd>{account.isLocked ? 'Yes' : 'No'}</dd></div>
                     <div><dt>Must change password</dt><dd>{account.forcePasswordChange ? 'Yes' : 'No'}</dd></div>

@@ -87,10 +87,15 @@ function RequireAuth() {
   return <Outlet />;
 }
 
-/** The first module the current role may open — used as their landing page. */
+/**
+ * The first module the current role may open — used as their landing page.
+ * Falls back to the always-accessible profile page: a role with no visible
+ * modules would otherwise be redirected to a route it cannot open either,
+ * looping forever.
+ */
 function useHomePath() {
   const { user } = useAuth();
-  return visibleModules(user?.role)[0]?.to ?? '/loans';
+  return visibleModules(user?.role)[0]?.to ?? '/profile';
 }
 
 /**
@@ -145,7 +150,9 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="users" element={<RequireModule module="users"><UsersPage /></RequireModule>} />
                 <Route path="documents" element={<RequireModule module="documents"><DocumentCenterPage /></RequireModule>} />
                 <Route path="settings" element={<RequireModule module="settings"><SettingsHubPage /></RequireModule>} />
-                <Route path="settings/hr-policy" element={<RequireModule module="settings"><HrPolicyPage /></RequireModule>} />
+                {/* HR Policy belongs to the HR module, not Settings: HR must reach
+                    it without also reaching the RBAC role/permission editor. */}
+                <Route path="settings/hr-policy" element={<RequireModule module="hrPolicy"><HrPolicyPage /></RequireModule>} />
                 <Route path="settings/roles" element={<RequireModule module="settings"><RolesListPage /></RequireModule>} />
                 <Route path="settings/roles/new" element={<RequireModule module="settings"><RoleFormPage /></RequireModule>} />
                 <Route path="settings/roles/:id/edit" element={<RequireModule module="settings"><RoleFormPage /></RequireModule>} />

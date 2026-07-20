@@ -62,6 +62,23 @@ export interface EmployeeRoleAssignment {
 export const roleLabel = (role: { displayName?: string | null; name?: string }): string =>
   role.displayName || (role.name ?? '').replace(/_/g, ' ').toLowerCase().replace(/\b\w/g, (c) => c.toUpperCase());
 
+/**
+ * Roles that reach the Admin Panel. Mirrors ADMIN_PORTAL_ROLES in the API's
+ * `src/constants/role.constants.ts` — the backend stays the enforcing copy; this
+ * one only labels the consequence so it is visible before saving.
+ */
+const ADMIN_PORTAL_ROLES = [
+  'SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER',
+  'ACCOUNTANT', 'OPERATIONS', 'COLLECTION_MANAGER', 'AUDITOR',
+];
+
+/**
+ * Which application a role signs into. Decided by ROLE alone — an employee's
+ * designation (job title) never affects this.
+ */
+export const portalForRole = (roleName?: string | null): string =>
+  roleName && ADMIN_PORTAL_ROLES.includes(roleName) ? 'Admin panel' : 'Field Officer app';
+
 const SCOPE_LABEL: Record<ScopeType, string> = {
   ALL: 'Organisation',
   BRANCH: 'Branch',

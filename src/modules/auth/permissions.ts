@@ -30,6 +30,7 @@ export type ModuleKey =
   | 'leave'
   | 'payroll'
   | 'salaryAdvances'
+  | 'hrPolicy'
   | 'masters'
   | 'reports'
   | 'employeeLoans'
@@ -84,22 +85,25 @@ const ALL_ROLES: Role[] = [
 export const MODULES: ModuleDef[] = [
   // Overview
   { key: 'dashboard', to: '/', label: 'Dashboard', end: true, roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'overview' },
-  { key: 'hrDashboard', to: '/hr-overview', label: 'HR Dashboard', end: true, roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'overview' },
+  { key: 'hrDashboard', to: '/hr-overview', label: 'HR Dashboard', end: true, roles: ['HUMAN_RESOURCES_ADMIN'], group: 'overview' },
 
-  // Human Resources
-  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'employeeImport', to: '/employees/import', label: 'Import Employees', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'hr' },
-  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  // Human Resources — the HR module is restricted to the HR role (and Super
+  // Admin, who wildcards through below). This mirrors HR_MODULE_ROLES on the
+  // backend; widening access here without widening it there yields 403s.
+  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'employeeImport', to: '/employees/import', label: 'Import Employees', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'HR Policy', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
 
-  // Payroll & Finance
-  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
-  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loans', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
-  { key: 'salaryAdvances', to: '/salary-advances', label: 'Salary Advances', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'finance' },
+  // Payroll & Finance — staff payroll, also HR-only.
+  { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'finance' },
+  { key: 'employeeLoans', to: '/employee-loans', label: 'Employee Loans', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'finance' },
+  { key: 'salaryAdvances', to: '/salary-advances', label: 'Salary Advances', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'finance' },
 
   // Operations
-  { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  { key: 'branches', to: '/branches', label: 'Branches', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
   { key: 'leads', to: '/leads', label: 'Leads', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'operations' },
   { key: 'loans', to: '/loans', label: 'Loans', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER', 'ACCOUNTANT'], group: 'operations' },
   // Loan Applications and Loan Assignments are now first-class, nav-visible pages
@@ -123,33 +127,39 @@ export const MODULES: ModuleDef[] = [
   { key: 'bankDeposits', to: '/reconciliation/deposits', label: 'Bank Deposits', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
   { key: 'bankReconciliation', to: '/reconciliation', label: 'Bank Reconciliation', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
 
-  // Insights
-  { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN', 'BRANCH_MANAGER'], group: 'insights' },
+  // Insights — every report in the catalog is an HR report (attendance,
+  // employee, leave, payroll), so the whole engine is HR-only.
+  { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'insights' },
 
   // Administration
-  { key: 'users', to: '/users', label: 'User Management', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'admin' },
-  { key: 'documents', to: '/documents', label: 'Document Center', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'admin' },
-  { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
-  { key: 'settings', to: '/settings', label: 'Settings', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin' },
+  { key: 'users', to: '/users', label: 'User Management', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin' },
+  // Employee personnel files — part of HR. Client/lead KYC lives on those records.
+  { key: 'documents', to: '/documents', label: 'Document Center', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
+  { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
+  // Settings hosts the RBAC role/permission editor, so HR is deliberately NOT
+  // here — HR must not be able to grant itself access beyond the HR module.
+  // HR reaches its own policy screen through the 'hrPolicy' module above.
+  { key: 'settings', to: '/settings', label: 'Settings', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
 ];
 
 /** In-page actions, each mapped to the roles the backend permits. */
 export const ACTION_ROLES = {
-  'employee:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  'employee:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  'leave:decide': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  'payroll:run': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  // Mark-paid, holiday management, leave accrual and HR policy edits are HR/HQ only.
-  'payroll:markPaid': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  'holiday:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  'leave:accrue': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  'salaryAdvance:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  // Organization masters management is HR/HQ; document management includes branch managers.
-  'master:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  'document:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  // ── HR module actions. Restricted to HR (+ Super Admin, who wildcards
+  // through `can`) to match HR_MODULE_ROLES on the backend.
+  'employee:create': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'employee:update': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'leave:decide': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'payroll:run': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'payroll:markPaid': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'holiday:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'leave:accrue': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'salaryAdvance:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // Also gates the HR Policy screen (attendance rules + payroll rates).
+  'master:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'document:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   // Employee login-account management (send credentials, lock/unlock, etc.).
-  'account:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
-  'employeeLoan:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  'account:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'employeeLoan:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'branch:create': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   'branch:update': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
   'branch:delete': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
@@ -175,10 +185,11 @@ export const ACTION_ROLES = {
   // Bank deposits + statement reconciliation (record deposit / match / unmatch).
   'reconcile:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'],
   // RBAC — role administration (create/edit/configure the permission matrix) is
-  // HQ / Super Admin; assigning existing roles to employees additionally
-  // includes the staff managers (HR, Branch Manager).
+  // HQ / Super Admin. Assigning an existing role to an employee additionally
+  // includes HR, who owns staff records; HR cannot edit the matrix itself and
+  // so cannot widen its own access.
   'role:manage': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'],
-  'role:assign': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'],
+  'role:assign': ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
 } satisfies Record<string, Role[]>;
 
 export type Action = keyof typeof ACTION_ROLES;

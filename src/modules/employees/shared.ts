@@ -1,5 +1,8 @@
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../../api/client';
+import type { RoleOption } from '../roles/shared';
+
+export type { RoleOption };
 
 /**
  * Shared types, constants and helpers for the Employee module's List / Create /
@@ -14,7 +17,12 @@ export interface EmployeeRow {
   fullName: string;
   phoneNumber: string;
   email?: string | null;
+  /** Job title (free-text mirror of designationRef.name). */
   designation: string;
+  /** Job title master row — authoritative. */
+  designationRef?: { id: string; name: string; code: string } | null;
+  /** Access role. Null when none has been assigned — never inferred. */
+  role?: { id: string; name: string; displayName: string | null } | null;
   employmentStatus: string;
   joiningDate: string;
   branchId?: string | null;
@@ -34,12 +42,10 @@ export const STATUS_FILTERS = ['', 'ONBOARDING', 'ACTIVE', 'ON_NOTICE', 'SEPARAT
 export const statusLabel = (s: string): string =>
   s ? s.charAt(0) + s.slice(1).toLowerCase().replaceAll('_', ' ') : 'All statuses';
 
-// ── Login roles for the create form's account section ──
-export const LOGIN_ROLES: { value: string; label: string; portal: string }[] = [
-  { value: 'FIELD_OFFICER', label: 'Field Officer', portal: 'Field Officer app' },
-  { value: 'ACCOUNTANT', label: 'Accountant', portal: 'Field Officer app' },
-  { value: 'BRANCH_MANAGER', label: 'Branch Manager', portal: 'Admin panel' },
-];
+// ── Roles ──
+// Portal labelling lives with the role domain; re-exported so the employee
+// pages can keep importing it from here.
+export { portalForRole } from '../roles/shared';
 
 // ── Salary components (sum to gross / CTC) ──
 export type SalaryComponentKey =
@@ -90,6 +96,8 @@ export interface EmployeeMasters {
   branches: BranchOption[];
   departments: DepartmentOption[];
   designations: DesignationOption[];
+  /** Assignable access roles, fetched live — never a hardcoded list. */
+  roles: RoleOption[];
   grades: GradeOption[];
   employmentTypes: EmploymentTypeOption[];
   shifts: ShiftOption[];
@@ -118,6 +126,11 @@ export function useEmployeeMasters(enabled = true): EmployeeMasters {
     queryFn: () => api.get('/masters/designations/options').then((r) => r.data.data as DesignationOption[]),
     enabled,
   });
+  const roles = useQuery({
+    queryKey: ['/roles/options'],
+    queryFn: () => api.get('/roles/options').then((r) => r.data.data as RoleOption[]),
+    enabled,
+  });
   const grades = useQuery({
     queryKey: ['/masters/grades/options'],
     queryFn: () => api.get('/masters/grades/options').then((r) => r.data.data as GradeOption[]),
@@ -142,10 +155,11 @@ export function useEmployeeMasters(enabled = true): EmployeeMasters {
     branches: branches.data ?? [],
     departments: departments.data ?? [],
     designations: designations.data ?? [],
+    roles: roles.data ?? [],
     grades: grades.data ?? [],
     employmentTypes: employmentTypes.data ?? [],
     shifts: shifts.data ?? [],
     managers: managers.data ?? [],
-    isLoading: branches.isLoading || departments.isLoading || designations.isLoading,
+    isLoading: branches.isLoading || departments.isLoading || designations.isLoading || roles.isLoading,
   };
 }
