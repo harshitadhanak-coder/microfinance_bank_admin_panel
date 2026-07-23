@@ -7,7 +7,7 @@ import { FilterBar } from '../../components/FilterBar';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
-import { HandCoins, Pencil, Plus, Trash2 } from '../../components/icons';
+import { Check, Ban, HandCoins, Pencil, Plus, Trash2 } from '../../components/icons';
 import { inr, titleCase, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
@@ -15,7 +15,7 @@ import { can } from '../auth/permissions';
 
 interface EmployeeOption { id: string; fullName: string; employeeCode: string }
 
-type AdvanceStatus = 'ACTIVE' | 'RECOVERED';
+type AdvanceStatus = 'PENDING' | 'ACTIVE' | 'RECOVERED' | 'REJECTED';
 
 interface SalaryAdvance {
   id: string;
@@ -28,7 +28,7 @@ interface SalaryAdvance {
   employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
 }
 
-const STATUS_FILTERS = ['ALL', 'ACTIVE', 'RECOVERED'] as const;
+const STATUS_FILTERS = ['ALL', 'PENDING', 'ACTIVE', 'RECOVERED', 'REJECTED'] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];
 
 const emptyForm = { employeeId: '', amount: '', monthlyRecovery: '', reason: '' };
@@ -59,6 +59,13 @@ export default function SalaryAdvancesPage() {
     onError: (err) => { setDeleteFor(null); toast.error(apiMessage(err, 'Could not delete the advance.')); },
   });
 
+  const decide = useMutation({
+    mutationFn: ({ id, decision }: { id: string; decision: 'APPROVED' | 'REJECTED' }) =>
+      api.post(`/human-resources/salary-advances/${id}/decision`, { decision }),
+    onSuccess: (_r, { decision }) => { refresh(); toast.success(`Advance ${decision.toLowerCase()}.`); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not record the decision.')),
+  });
+
   const columns: Column<SalaryAdvance>[] = [
     { header: 'Employee', render: (a) => <><strong>{a.employee.fullName}</strong><div className="muted sm-text">{a.employee.employeeCode}</div></>, sortValue: (a) => a.employee.fullName },
     { header: 'Branch', render: (a) => a.employee.branch?.name ?? '—', sortValue: (a) => a.employee.branch?.name ?? '' },
@@ -73,7 +80,12 @@ export default function SalaryAdvancesPage() {
     columns.push({
       header: '',
       render: (a) =>
-        a.status === 'ACTIVE' ? (
+        a.status === 'PENDING' ? (
+          <div className="actions-cell" style={{ gap: 6 }}>
+            <button className="ghost sm ok" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, decision: 'APPROVED' })}><Check size={14} /> Approve</button>
+            <button className="ghost sm danger" disabled={decide.isPending} onClick={() => decide.mutate({ id: a.id, decision: 'REJECTED' })}><Ban size={14} /> Reject</button>
+          </div>
+        ) : a.status === 'ACTIVE' ? (
           <div className="actions-cell">
             <ActionMenu items={[
               { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(a) },

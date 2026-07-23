@@ -4,8 +4,9 @@ import { useAuth } from '../modules/auth/AuthContext';
 import { navSections } from '../modules/auth/permissions';
 import type { ModuleDef, ModuleGroup, ModuleKey } from '../modules/auth/permissions';
 import { Modal } from '../components/Modal';
+import { NotificationsBell } from '../components/NotificationsBell';
 import {
-  Banknote, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
+  AlertCircle, Banknote, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
   Landmark, LayoutDashboard, ListChecks, LogOut, Menu, PanelLeft, Settings2, Target, UserCheck,
   Users, Wallet, Briefcase,
 } from '../components/icons';
@@ -17,11 +18,17 @@ const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   employees: <Users size={18} />,
   employeeImport: <FileSpreadsheet size={18} />,
   attendance: <CalendarCheck size={18} />,
+  attendanceRequests: <ListChecks size={18} />,
   holidays: <CalendarOff size={18} />,
   leave: <CalendarOff size={18} />,
   payroll: <Wallet size={18} />,
   salaryAdvances: <HandCoins size={18} />,
   hrPolicy: <Settings2 size={18} />,
+  orgChart: <UserCheck size={18} />,
+  shifts: <CalendarCheck size={18} />,
+  exit: <LogOut size={18} />,
+  announcements: <AlertCircle size={18} />,
+  hrPolicyLibrary: <FileSpreadsheet size={18} />,
   masters: <Settings2 size={18} />,
   reports: <FileSpreadsheet size={18} />,
   employeeLoans: <Banknote size={18} />,
@@ -102,6 +109,7 @@ export default function AppLayout() {
           <Menu size={18} />
         </button>
         <Link to="/" className="topbar-brand"><span className="brand-mark sm">MF</span> Microfinance</Link>
+        <div style={{ marginLeft: 'auto' }}><NotificationsBell /></div>
       </header>
 
       {/* Backdrop for the mobile drawer. */}
@@ -113,6 +121,7 @@ export default function AppLayout() {
             <span className="brand-mark sm">MF</span>
             <span className="brand-name">Microfinance</span>
           </Link>
+          {!collapsed && <NotificationsBell />}
           <button
             type="button"
             className="icon-btn sidebar-collapse"

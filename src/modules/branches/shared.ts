@@ -8,6 +8,7 @@ export interface BranchRow {
 
 export interface BranchDetail extends BranchRow {
   managerId?: string | null;
+  reportsToSuperAdmin?: boolean;
 }
 
 /** Aggregate returned by GET /branches/:id/dashboard. */

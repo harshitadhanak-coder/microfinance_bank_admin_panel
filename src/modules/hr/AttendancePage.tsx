@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { FormEvent, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
@@ -11,6 +11,7 @@ import { Tabs, TabDef } from '../../components/Tabs';
 import { FilterBar, FilterChip } from '../../components/FilterBar';
 import { EmptyState } from '../../components/EmptyState';
 import { Calendar, CalendarDayCell } from '../../components/Calendar';
+import { Modal } from '../../components/Modal';
 import { CardsSkeleton } from '../../components/Skeleton';
 import { CalendarCheck, ListChecks, LogOut, UserCheck, ArrowRight, FileSpreadsheet, Search } from '../../components/icons';
 import { fmtDate, apiMessage } from '../../lib/format';
@@ -58,6 +59,7 @@ type ViewKey = 'list' | 'summary' | 'calendar';
 export default function AttendancePage() {
   const toast = useToast();
   const queryClient = useQueryClient();
+  const [manualOpen, setManualOpen] = useState(false);
   const navigate = useNavigate();
   const now = new Date();
 
@@ -244,6 +246,9 @@ export default function AttendancePage() {
               </select>
             </div>
             <span className="hdr-sep" aria-hidden="true" />
+            <button type="button" className="ghost" onClick={() => setManualOpen(true)}>
+              <CalendarCheck size={15} /> Add attendance
+            </button>
             <button type="button" className="ghost" disabled={punchOut.isPending} onClick={() => punchOut.mutate()}>
               <LogOut size={15} /> {punchOut.isPending ? 'Checking out…' : 'Check out'}
             </button>
@@ -364,6 +369,74 @@ export default function AttendancePage() {
           )}
         </Card>
       )}
+      {manualOpen && (
+        <ManualAttendanceModal
+          employees={employeesQuery.data ?? []}
+          onClose={() => setManualOpen(false)}
+          onDone={() => { setManualOpen(false); queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/attendance') }); }}
+        />
+      )}
     </>
+  );
+}
+
+// ── HR manual attendance (missing-punch add) ────────────────────────────────
+function ManualAttendanceModal({ employees, onClose, onDone }: { employees: EmployeeOption[]; onClose: () => void; onDone: () => void }) {
+  const toast = useToast();
+  const [employeeId, setEmployeeId] = useState('');
+  const [attendanceDate, setAttendanceDate] = useState('');
+  const [checkInAt, setCheckInAt] = useState('');
+  const [checkOutAt, setCheckOutAt] = useState('');
+  const [status, setStatus] = useState('PRESENT');
+  const [note, setNote] = useState('');
+  const [error, setError] = useState('');
+
+  const save = useMutation({
+    mutationFn: () => api.post('/human-resources/attendance/manual', {
+      employeeId,
+      attendanceDate,
+      ...(checkInAt ? { checkInAt: `${attendanceDate}T${checkInAt}:00` } : {}),
+      ...(checkOutAt ? { checkOutAt: `${attendanceDate}T${checkOutAt}:00` } : {}),
+      status,
+      ...(note.trim() ? { note: note.trim() } : {}),
+    }),
+    onSuccess: () => { toast.success('Attendance recorded.'); onDone(); },
+    onError: (err) => setError(apiMessage(err, 'Could not record attendance.')),
+  });
+
+  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
+  const disabled = save.isPending || !employeeId || !attendanceDate;
+
+  return (
+    <Modal
+      size="md" onClose={onClose} icon={<CalendarCheck size={20} />}
+      title="Add / correct attendance"
+      subtitle="Manually record a missing punch. The row is flagged as a manual entry."
+      footer={<>
+        <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+        <button type="submit" form="manual-att-form" disabled={disabled}>{save.isPending ? 'Saving…' : 'Save'}</button>
+      </>}
+    >
+      <form id="manual-att-form" className="form-grid" onSubmit={submit}>
+        <label className="span-all">Employee
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+            <option value="">— Select employee —</option>
+            {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeCode})</option>)}
+          </select>
+        </label>
+        <label>Date<input type="date" value={attendanceDate} onChange={(e) => setAttendanceDate(e.target.value)} required /></label>
+        <label>Status
+          <select value={status} onChange={(e) => setStatus(e.target.value)}>
+            <option value="PRESENT">Present</option>
+            <option value="HALF_DAY">Half day</option>
+            <option value="ABSENT">Absent</option>
+          </select>
+        </label>
+        <label>Check in<input type="time" value={checkInAt} onChange={(e) => setCheckInAt(e.target.value)} /></label>
+        <label>Check out<input type="time" value={checkOutAt} onChange={(e) => setCheckOutAt(e.target.value)} /></label>
+        <label className="span-all">Note<input value={note} onChange={(e) => setNote(e.target.value)} placeholder="optional" /></label>
+        {error && <div className="error-box span-all">{error}</div>}
+      </form>
+    </Modal>
   );
 }

@@ -26,11 +26,17 @@ export type ModuleKey =
   | 'employees'
   | 'employeeImport'
   | 'attendance'
+  | 'attendanceRequests'
   | 'holidays'
   | 'leave'
   | 'payroll'
   | 'salaryAdvances'
   | 'hrPolicy'
+  | 'orgChart'
+  | 'shifts'
+  | 'exit'
+  | 'announcements'
+  | 'hrPolicyLibrary'
   | 'masters'
   | 'reports'
   | 'employeeLoans'
@@ -90,12 +96,19 @@ export const MODULES: ModuleDef[] = [
   // Human Resources — the HR module is restricted to the HR role (and Super
   // Admin, who wildcards through below). This mirrors HR_MODULE_ROLES on the
   // backend; widening access here without widening it there yields 403s.
-  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'employeeImport', to: '/employees/import', label: 'Import Employees', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
-  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
-  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'orgChart', to: '/hr/hierarchy', label: 'Org Chart', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'attendanceRequests', to: '/hr/attendance-requests', label: 'Attendance Requests', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'shifts', to: '/hr/shifts', label: 'Shifts', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
-  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'HR Policy', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  { key: 'exit', to: '/hr/exit', label: 'Exit Management', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'Attendance & Payroll Rules', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  // Company-wide info published by HR — everyone with admin-panel access sees these.
+  { key: 'announcements', to: '/announcements', label: 'Announcements', roles: ALL_ROLES, group: 'hr' },
+  { key: 'hrPolicyLibrary', to: '/hr-policies', label: 'HR Policies', roles: ALL_ROLES, group: 'hr' },
 
   // Payroll & Finance — staff payroll, also HR-only.
   { key: 'payroll', to: '/payroll', label: 'Payroll', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'finance' },
@@ -155,6 +168,14 @@ export const ACTION_ROLES = {
   'holiday:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'leave:accrue': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'salaryAdvance:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // ── HRJee HR-module actions. HR (+ Super Admin) only — Branch Managers hold
+  // the modules for VIEW but never these write/approve actions (read-only).
+  'shift:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'attendance:approve': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'hierarchy:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'exit:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'announcement:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  'hrPolicy:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   // Also gates the HR Policy screen (attendance rules + payroll rates).
   'master:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'document:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],

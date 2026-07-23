@@ -1,4 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useState } from 'react';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { FormEvent } from 'react';
 import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -6,12 +8,16 @@ import { PageHeader } from '../../components/PageHeader';
 import { Card, StatCard } from '../../components/Card';
 import { Tabs, TabDef } from '../../components/Tabs';
 import { Badge } from '../../components/Badge';
+import { Modal } from '../../components/Modal';
 import { Skeleton } from '../../components/Skeleton';
-import { AlertCircle, Banknote, HandCoins, ListChecks, Pencil, Users } from '../../components/icons';
-import { inr, fmtDate } from '../../lib/format';
+import { AlertCircle, Banknote, HandCoins, ListChecks, Pencil, UserCheck, Users } from '../../components/icons';
+import { apiMessage, inr, fmtDate } from '../../lib/format';
+import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { BranchDashboard, BranchDetail } from './shared';
+
+interface EmployeeOption { id: string; fullName: string; employeeCode: string }
 
 interface StaffRow {
   id: string; employeeCode: string; fullName: string; designation: string; employmentStatus: string; joiningDate: string;
@@ -25,6 +31,7 @@ export default function BranchDetailPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const canUpdate = can(user?.role, 'branch:update');
+  const [assignManager, setAssignManager] = useState(false);
 
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as TabKey) || 'overview';
@@ -87,7 +94,16 @@ export default function BranchDetailPage() {
                   <div><dt>Address</dt><dd>{branch.addressLine ?? '—'}</dd></div>
                   <div><dt>City</dt><dd>{branch.city}</dd></div>
                   <div><dt>State</dt><dd>{branch.state}</dd></div>
-                  <div><dt>Manager</dt><dd>{branch.manager?.fullName ?? '—'}</dd></div>
+                  <div>
+                    <dt>Manager</dt>
+                    <dd>
+                      {branch.manager?.fullName ?? '—'}
+                      {canUpdate && !branch.reportsToSuperAdmin && (
+                        <button className="ghost sm" style={{ marginLeft: 8 }} onClick={() => setAssignManager(true)}><UserCheck size={13} /> Change</button>
+                      )}
+                      {branch.reportsToSuperAdmin && <span className="muted sm-text"> · reports to Super Admin</span>}
+                    </dd>
+                  </div>
                   <div><dt>Status</dt><dd><Badge status={branch.status} /></dd></div>
                 </dl>
               </Card>
@@ -129,6 +145,58 @@ export default function BranchDetailPage() {
           )}
         </>
       )}
+
+      {assignManager && branch && (
+        <AssignBranchManagerModal branchId={id} current={branch.manager?.fullName ?? null} onClose={() => setAssignManager(false)} />
+      )}
     </>
+  );
+}
+
+// ── Assign / change branch manager (HRJee hierarchy) ────────────────────────
+function AssignBranchManagerModal({ branchId, current, onClose }: { branchId: string; current: string | null; onClose: () => void }) {
+  const qc = useQueryClient();
+  const toast = useToast();
+  const [employeeId, setEmployeeId] = useState('');
+  const [error, setError] = useState('');
+
+  const employeesQuery = useQuery({
+    queryKey: ['/employees', 'branch-manager', branchId],
+    queryFn: () => api.get(`/employees?branchId=${branchId}&pageSize=200&sortBy=fullName&sortOrder=asc`).then((r) => r.data.data as EmployeeOption[]),
+  });
+
+  const save = useMutation({
+    mutationFn: () => api.patch(`/branches/${branchId}/manager`, { employeeId: employeeId || null }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/branches', branchId] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/hierarchy/tree'] });
+      toast.success('Branch manager updated.');
+      onClose();
+    },
+    onError: (err) => setError(apiMessage(err, 'Could not update the manager.')),
+  });
+
+  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
+
+  return (
+    <Modal
+      size="md" onClose={onClose} icon={<UserCheck size={20} />}
+      title="Branch manager"
+      subtitle={current ? `Current: ${current}` : 'No manager assigned'}
+      footer={<>
+        <button type="button" className="ghost" onClick={onClose}>Cancel</button>
+        <button type="submit" form="assign-bm-form" disabled={save.isPending}>{save.isPending ? 'Saving…' : 'Save'}</button>
+      </>}
+    >
+      <form id="assign-bm-form" className="form-grid" onSubmit={submit}>
+        <label className="span-all">Manager (must be posted to this branch)
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)}>
+            <option value="">— None (clear manager) —</option>
+            {employeesQuery.data?.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeCode})</option>)}
+          </select>
+        </label>
+        {error && <div className="error-box span-all">{error}</div>}
+      </form>
+    </Modal>
   );
 }

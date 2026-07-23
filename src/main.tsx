@@ -40,6 +40,12 @@ import PayrollRunPage from './modules/hr/PayrollRunPage';
 import PayrollRunDetailPage from './modules/hr/PayrollRunDetailPage';
 import SalarySlipPage from './modules/hr/SalarySlipPage';
 import SalaryAdvancesPage from './modules/hr/SalaryAdvancesPage';
+import OrgChartPage from './modules/hr/OrgChartPage';
+import ShiftsPage from './modules/hr/ShiftsPage';
+import AttendanceRequestsPage from './modules/hr/AttendanceRequestsPage';
+import ExitPage from './modules/hr/ExitPage';
+import AnnouncementsPage from './modules/hr/AnnouncementsPage';
+import HrPolicyLibraryPage from './modules/hr/HrPolicyLibraryPage';
 import MastersPage from './modules/masters/MastersPage';
 import MasterResourcePage from './modules/masters/MasterResourcePage';
 import UsersPage from './modules/users/UsersPage';
@@ -145,6 +151,13 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="payroll/slip/:id" element={<RequireModule module="payroll"><SalarySlipPage /></RequireModule>} />
                 <Route path="payroll/:runId" element={<RequireModule module="payroll"><PayrollRunDetailPage /></RequireModule>} />
                 <Route path="salary-advances" element={<RequireModule module="salaryAdvances"><SalaryAdvancesPage /></RequireModule>} />
+                {/* HRJee HR-module screens */}
+                <Route path="hr/hierarchy" element={<RequireModule module="orgChart"><OrgChartPage /></RequireModule>} />
+                <Route path="hr/shifts" element={<RequireModule module="shifts"><ShiftsPage /></RequireModule>} />
+                <Route path="hr/attendance-requests" element={<RequireModule module="attendanceRequests"><AttendanceRequestsPage /></RequireModule>} />
+                <Route path="hr/exit" element={<RequireModule module="exit"><ExitPage /></RequireModule>} />
+                <Route path="announcements" element={<RequireModule module="announcements"><AnnouncementsPage /></RequireModule>} />
+                <Route path="hr-policies" element={<RequireModule module="hrPolicyLibrary"><HrPolicyLibraryPage /></RequireModule>} />
                 <Route path="masters" element={<RequireModule module="masters"><MastersPage /></RequireModule>} />
                 <Route path="masters/:resource" element={<RequireModule module="masters"><MasterResourcePage /></RequireModule>} />
                 <Route path="users" element={<RequireModule module="users"><UsersPage /></RequireModule>} />

@@ -81,6 +81,14 @@ const emptySalary = {
 };
 type SalaryForm = typeof emptySalary;
 
+interface SalaryHistoryRow {
+  id: string;
+  grossSalary: string;
+  effectiveFrom: string;
+  effectiveTo: string | null;
+  createdAt: string;
+}
+
 type TabKey = 'overview' | 'documents' | 'salary' | 'leave' | 'account' | 'roles';
 
 /** Employee — Details. Tabbed profile page (replaces the detail modal). */
@@ -117,6 +125,11 @@ export default function EmployeeDetailPage() {
   // ── Salary revise ──
   const [salaryForm, setSalaryForm] = useState<SalaryForm>(emptySalary);
   const [salaryError, setSalaryError] = useState('');
+  const salaryHistoryQuery = useQuery({
+    queryKey: [`/employees/${id}/salary/history`],
+    queryFn: () => api.get(`/employees/${id}/salary/history`).then((r) => r.data.data as SalaryHistoryRow[]),
+    enabled: tab === 'salary',
+  });
   useEffect(() => {
     const s = detail?.salaryStructure;
     if (!s) { setSalaryForm(emptySalary); return; }
@@ -476,6 +489,22 @@ export default function EmployeeDetailPage() {
                     <div><dt>Effective from</dt><dd>{fmtDate(salary.effectiveFrom)}</dd></div>
                   </dl>
                 ) : <p className="muted">No salary structure on record.{canManage ? ' Use the form to create one.' : ''}</p>}
+              </Card>
+              <Card title="Revision history">
+                {salaryHistoryQuery.isLoading ? (
+                  <p className="muted">Loading…</p>
+                ) : !salaryHistoryQuery.data?.length ? (
+                  <p className="muted">No prior revisions — the current structure is the first on record.</p>
+                ) : (
+                  <dl className="detail-list one-col">
+                    {salaryHistoryQuery.data.map((h) => (
+                      <div key={h.id}>
+                        <dt>{fmtDate(h.effectiveFrom)} → {h.effectiveTo ? fmtDate(h.effectiveTo) : 'current'}</dt>
+                        <dd className="num">{inr(h.grossSalary)}</dd>
+                      </div>
+                    ))}
+                  </dl>
+                )}
               </Card>
               {salary && breakdown && (
                 <Card title="Monthly salary calculation">
