@@ -28,6 +28,9 @@ export default function CollectionSettlementPage() {
   const { user } = useAuth();
   const [tab, setTab] = useState<Tab>('report');
   const allowed = canAccessModule(user?.role, 'collectionSettlement');
+  // Branch-scoped users (branch managers) only ever see their own branch — the
+  // backend pins the query, so the branch/region pickers are hidden below.
+  const branchScoped = !!user?.branchId;
 
   if (!allowed) return <p className="muted">You do not have permission to view settlement data.</p>;
 
@@ -36,7 +39,7 @@ export default function CollectionSettlementPage() {
       <PageHeader
         breadcrumb={[{ label: 'Operations' }, { label: 'Collections', to: '/collections' }, { label: 'Branch Closing Report' }]}
         title="Branch Closing Report"
-        subtitle="Per-branch cash book — opening, collection, hospicash, bank deposits (AXIS/SBI/HDFC) and closing balance — generated automatically, not entered by hand."
+        subtitle={`${branchScoped ? `Cash book for ${user?.branch?.name ?? 'your branch'}` : 'Per-branch cash book'} — opening, collection, hospicash, bank deposits (AXIS/SBI/HDFC) and closing balance — generated automatically, not entered by hand.`}
       />
 
       <div className="tabs" style={{ marginBottom: 16 }}>
@@ -44,7 +47,7 @@ export default function CollectionSettlementPage() {
         <button type="button" className={`tab ${tab === 'fieldofficer' ? 'active' : ''}`} onClick={() => setTab('fieldofficer')}>Field-officer settlements</button>
       </div>
 
-      {tab === 'report' ? <ImportedBranchReport /> : <FieldOfficerReport />}
+      {tab === 'report' ? <ImportedBranchReport branchScoped={branchScoped} /> : <FieldOfficerReport branchScoped={branchScoped} />}
     </>
   );
 }
@@ -123,7 +126,7 @@ function settlementParams(f: SettleFilters, search: string, paging = true): URLS
   return p;
 }
 
-function ImportedBranchReport() {
+function ImportedBranchReport({ branchScoped }: { branchScoped: boolean }) {
   const toast = useToast();
   // Filters apply live — every change refetches immediately, no "Apply" step.
   // Only the free-text search is debounced (below) so typing doesn't fire a
@@ -191,8 +194,9 @@ function ImportedBranchReport() {
 
   type Row = SettlementRow & { _total?: boolean };
   // Totals row summed from the loaded per-branch rows (all rows are loaded).
+  // Pointless for a branch-scoped user — it would just repeat their only row.
   const num = (v: string | number) => Number(v);
-  const totalRow: Row | null = hasData
+  const totalRow: Row | null = hasData && !branchScoped
     ? {
         id: '__all__', _total: true, statementDate: filters.date, branchName: 'ALL BRANCHES', isTotal: true, branch: null,
         managerName: null, region: null, updatedAt: '',
@@ -236,7 +240,7 @@ function ImportedBranchReport() {
   return (
     <>
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <StatCard label="Branches settled" value={hasData ? String(rows.length) : '—'} />
+        {!branchScoped && <StatCard label="Branches settled" value={hasData ? String(rows.length) : '—'} />}
         <StatCard label="Total collection" value={t ? inr(t.totalCollection as number) : '—'} />
         <StatCard label="Total deposit" value={t ? inr(t.totalDeposit as number) : '—'} />
         <StatCard label="Total closing" value={t ? inr(t.closingBalance as number) : '—'} />
@@ -248,16 +252,20 @@ function ImportedBranchReport() {
           <label>Statement date
             <input type="date" value={filters.date} onChange={(e) => setF({ date: e.target.value })} />
           </label>
-          <label>Region
-            <select value={filters.region} onChange={(e) => setF({ region: e.target.value, branchIds: [] })}>
-              <option value="">All regions</option>
-              {(facets?.regions ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
-            </select>
-          </label>
-          <div className="adv-field">
-            <span>Branch</span>
-            <MultiSelect options={branchOptions} selected={filters.branchIds} onChange={(ids) => setF({ branchIds: ids })} allLabel="All branches" noun="branch" />
-          </div>
+          {!branchScoped && (
+            <>
+              <label>Region
+                <select value={filters.region} onChange={(e) => setF({ region: e.target.value, branchIds: [] })}>
+                  <option value="">All regions</option>
+                  {(facets?.regions ?? []).map((r) => <option key={r} value={r}>{r}</option>)}
+                </select>
+              </label>
+              <div className="adv-field">
+                <span>Branch</span>
+                <MultiSelect options={branchOptions} selected={filters.branchIds} onChange={(ids) => setF({ branchIds: ids })} allLabel="All branches" noun="branch" />
+              </div>
+            </>
+          )}
           <div className="adv-field">
             <span>Status</span>
             <MultiSelect options={STATUS_OPTIONS} selected={filters.statuses} onChange={(ids) => setF({ statuses: ids })} allLabel="All statuses" noun="status" />
@@ -298,7 +306,7 @@ function ImportedBranchReport() {
 
 // ── Branch Closing Report from approved field-officer settlements ─────────────
 
-function FieldOfficerReport() {
+function FieldOfficerReport({ branchScoped }: { branchScoped: boolean }) {
   const iso = (d: Date) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
   const [from, setFrom] = useState(iso(new Date()));
   const [to, setTo] = useState(iso(new Date()));
@@ -317,7 +325,9 @@ function FieldOfficerReport() {
   const t = query.data?.totals;
 
   type Row = BranchClosingRow & { id: string };
-  const displayRows: Row[] = t && rows.length > 0
+  // The "All branches" roll-up would just repeat the single row a branch-scoped
+  // user sees, so it is dropped for them.
+  const displayRows: Row[] = t && rows.length > 0 && !branchScoped
     ? [...rows.map((r) => ({ ...r, id: r.branchId ?? r.branchName })), { branchId: null, branchName: 'All branches', ...t, id: '__all__' }]
     : rows.map((r) => ({ ...r, id: r.branchId ?? r.branchName }));
 
