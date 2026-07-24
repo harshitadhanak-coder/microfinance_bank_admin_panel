@@ -16,6 +16,16 @@ import { can } from '../auth/permissions';
 
 const PRIORITIES = ['LOW', 'NORMAL', 'HIGH', 'URGENT'] as const;
 
+/**
+ * Targeting is a restriction — "only these branches / departments / roles" —
+ * and an empty list means no restriction at all. Ticking every option reads as
+ * "everyone", so send it as the empty list: otherwise an announcement aimed at
+ * the whole company silently misses anyone who has no department (or branch, or
+ * role) recorded against them.
+ */
+const targetIds = (selected: string[], options: { id: string }[]): string[] =>
+  options.length > 0 && selected.length === options.length ? [] : selected;
+
 interface Announcement {
   id: string;
   title: string;
@@ -30,7 +40,10 @@ interface Announcement {
   branches?: { branchId: string }[];
   departments?: { departmentId: string }[];
   roles?: { roleId: string }[];
+  audience?: Audience;
 }
+/** How many active users the targeting resolves to, out of the whole headcount. */
+interface Audience { matched: number; total: number; isEveryone: boolean }
 interface Opt { id: string; name: string }
 
 export default function AnnouncementsPage() {
@@ -65,6 +78,18 @@ function ViewerFeed() {
   );
 }
 
+/**
+ * Who an announcement actually reaches. Targeting that matches nobody is the
+ * one outcome that looks identical to success everywhere else — the row says
+ * "Published", the API returns 200 — so it is called out here in full.
+ */
+function AudienceLabel({ audience }: { audience?: Audience }) {
+  if (!audience) return <span className="muted">—</span>;
+  if (audience.isEveryone) return <>Everyone <span className="muted sm-text">({audience.total})</span></>;
+  if (audience.matched === 0) return <Badge status="REJECTED">Reaches nobody</Badge>;
+  return <>{audience.matched} <span className="muted sm-text">of {audience.total}</span></>;
+}
+
 // ── Management (HR) ──
 function ManageView() {
   const qc = useQueryClient();
@@ -87,6 +112,7 @@ function ManageView() {
     { header: 'Title', render: (a) => <><strong>{a.title}</strong>{a.isPinned && <span className="pill pill-info"> Pinned</span>}</>, sortValue: (a) => a.title },
     { header: 'Priority', render: (a) => <Badge status={a.priority === 'URGENT' || a.priority === 'HIGH' ? 'REJECTED' : 'INFO'}>{titleCase(a.priority)}</Badge>, sortValue: (a) => a.priority },
     { header: 'Status', render: (a) => <Badge status={a.isPublished ? 'APPROVED' : 'PENDING'}>{a.isPublished ? 'Published' : 'Draft'}</Badge>, sortValue: (a) => String(a.isPublished) },
+    { header: 'Audience', render: (a) => <AudienceLabel audience={a.audience} />, sortValue: (a) => a.audience?.matched ?? 0 },
     { header: 'Publish', render: (a) => a.publishAt ? fmtDate(a.publishAt) : '—' },
     { header: 'Expires', render: (a) => a.expiresAt ? fmtDate(a.expiresAt) : '—' },
     {
@@ -139,9 +165,29 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
   const departments = useQuery({ queryKey: ['/masters/departments', 'ann'], queryFn: () => api.get('/masters/departments').then((r) => (r.data.data as { id: string; name: string }[]).map((d) => ({ id: d.id, name: d.name }))) });
   const roles = useQuery({ queryKey: ['/roles/options', 'ann'], queryFn: () => api.get('/roles/options').then((r) => (r.data.data as { id: string; displayName?: string; name: string }[]).map((x) => ({ id: x.id, name: x.displayName ?? x.name }))) });
 
+  // Resolved targeting — what will actually be saved, and what the audience
+  // preview is asked about, so the two can never disagree.
+  const target = {
+    branchIds: targetIds(branchIds, branches.data ?? []),
+    departmentIds: targetIds(departmentIds, departments.data ?? []),
+    roleIds: targetIds(roleIds, roles.data ?? []),
+  };
+  const audience = useQuery({
+    queryKey: ['/human-resources/announcements/audience', target],
+    queryFn: () => api.post('/human-resources/announcements/audience', target).then((r) => r.data.data as Audience),
+  });
+
   const save = useMutation({
     mutationFn: async () => {
-      const bodyData = { title: title.trim(), body: body.trim(), priority, isPinned, ...(publishAt ? { publishAt } : {}), ...(expiresAt ? { expiresAt } : {}), branchIds, departmentIds, roleIds };
+      const bodyData = {
+        title: title.trim(),
+        body: body.trim(),
+        priority,
+        isPinned,
+        ...(publishAt ? { publishAt } : {}),
+        ...(expiresAt ? { expiresAt } : {}),
+        ...target,
+      };
       const res = isEdit
         ? await api.patch(`/human-resources/announcements/${announcement!.id}`, bodyData)
         : await api.post('/human-resources/announcements', bodyData);
@@ -174,6 +220,26 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
         <label className="span-all">Target branches<MultiSelect options={branches.data ?? []} selected={branchIds} onChange={setBranchIds} allLabel="All branches" noun="branch" /></label>
         <label className="span-all">Target departments<MultiSelect options={departments.data ?? []} selected={departmentIds} onChange={setDepartmentIds} allLabel="All departments" noun="department" /></label>
         <label className="span-all">Target roles<MultiSelect options={roles.data ?? []} selected={roleIds} onChange={setRoleIds} allLabel="All roles" noun="role" /></label>
+        {/* Targeting narrows across dimensions and an employee only matches a
+            dimension they have a value for, so a plausible-looking selection can
+            resolve to nobody. Say so here, while it can still be changed. */}
+        <div className="span-all">
+          {audience.data?.matched === 0 ? (
+            <div className="error-box">
+              This targeting reaches <strong>nobody</strong> — the announcement would be published but seen by no one.
+              Employees only match a target they have on record, and no employee currently has a department set,
+              so any department target excludes everyone. Clear the targeting to reach all {audience.data.total} staff.
+            </div>
+          ) : (
+            <p className="muted sm-text">
+              {audience.isLoading || !audience.data
+                ? 'Working out who this reaches…'
+                : audience.data.isEveryone
+                  ? `Reaches everyone — all ${audience.data.total} active staff.`
+                  : `Reaches ${audience.data.matched} of ${audience.data.total} active staff.`}
+            </p>
+          )}
+        </div>
         <label className="span-all">Attachment (optional)<input type="file" accept="application/pdf,image/png,image/jpeg" onChange={(e) => setFile(e.target.files?.[0] ?? null)} /></label>
         {error && <div className="error-box span-all">{error}</div>}
       </form>
