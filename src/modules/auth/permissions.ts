@@ -98,7 +98,10 @@ export const MODULES: ModuleDef[] = [
   // backend; widening access here without widening it there yields 403s.
   { key: 'employees', to: '/employees', label: 'Employees', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'employeeImport', to: '/employees/import', label: 'Import Employees', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
-  { key: 'orgChart', to: '/hr/hierarchy', label: 'Org Chart', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
+  // Org Chart is deliberately kept out of the sidebar — reporting lines are set
+  // from the employee record and the branch page, so the tree is a read-only
+  // view reached by URL (/hr/hierarchy) rather than a menu destination.
+  { key: 'orgChart', to: '/hr/hierarchy', label: 'Org Chart', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr', hidden: true },
   { key: 'attendance', to: '/attendance', label: 'Attendance', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'attendanceRequests', to: '/hr/attendance-requests', label: 'Attendance Requests', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'shifts', to: '/hr/shifts', label: 'Shifts', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
