@@ -4,22 +4,26 @@ import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
 import { Modal, ConfirmDialog } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
-import { Card } from '../../components/Card';
+import { Card, StatCard } from '../../components/Card';
 import { Tabs, TabDef } from '../../components/Tabs';
 import { Badge } from '../../components/Badge';
-import { Form, FormGrid, Field, FormActions } from '../../components/Form';
+import { Drawer } from '../../components/Drawer';
+import { Form, FormGrid, Field } from '../../components/Form';
 import { EmptyState } from '../../components/EmptyState';
 import { Skeleton } from '../../components/Skeleton';
 import { useToast } from '../../components/Toast';
-import { Loader, Plus, Upload, Trash2, Lock, Pencil, Briefcase } from '../../components/icons';
-import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
+import { Loader, Plus, Upload, Trash2, Lock, Pencil, Briefcase, Wallet } from '../../components/icons';
+import { inr, fmtDate, titleCase, apiMessage, isoLocalDate } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import EmployeeRolesTab from '../roles/EmployeeRolesTab';
 import { type EmployeeRoleAssignment } from '../roles/shared';
 import { AccessSummary } from './AccessSummary';
+import { InlineEditField, type InlineOption } from './InlineEditField';
+import EmployeeSalaryAdvances from './EmployeeSalaryAdvances';
+import EmployeeShiftTab from './EmployeeShiftTab';
 import {
-  SALARY_COMPONENTS, DOCUMENT_CATEGORIES, isExpiringSoon,
+  SALARY_COMPONENTS, DOCUMENT_CATEGORIES, isExpiringSoon, useEmployeeMasters,
 } from './shared';
 
 // ── Shapes ──
@@ -89,7 +93,18 @@ interface SalaryHistoryRow {
   createdAt: string;
 }
 
-type TabKey = 'overview' | 'documents' | 'salary' | 'leave' | 'account' | 'roles';
+type TabKey = 'overview' | 'documents' | 'salary' | 'shift' | 'leave' | 'account' | 'roles';
+
+// Fixed option lists + draft normalisers for the Overview inline editors.
+const GENDER_OPTIONS: InlineOption[] = [
+  { value: 'MALE', label: 'Male' }, { value: 'FEMALE', label: 'Female' }, { value: 'OTHER', label: 'Other' },
+];
+const MARITAL_OPTIONS: InlineOption[] = [
+  { value: 'SINGLE', label: 'Single' }, { value: 'MARRIED', label: 'Married' }, { value: 'OTHER', label: 'Other' },
+];
+const upperCase = (value: string) => value.toUpperCase();
+const digitsOnly = (value: string) => value.replace(/\D+/g, '');
+const dateInput = (value?: string | null) => (value ? value.slice(0, 10) : '');
 
 /** Employee — Details. Tabbed profile page (replaces the detail modal). */
 export default function EmployeeDetailPage() {
@@ -102,6 +117,10 @@ export default function EmployeeDetailPage() {
   const canRoles = can(user?.role, 'role:assign');
   const canDocs = can(user?.role, 'document:manage');
   const canAccount = can(user?.role, 'account:manage');
+  const canManageAdvances = can(user?.role, 'salaryAdvance:manage');
+  // Designation / role option lists for the inline access editor (HR / Super
+  // Admin only). Shared query keys, so this reuses the Edit page's cache.
+  const masters = useEmployeeMasters(canManage);
 
   const [params, setParams] = useSearchParams();
   const tab = (params.get('tab') as TabKey) || 'overview';
@@ -122,9 +141,57 @@ export default function EmployeeDetailPage() {
     ? directoryQuery.data?.find((e) => e.id === detail.reportsToId)?.fullName ?? '…'
     : '—';
 
+  // ── Inline access edit (designation / role) from the summary cards. Portal is
+  // derived from the role, so changing the role is what moves the portal.
+  const updateAccess = useMutation({
+    mutationFn: (patch: { designationId?: string; roleId?: string }) => api.patch(`/employees/${id}`, patch),
+    onSuccess: (_res, patch) => {
+      qc.invalidateQueries({ queryKey: ['/employees', id] });
+      qc.invalidateQueries({ queryKey: ['/employees'] });
+      toast.success(patch.roleId !== undefined ? 'Role updated.' : 'Designation updated.');
+    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not save the change.')),
+  });
+
+  // ── Inline profile edits (Overview tab) ──
+  // Each Personal-details / Branch field saves on its own via PATCH
+  // /employees/:id. The two fields that carry extra rules skip the generic patch
+  // and use their dedicated endpoints: reporting manager (self / cycle check) and
+  // shift (assignment history + employee notification).
+  const saveField = useMutation({
+    mutationFn: (patch: Record<string, unknown>) => api.patch(`/employees/${id}`, patch),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/employees', id] });
+      qc.invalidateQueries({ queryKey: ['/employees'] });
+      toast.success('Saved.');
+    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not save the change.')),
+  });
+  const patchField = (field: string) => (value: string) => saveField.mutateAsync({ [field]: value });
+
+  const assignManager = useMutation({
+    mutationFn: (managerId: string) => api.patch(`/employees/${id}/reporting-manager`, { managerId }),
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['/employees', id] }); toast.success('Reporting manager updated.'); },
+    onError: (err) => toast.error(apiMessage(err, 'Could not update the reporting manager.')),
+  });
+
+  const assignShift = useMutation({
+    mutationFn: (shiftId: string) => api.post(`/human-resources/shifts/${shiftId}/assign`, { employeeIds: [id] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/employees', id] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assignments', id] });
+      toast.success('Shift assigned.');
+    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not assign the shift.')),
+  });
+
   // ── Salary revise ──
+  // The structure is shown read-only on the tab; editing happens in a slide-over
+  // drawer so the page stays a clean summary instead of a permanently-open form
+  // that duplicates the current values.
   const [salaryForm, setSalaryForm] = useState<SalaryForm>(emptySalary);
   const [salaryError, setSalaryError] = useState('');
+  const [reviseOpen, setReviseOpen] = useState(false);
   const salaryHistoryQuery = useQuery({
     queryKey: [`/employees/${id}/salary/history`],
     queryFn: () => api.get(`/employees/${id}/salary/history`).then((r) => r.data.data as SalaryHistoryRow[]),
@@ -161,6 +228,7 @@ export default function EmployeeDetailPage() {
       qc.invalidateQueries({ queryKey: ['/employees', id] });
       qc.invalidateQueries({ queryKey: ['/employees'] });
       setSalaryError('');
+      setReviseOpen(false);
       toast.success('Salary structure revised.');
     },
     onError: (err) => setSalaryError(apiMessage(err, 'Could not revise the salary structure.')),
@@ -169,6 +237,13 @@ export default function EmployeeDetailPage() {
     e.preventDefault(); setSalaryError('');
     if (!salaryForm.effectiveFrom) { setSalaryError('An effective-from date is required.'); return; }
     reviseSalary.mutate();
+  };
+  // Open the revise drawer; seed a new structure's effective-from to today so the
+  // required field isn't blank on first setup (an existing one keeps its date).
+  const openRevise = () => {
+    setSalaryError('');
+    setSalaryForm((f) => (f.effectiveFrom ? f : { ...f, effectiveFrom: isoLocalDate(new Date()) }));
+    setReviseOpen(true);
   };
 
   // ── Leave ──
@@ -325,11 +400,21 @@ export default function EmployeeDetailPage() {
   const breakdown = detail?.salaryBreakdown;
   const salaryGross = salary ? SALARY_COMPONENTS.reduce((sum, c) => sum + (Number(salary[c.key]) || 0), 0) : 0;
 
+  // Option lists for the inline select editors, from the shared masters fetch.
+  const departmentOptions = masters.departments.map((d) => ({ value: d.id, label: `${d.name} (${d.code})` }));
+  const gradeOptions = masters.grades.map((g) => ({ value: g.id, label: `${g.name} (${g.code})` }));
+  const employmentTypeOptions = masters.employmentTypes.map((t) => ({ value: t.id, label: `${t.name} (${t.code})` }));
+  const shiftOptions = masters.shifts.map((s) => ({ value: s.id, label: `${s.name} (${s.code})` }));
+  const branchOptions = masters.branches.map((b) => ({ value: b.id, label: `${b.name} (${b.code})` }));
+  // A person can't report to themselves — drop the current employee.
+  const managerOptions = masters.managers.filter((m) => m.id !== id).map((m) => ({ value: m.id, label: m.fullName }));
+
   const tabs: TabDef[] = [
     { key: 'overview', label: 'Overview' },
     { key: 'documents', label: 'Documents' },
     { key: 'salary', label: 'Salary' },
     ...(canManage ? [{ key: 'leave', label: 'Leave' }] : []),
+    ...(canManage ? [{ key: 'shift', label: 'Shift' }] : []),
     ...(canManage ? [{ key: 'account', label: 'Account & Access' }] : []),
     ...(canRoles ? [{ key: 'roles', label: 'Roles' }] : []),
   ];
@@ -362,56 +447,113 @@ export default function EmployeeDetailPage() {
             role={detail.role}
             inheritedRoleName={account?.role ?? null}
             additionalRoles={activeExtraRoles}
+            canEdit={canManage}
+            designationId={detail.designationRef?.id ?? null}
+            roleId={detail.role?.id ?? null}
+            designationOptions={masters.designations}
+            roleOptions={masters.roles}
+            onSave={(patch) => updateAccess.mutateAsync(patch)}
+            saving={updateAccess.isPending}
           />
 
           {tab === 'overview' && (
             <div className="detail-cols">
-              <Card title="Personal details">
+              <Card
+                title="Personal details"
+                action={canManage && <span className="muted sm-text">Double-click a value to edit</span>}
+              >
                 <dl className="detail-list">
                   <div><dt>Employee code</dt><dd><code>{detail.employeeCode}</code></dd></div>
                   {/* Designation and role deliberately live only in the summary
                       above — repeating them here is what made the two read as
                       interchangeable. */}
-                  <div><dt>Department</dt><dd>{detail.departmentRef?.name ?? detail.department ?? '—'}</dd></div>
-                  <div><dt>Grade</dt><dd>{detail.grade?.name ?? '—'}</dd></div>
-                  <div><dt>Reporting manager</dt><dd>{reportsToName}</dd></div>
-                  <div><dt>Employment type</dt><dd>{detail.employmentTypeRef?.name ?? (detail.employeeType ? titleCase(detail.employeeType) : '—')}</dd></div>
-                  <div><dt>Shift</dt><dd>{detail.shift?.name ?? '—'}</dd></div>
-                  <div><dt>Phone</dt><dd>{detail.phoneNumber}</dd></div>
-                  <div><dt>Email</dt><dd>{detail.email ?? '—'}</dd></div>
-                  <div><dt>Date of birth</dt><dd>{fmtDate(detail.dateOfBirth)}</dd></div>
-                  <div><dt>Gender</dt><dd>{detail.gender ? titleCase(detail.gender) : '—'}</dd></div>
-                  <div><dt>Marital status</dt><dd>{detail.maritalStatus ? titleCase(detail.maritalStatus) : '—'}</dd></div>
-                  <div><dt>Joining date</dt><dd>{fmtDate(detail.joiningDate)}</dd></div>
-                  <div><dt>Confirmation date</dt><dd>{fmtDate(detail.confirmationDate)}</dd></div>
-                  <div><dt>Address</dt><dd>{detail.addressLine ?? '—'}</dd></div>
-                  <div><dt>Emergency contact</dt><dd>{detail.emergencyContactName
-                    ? `${detail.emergencyContactName}${detail.emergencyContactRelation ? ` (${detail.emergencyContactRelation})` : ''}${detail.emergencyContactPhone ? ` · ${detail.emergencyContactPhone}` : ''}`
-                    : '—'}</dd></div>
-                  <div><dt>Aadhaar</dt><dd>{detail.aadhaarNumber ?? '—'}</dd></div>
-                  <div><dt>PAN</dt><dd>{detail.panNumber ?? detail.panMasked ?? '—'}</dd></div>
-                  <div><dt>UAN</dt><dd>{detail.uanNumber ?? '—'}</dd></div>
-                  <div><dt>PF number</dt><dd>{detail.providentFundNumber ?? '—'}</dd></div>
-                  <div><dt>ESI number</dt><dd>{detail.stateInsuranceNumber ?? '—'}</dd></div>
-                  <div><dt>Bank name</dt><dd>{detail.bankName ?? '—'}</dd></div>
-                  <div><dt>Bank account</dt><dd>{detail.bankAccountNumber ?? detail.bankAccountMasked ?? '—'}</dd></div>
-                  <div><dt>Account holder</dt><dd>{detail.bankAccountHolderName ?? '—'}</dd></div>
-                  <div><dt>IFSC</dt><dd>{detail.bankIfscCode ?? '—'}</dd></div>
+                  <InlineEditField label="Department" kind="select" options={departmentOptions}
+                    value={detail.departmentRef?.id ?? ''} display={detail.departmentRef?.name ?? detail.department ?? '—'}
+                    canEdit={canManage} onSave={patchField('departmentId')} />
+                  <InlineEditField label="Grade" kind="select" options={gradeOptions}
+                    value={detail.grade?.id ?? ''} display={detail.grade?.name ?? '—'}
+                    canEdit={canManage} onSave={patchField('gradeId')} />
+                  <InlineEditField label="Reporting manager" kind="select" options={managerOptions}
+                    value={detail.reportsToId ?? ''} display={reportsToName}
+                    canEdit={canManage} onSave={(v) => assignManager.mutateAsync(v)} />
+                  <InlineEditField label="Employment type" kind="select" options={employmentTypeOptions}
+                    value={detail.employmentTypeRef?.id ?? ''}
+                    display={detail.employmentTypeRef?.name ?? (detail.employeeType ? titleCase(detail.employeeType) : '—')}
+                    canEdit={canManage} onSave={patchField('employmentTypeId')} />
+                  <InlineEditField label="Shift" kind="select" options={shiftOptions}
+                    value={detail.shift?.id ?? ''} display={detail.shift?.name ?? '—'}
+                    hint="Assigned effective today; use the Shift tab to back-date."
+                    canEdit={canManage} onSave={(v) => assignShift.mutateAsync(v)} />
+                  <InlineEditField label="Phone" value={detail.phoneNumber}
+                    canEdit={canManage} onSave={patchField('phoneNumber')} />
+                  <InlineEditField label="Email" kind="email" value={detail.email ?? ''} display={detail.email ?? '—'}
+                    canEdit={canManage} onSave={patchField('email')} />
+                  <InlineEditField label="Date of birth" kind="date" value={dateInput(detail.dateOfBirth)}
+                    display={fmtDate(detail.dateOfBirth)} canEdit={canManage} onSave={patchField('dateOfBirth')} />
+                  <InlineEditField label="Gender" kind="select" options={GENDER_OPTIONS}
+                    value={detail.gender ?? ''} display={detail.gender ? titleCase(detail.gender) : '—'}
+                    canEdit={canManage} onSave={patchField('gender')} />
+                  <InlineEditField label="Marital status" kind="select" options={MARITAL_OPTIONS}
+                    value={detail.maritalStatus ?? ''} display={detail.maritalStatus ? titleCase(detail.maritalStatus) : '—'}
+                    canEdit={canManage} onSave={patchField('maritalStatus')} />
+                  <InlineEditField label="Joining date" kind="date" value={dateInput(detail.joiningDate)}
+                    display={fmtDate(detail.joiningDate)} canEdit={canManage} onSave={patchField('joiningDate')} />
+                  <InlineEditField label="Confirmation date" kind="date" value={dateInput(detail.confirmationDate)}
+                    display={fmtDate(detail.confirmationDate)} canEdit={canManage} onSave={patchField('confirmationDate')} />
+                  <InlineEditField label="Address" value={detail.addressLine ?? ''}
+                    canEdit={canManage} onSave={patchField('addressLine')} />
+                  <InlineEditField label="Emergency contact" value={detail.emergencyContactName ?? ''}
+                    canEdit={canManage} onSave={patchField('emergencyContactName')} />
+                  <InlineEditField label="Emergency relation" value={detail.emergencyContactRelation ?? ''}
+                    canEdit={canManage} onSave={patchField('emergencyContactRelation')} />
+                  <InlineEditField label="Emergency phone" value={detail.emergencyContactPhone ?? ''}
+                    canEdit={canManage} onSave={patchField('emergencyContactPhone')} />
+                  <InlineEditField label="Aadhaar" value="" sensitive display={detail.aadhaarNumber ?? '—'}
+                    transform={digitsOnly} hint="12 digits — leave blank to keep."
+                    canEdit={canManage} onSave={patchField('aadhaarNumber')} />
+                  <InlineEditField label="PAN" value="" sensitive display={detail.panNumber ?? detail.panMasked ?? '—'}
+                    transform={upperCase} hint="Format ABCDE1234F — leave blank to keep."
+                    canEdit={canManage} onSave={patchField('panNumber')} />
+                  <InlineEditField label="UAN" value={detail.uanNumber ?? ''}
+                    canEdit={canManage} onSave={patchField('uanNumber')} />
+                  <InlineEditField label="PF number" value={detail.providentFundNumber ?? ''}
+                    canEdit={canManage} onSave={patchField('providentFundNumber')} />
+                  <InlineEditField label="ESI number" value={detail.stateInsuranceNumber ?? ''}
+                    canEdit={canManage} onSave={patchField('stateInsuranceNumber')} />
+                  <InlineEditField label="Bank name" value={detail.bankName ?? ''}
+                    canEdit={canManage} onSave={patchField('bankName')} />
+                  <InlineEditField label="Bank account" value="" sensitive
+                    display={detail.bankAccountNumber ?? detail.bankAccountMasked ?? '—'}
+                    transform={digitsOnly} hint="9–18 digits — leave blank to keep."
+                    canEdit={canManage} onSave={patchField('bankAccountNumber')} />
+                  <InlineEditField label="Account holder" value={detail.bankAccountHolderName ?? ''}
+                    canEdit={canManage} onSave={patchField('bankAccountHolderName')} />
+                  <InlineEditField label="IFSC" value={detail.bankIfscCode ?? ''} transform={upperCase}
+                    hint="Format ABCD0123456" canEdit={canManage} onSave={patchField('bankIfscCode')} />
                 </dl>
               </Card>
-              <Card title="Branch posting">
-                {detail.branch ? (
+              <Card
+                title="Branch posting"
+                action={canManage && <span className="muted sm-text">Double-click a value to edit</span>}
+              >
+                {detail.branch || canManage ? (
                   <dl className="detail-list one-col">
-                    <div><dt>Branch</dt><dd>{detail.branch.name}</dd></div>
-                    <div><dt>Branch code</dt><dd>{detail.branch.code ? <code>{detail.branch.code}</code> : '—'}</dd></div>
-                    <div><dt>City</dt><dd>{detail.branch.city ?? '—'}</dd></div>
-                    <div><dt>State</dt><dd>{detail.branch.state ?? '—'}</dd></div>
-                    <div><dt>Branch manager</dt><dd>{detail.branch.manager
-                      ? `${detail.branch.manager.fullName}${detail.branch.manager.designation ? ` · ${titleCase(detail.branch.manager.designation)}` : ''}`
-                      : '—'}</dd></div>
+                    <InlineEditField label="Branch" kind="select" options={branchOptions}
+                      value={detail.branchId ?? ''} display={detail.branch?.name ?? '—'}
+                      canEdit={canManage} onSave={patchField('branchId')} />
+                    {detail.branch && (
+                      <>
+                        <div><dt>Branch code</dt><dd>{detail.branch.code ? <code>{detail.branch.code}</code> : '—'}</dd></div>
+                        <div><dt>City</dt><dd>{detail.branch.city ?? '—'}</dd></div>
+                        <div><dt>State</dt><dd>{detail.branch.state ?? '—'}</dd></div>
+                        <div><dt>Branch manager</dt><dd>{detail.branch.manager
+                          ? `${detail.branch.manager.fullName}${detail.branch.manager.designation ? ` · ${titleCase(detail.branch.manager.designation)}` : ''}`
+                          : '—'}</dd></div>
+                      </>
+                    )}
                   </dl>
                 ) : (
-                  <p className="muted">Not assigned to a branch yet.{canManage ? ' Use Edit to assign one.' : ''}</p>
+                  <p className="muted">Not assigned to a branch yet.</p>
                 )}
               </Card>
             </div>
@@ -474,79 +616,102 @@ export default function EmployeeDetailPage() {
           )}
 
           {tab === 'salary' && (
-            <div className="detail-cols">
-              <Card title="Current structure">
-                {salary ? (
-                  <dl className="detail-list one-col">
-                    {SALARY_COMPONENTS.map((c) => (
-                      <div key={c.key}><dt>{c.label}</dt><dd className="num">{inr(salary[c.key])}</dd></div>
-                    ))}
-                    <div><dt>Gross (monthly)</dt><dd><strong className="num">{inr(breakdown?.gross ?? salaryGross)}</strong></dd></div>
-                    <div><dt>Mediclaim deduction</dt><dd className="num">{inr(salary.mediclaimDeduction)}</dd></div>
-                    <div><dt>PF applicable</dt><dd>{salary.isProvidentFundApplicable ? 'Yes' : 'No'}</dd></div>
-                    <div><dt>ESI applicable</dt><dd>{salary.isStateInsuranceApplicable ? 'Yes' : 'No'}</dd></div>
-                    <div><dt>Professional tax</dt><dd>{salary.isProfessionalTaxApplicable ? 'Yes' : 'No'}</dd></div>
-                    <div><dt>Effective from</dt><dd>{fmtDate(salary.effectiveFrom)}</dd></div>
-                  </dl>
-                ) : <p className="muted">No salary structure on record.{canManage ? ' Use the form to create one.' : ''}</p>}
-              </Card>
-              <Card title="Revision history">
-                {salaryHistoryQuery.isLoading ? (
-                  <p className="muted">Loading…</p>
-                ) : !salaryHistoryQuery.data?.length ? (
-                  <p className="muted">No prior revisions — the current structure is the first on record.</p>
-                ) : (
-                  <dl className="detail-list one-col">
-                    {salaryHistoryQuery.data.map((h) => (
-                      <div key={h.id}>
-                        <dt>{fmtDate(h.effectiveFrom)} → {h.effectiveTo ? fmtDate(h.effectiveTo) : 'current'}</dt>
-                        <dd className="num">{inr(h.grossSalary)}</dd>
-                      </div>
-                    ))}
-                  </dl>
-                )}
-              </Card>
-              {salary && breakdown && (
-                <Card title="Monthly salary calculation">
-                  <dl className="detail-list one-col">
-                    <div><dt>Gross earnings</dt><dd><strong className="num">{inr(breakdown.gross)}</strong></dd></div>
-                    <div><dt>PF (employee)</dt><dd className="num">− {inr(breakdown.providentFund)}</dd></div>
-                    <div><dt>ESIC (employee)</dt><dd className="num">− {inr(breakdown.stateInsurance)}</dd></div>
-                    <div><dt>Professional tax</dt><dd className="num">− {inr(breakdown.professionalTax)}</dd></div>
-                    <div><dt>Mediclaim</dt><dd className="num">− {inr(breakdown.mediclaim)}</dd></div>
-                    <div><dt>Total deductions</dt><dd className="num">− {inr(breakdown.totalDeductions)}</dd></div>
-                    <div><dt>Take home</dt><dd><strong className="num">{inr(breakdown.takeHome)}</strong></dd></div>
-                    <div><dt>Salary advance recovery</dt><dd className="num">− {inr(breakdown.advanceRecovery)}</dd></div>
-                    <div><dt>Final payable</dt><dd><strong className="num">{inr(breakdown.finalPayable)}</strong></dd></div>
-                  </dl>
-                </Card>
-              )}
-              {canManage && (
-                <Card title="Revise salary" action={<span className="muted sm-text">New gross: <strong className="num">{inr(salaryFormGross)}</strong></span>}>
-                  <Form onSubmit={submitSalary}>
-                    <FormGrid cols={2}>
-                      {SALARY_COMPONENTS.map((c) => (
-                        <Field key={c.key} label={c.label} required={c.key === 'basicSalary'}>
-                          <input type="number" min="0" value={salaryForm[c.key]} onChange={(e) => setSalaryForm({ ...salaryForm, [c.key]: e.target.value })} required={c.key === 'basicSalary'} />
-                        </Field>
-                      ))}
-                      <Field label="Mediclaim deduction">
-                        <input type="number" min="0" value={salaryForm.mediclaimDeduction} onChange={(e) => setSalaryForm({ ...salaryForm, mediclaimDeduction: e.target.value })} />
-                      </Field>
-                      <Field label="Effective from" required><input type="date" value={salaryForm.effectiveFrom} onChange={(e) => setSalaryForm({ ...salaryForm, effectiveFrom: e.target.value })} required /></Field>
-                    </FormGrid>
-                    <div className="check-row">
-                      <label className="check"><input type="checkbox" checked={salaryForm.isProvidentFundApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isProvidentFundApplicable: e.target.checked })} /> PF applicable</label>
-                      <label className="check"><input type="checkbox" checked={salaryForm.isStateInsuranceApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isStateInsuranceApplicable: e.target.checked })} /> ESI applicable</label>
-                      <label className="check"><input type="checkbox" checked={salaryForm.isProfessionalTaxApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isProfessionalTaxApplicable: e.target.checked })} /> Professional tax applicable</label>
+            <div className="tab-stack">
+              {!salary ? (
+                <EmptyState
+                  variant="no-data"
+                  title="No salary structure on record"
+                  message={canManage
+                    ? 'Set up the salary structure to calculate monthly pay, statutory deductions and payslips.'
+                    : 'No salary structure has been defined for this employee yet.'}
+                  action={canManage && <button onClick={openRevise}><Plus size={15} /> Set up salary structure</button>}
+                />
+              ) : (
+                <>
+                  {/* Statutory context + the single edit entry point, above the
+                      numbers. Editing opens the drawer, so the current values are
+                      shown once (read-only) instead of mirrored in an open form. */}
+                  <div className="summary-band-head">
+                    <div className="summary-band-meta">
+                      <span>Effective from <strong>{fmtDate(salary.effectiveFrom)}</strong></span>
+                      <span className="summary-band-flags">
+                        <Badge tone={salary.isProvidentFundApplicable ? 'success' : 'neutral'} dot>PF</Badge>
+                        <Badge tone={salary.isStateInsuranceApplicable ? 'success' : 'neutral'} dot>ESI</Badge>
+                        <Badge tone={salary.isProfessionalTaxApplicable ? 'success' : 'neutral'} dot>Prof. tax</Badge>
+                      </span>
                     </div>
-                    {salaryError && <div className="error-box">{salaryError}</div>}
-                    <FormActions>
-                      <button type="submit" disabled={reviseSalary.isPending}>{reviseSalary.isPending ? <><Loader size={15} /> Saving…</> : 'Save revision'}</button>
-                    </FormActions>
-                  </Form>
-                </Card>
+                    {canManage && (
+                      <button className="btn-lg" onClick={openRevise}><Pencil size={15} /> Revise salary</button>
+                    )}
+                  </div>
+
+                  {/* Headline figures first, so the tab reads at a glance before
+                      the line-item breakdown below. */}
+                  <div className="stat-grid">
+                    <StatCard label="Gross earnings" hint="Per month" tone="brass" icon={<Wallet size={18} />}
+                      value={inr(breakdown?.gross ?? salaryGross)} />
+                    <StatCard label="Total deductions" tone="warning"
+                      value={breakdown ? `− ${inr(breakdown.totalDeductions)}` : '—'} />
+                    <StatCard label="Take home" tone="info"
+                      value={breakdown ? inr(breakdown.takeHome) : '—'} />
+                    <StatCard label="Final payable" tone="success"
+                      hint={breakdown && breakdown.advanceRecovery > 0 ? `after − ${inr(breakdown.advanceRecovery)} advance` : 'Net paid this month'}
+                      value={breakdown ? inr(breakdown.finalPayable) : '—'} />
+                  </div>
+
+                  {/* Earnings (money in) beside deductions & net pay (money out). */}
+                  <div className="detail-cols">
+                    <Card title="Earnings">
+                      <dl className="detail-list one-col">
+                        {SALARY_COMPONENTS.map((c) => (
+                          <div key={c.key}><dt>{c.label}</dt><dd className="num">{inr(salary[c.key])}</dd></div>
+                        ))}
+                        <div className="row-total"><dt>Gross (monthly)</dt><dd><strong className="num">{inr(breakdown?.gross ?? salaryGross)}</strong></dd></div>
+                      </dl>
+                    </Card>
+
+                    <Card title="Deductions & net pay">
+                      {breakdown ? (
+                        <dl className="detail-list one-col">
+                          <div><dt>Gross earnings</dt><dd className="num">{inr(breakdown.gross)}</dd></div>
+                          <div><dt>PF (employee)</dt><dd className="num">− {inr(breakdown.providentFund)}</dd></div>
+                          <div><dt>ESIC (employee)</dt><dd className="num">− {inr(breakdown.stateInsurance)}</dd></div>
+                          <div><dt>Professional tax</dt><dd className="num">− {inr(breakdown.professionalTax)}</dd></div>
+                          <div><dt>Mediclaim</dt><dd className="num">− {inr(breakdown.mediclaim)}</dd></div>
+                          <div className="row-total"><dt>Total deductions</dt><dd className="num">− {inr(breakdown.totalDeductions)}</dd></div>
+                          <div><dt>Take home</dt><dd><strong className="num">{inr(breakdown.takeHome)}</strong></dd></div>
+                          <div><dt>Salary advance recovery</dt><dd className="num">− {inr(breakdown.advanceRecovery)}</dd></div>
+                          <div className="row-total"><dt>Final payable</dt><dd><strong className="num">{inr(breakdown.finalPayable)}</strong></dd></div>
+                        </dl>
+                      ) : (
+                        <p className="muted">Pay breakdown is unavailable for this structure.</p>
+                      )}
+                    </Card>
+                  </div>
+
+                  <Card title="Revision history">
+                    {salaryHistoryQuery.isLoading ? (
+                      <p className="muted">Loading…</p>
+                    ) : !salaryHistoryQuery.data?.length ? (
+                      <p className="muted">No prior revisions — the current structure is the first on record.</p>
+                    ) : (
+                      <dl className="detail-list">
+                        {salaryHistoryQuery.data.map((h) => (
+                          <div key={h.id}>
+                            <dt>{fmtDate(h.effectiveFrom)} → {h.effectiveTo ? fmtDate(h.effectiveTo) : 'current'}</dt>
+                            <dd className="num">{inr(h.grossSalary)}</dd>
+                          </div>
+                        ))}
+                      </dl>
+                    )}
+                  </Card>
+                </>
               )}
+
+              {/* Advances are an HR-only ledger (the list endpoint is HR-scoped, and
+                  pay is withheld from view-only branch managers), so the card only
+                  shows for users who can manage them. */}
+              {canManageAdvances && <EmployeeSalaryAdvances employeeId={id} canManage={canManageAdvances} />}
             </div>
           )}
 
@@ -567,6 +732,10 @@ export default function EmployeeDetailPage() {
                 <EmptyState variant="no-data" title="No leave balances" message={leaveQuery.data ? `Nothing on record for ${leaveQuery.data.year}.` : undefined} />
               )}
             </Card>
+          )}
+
+          {tab === 'shift' && canManage && id && (
+            <EmployeeShiftTab employeeId={id} canManage={canManage} />
           )}
 
           {tab === 'roles' && canRoles && id && (
@@ -669,6 +838,41 @@ export default function EmployeeDetailPage() {
             </Card>
           )}
         </>
+      )}
+
+      {/* Revise salary — the structure editor as a slide-over, so the tab itself
+          stays a read-only summary. Opens for a new structure or a revision. */}
+      {reviseOpen && canManage && (
+        <Drawer
+          size="md"
+          onClose={() => setReviseOpen(false)}
+          title={salary ? 'Revise salary structure' : 'Set up salary structure'}
+          subtitle={detail?.fullName}
+          headerAside={<span className="muted sm-text">New gross <strong className="num">{inr(salaryFormGross)}</strong></span>}
+          footer={<>
+            <button type="button" className="ghost" onClick={() => setReviseOpen(false)}>Cancel</button>
+            <button type="submit" form="salary-revise-form" disabled={reviseSalary.isPending}>{reviseSalary.isPending ? <><Loader size={15} /> Saving…</> : 'Save revision'}</button>
+          </>}>
+          <Form id="salary-revise-form" onSubmit={submitSalary}>
+            <FormGrid cols={2}>
+              {SALARY_COMPONENTS.map((c) => (
+                <Field key={c.key} label={c.label} required={c.key === 'basicSalary'}>
+                  <input type="number" min="0" value={salaryForm[c.key]} onChange={(e) => setSalaryForm({ ...salaryForm, [c.key]: e.target.value })} required={c.key === 'basicSalary'} />
+                </Field>
+              ))}
+              <Field label="Mediclaim deduction">
+                <input type="number" min="0" value={salaryForm.mediclaimDeduction} onChange={(e) => setSalaryForm({ ...salaryForm, mediclaimDeduction: e.target.value })} />
+              </Field>
+              <Field label="Effective from" required><input type="date" value={salaryForm.effectiveFrom} onChange={(e) => setSalaryForm({ ...salaryForm, effectiveFrom: e.target.value })} required /></Field>
+            </FormGrid>
+            <div className="check-row">
+              <label className="check"><input type="checkbox" checked={salaryForm.isProvidentFundApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isProvidentFundApplicable: e.target.checked })} /> PF applicable</label>
+              <label className="check"><input type="checkbox" checked={salaryForm.isStateInsuranceApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isStateInsuranceApplicable: e.target.checked })} /> ESI applicable</label>
+              <label className="check"><input type="checkbox" checked={salaryForm.isProfessionalTaxApplicable} onChange={(e) => setSalaryForm({ ...salaryForm, isProfessionalTaxApplicable: e.target.checked })} /> Professional tax applicable</label>
+            </div>
+            {salaryError && <div className="error-box">{salaryError}</div>}
+          </Form>
+        </Drawer>
       )}
 
       {/* Document upload / replace / versions / delete modals */}

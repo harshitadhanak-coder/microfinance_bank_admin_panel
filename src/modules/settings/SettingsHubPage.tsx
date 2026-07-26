@@ -1,23 +1,17 @@
 import { ReactNode } from 'react';
 import { Link } from 'react-router-dom';
 import { PageHeader } from '../../components/PageHeader';
-import { ArrowRight, CalendarCheck, Lock } from '../../components/icons';
-import { useAuth } from '../auth/AuthContext';
-import { can } from '../auth/permissions';
+import { ArrowRight, Lock } from '../../components/icons';
 
 /**
- * Settings — Hub. One home for admin configuration currently scattered or
- * code-only: HR Policy (accrual, workweek, punch/payroll rules) and a read-only
- * Roles & permissions view.
+ * Settings — Hub. One home for admin configuration. HR Policy was removed from
+ * the menu per request (the attendance/payroll rules screen stays routable at
+ * /settings/hr-policy by direct URL); the hub now surfaces the RBAC editor.
  */
 export default function SettingsHubPage() {
-  const { user } = useAuth();
-  const canPolicy = can(user?.role, 'master:manage');
-
-  const tiles: { to: string; icon: ReactNode; title: string; desc: string; show: boolean }[] = [
-    { to: '/settings/hr-policy', icon: <CalendarCheck size={20} />, title: 'HR Policy', desc: 'Attendance rules (office hours, grace, workweek) and payroll rates (PF, ESI, professional tax).', show: canPolicy },
-    { to: '/settings/roles', icon: <Lock size={20} />, title: 'Roles & permissions', desc: 'Create roles, configure their permission matrix, set data scope, and manage assignments.', show: true },
-  ].filter((t) => t.show);
+  const tiles: { to: string; icon: ReactNode; title: string; desc: string }[] = [
+    { to: '/settings/roles', icon: <Lock size={20} />, title: 'Roles & permissions', desc: 'Create roles, configure their permission matrix, set data scope, and manage assignments.' },
+  ];
 
   return (
     <>

@@ -108,7 +108,9 @@ export const MODULES: ModuleDef[] = [
   { key: 'leave', to: '/leave', label: 'Leave', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'holidays', to: '/holidays', label: 'Holidays', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
   { key: 'exit', to: '/hr/exit', label: 'Exit Management', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'Attendance & Payroll Rules', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
+  // Hidden from the sidebar per request. The attendance/payroll rules screen
+  // stays routable at /settings/hr-policy (direct URL); it is no longer a menu item.
+  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'Attendance & Payroll Rules', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr', hidden: true },
   // Company-wide info published by HR — everyone with admin-panel access sees these.
   { key: 'announcements', to: '/announcements', label: 'Announcements', roles: ALL_ROLES, group: 'hr' },
   { key: 'hrPolicyLibrary', to: '/hr-policies', label: 'HR Policies', roles: ALL_ROLES, group: 'hr' },
@@ -149,13 +151,16 @@ export const MODULES: ModuleDef[] = [
   { key: 'reports', to: '/reports', label: 'Reports', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'insights' },
 
   // Administration
-  { key: 'users', to: '/users', label: 'User Management', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin' },
+  // Hidden from the sidebar per request. Login accounts are administered per
+  // employee from the Account & Access tab; the list stays routable at /users.
+  { key: 'users', to: '/users', label: 'User Management', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin', hidden: true },
   // Employee personnel files — part of HR. Client/lead KYC lives on those records.
   { key: 'documents', to: '/documents', label: 'Document Center', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
   { key: 'masters', to: '/masters', label: 'Organization Masters', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
   // Settings hosts the RBAC role/permission editor, so HR is deliberately NOT
   // here — HR must not be able to grant itself access beyond the HR module.
-  // HR reaches its own policy screen through the 'hrPolicy' module above.
+  // The HR policy screen (hrPolicy) is hidden from the menu; it stays reachable
+  // at /settings/hr-policy by direct URL.
   { key: 'settings', to: '/settings', label: 'Settings', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
 ];
 
@@ -170,6 +175,8 @@ export const ACTION_ROLES = {
   'payroll:markPaid': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'holiday:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'leave:accrue': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // Org-wide leave-policy config (entitlement / accrual per leave type).
+  'leave:managePolicy': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'salaryAdvance:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   // ── HRJee HR-module actions. HR (+ Super Admin) only — Branch Managers hold
   // the modules for VIEW but never these write/approve actions (read-only).

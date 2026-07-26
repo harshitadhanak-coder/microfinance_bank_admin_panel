@@ -108,6 +108,12 @@ export const MASTER_CONFIG: Record<MasterKey, MasterDef> = {
   },
 };
 
-export const MASTER_ORDER: MasterKey[] = ['departments', 'designations', 'grades', 'employment-types', 'shifts', 'holiday-groups'];
+// 'shifts' is intentionally excluded from the hub/menu: shift definitions are
+// managed in Human Resources → Shifts (which also handles assignment + history),
+// so the duplicate masters CRUD is hidden. Excluding it here also makes
+// isMasterKey('shifts') false, so /masters/shifts redirects back to the hub.
+// The Shift master row and its /masters/shifts/options endpoint (used by the
+// employee shift dropdowns) are unaffected.
+export const MASTER_ORDER: MasterKey[] = ['departments', 'designations', 'grades', 'employment-types', 'holiday-groups'];
 
 export const isMasterKey = (v: string): v is MasterKey => (MASTER_ORDER as string[]).includes(v);

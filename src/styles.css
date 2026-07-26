@@ -906,6 +906,32 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .detail-list dd { margin: 0; text-align: right; }
 @media (max-width: 640px) { .detail-list { grid-template-columns: 1fr; } }
 
+/* ── Inline-editable profile rows (Overview) ────────────────────────────────
+   Double-click a value — or the pencil that appears on hover — to edit it in
+   place; Enter / the check saves, Esc / the ✕ cancels. */
+.detail-list > div.editable dd {
+  display: flex; align-items: center; justify-content: flex-end; gap: 0.35rem; cursor: text;
+}
+.detail-list .inline-value { overflow-wrap: anywhere; }
+/* Compact so revealing it on hover doesn't nudge the row height. */
+.detail-list .edit-pencil { display: none; flex: none; width: 1.35rem; min-height: 1.35rem; }
+.detail-list > div.editable:hover .edit-pencil,
+.detail-list .edit-pencil:focus-visible { display: inline-flex; }
+/* Editing takes the row full-width so the field (and its hint) has room. */
+.detail-list > div.editing { grid-column: 1 / -1; }
+.detail-list > div.editing dd { text-align: left; flex: 1; margin-left: 1rem; }
+.detail-list .inline-edit { display: flex; align-items: center; gap: 0.3rem; }
+.detail-list .inline-edit input,
+.detail-list .inline-edit select { flex: 1 1 auto; min-width: 0; }
+.detail-list .inline-edit-hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; text-align: left; }
+
+/* ── Salary advances ledger (employee Salary tab) ───────────────────────────
+   One bordered block per advance; active ones inline-edit like the profile. */
+.advance-list { display: grid; gap: 0.85rem; }
+.advance-item { border: 1px solid var(--line); border-radius: var(--radius); padding: 0.6rem 0.9rem; }
+.advance-head { display: flex; align-items: center; gap: 0.6rem; margin-bottom: 0.15rem; }
+.advance-head .advance-delete { margin-left: auto; }
+
 /* ── Designation / Role / Portal explainer ──────────────────────────────────
    The three are routinely confused, so they sit together above the tabs. The
    layout encodes the rule: a rule-off separates the job title (which grants
@@ -937,6 +963,11 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .access-value .access-warn { font-size: 0.95rem; }
 .access-split { width: 1px; background: var(--line); }
 .access-arrow { display: flex; align-items: center; color: var(--brass); font-size: 1.1rem; }
+/* Inline editors on the three cards (HR / Super Admin). The pencil sits by the
+   label; editing swaps the value for a select with save / cancel. */
+.access-edit { padding: 2px; margin-left: 0.15rem; color: var(--muted); }
+.access-edit-row { display: flex; align-items: center; gap: 0.3rem; margin: 0.1rem 0; }
+.access-edit-row select { flex: 1; min-width: 0; }
 @media (max-width: 860px) {
   .access-summary { grid-template-columns: 1fr; gap: 0.75rem; }
   .access-split { width: auto; height: 1px; }
@@ -1442,6 +1473,20 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .detail-cols { display: grid; grid-template-columns: 1fr 1fr; gap: var(--space-4); align-items: start; }
 @media (max-width: 1023px) { .detail-cols { grid-template-columns: 1fr; } }
 .detail-list.one-col { grid-template-columns: 1fr; }
+
+/* Vertical rhythm for a stack of sections inside one tab (summary band → cards →
+   ledger), so every block sits on the same 16px gap without per-block margins. */
+.tab-stack { display: grid; gap: var(--space-4); align-content: start; }
+
+/* Header strip above a record summary: statutory context on the left, the single
+   edit action on the right. Shared by the Salary and Shift tabs. */
+.summary-band-head { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; }
+.summary-band-meta { display: flex; align-items: center; gap: var(--space-2) var(--space-3); flex-wrap: wrap; font: var(--text-sm); color: var(--color-muted); }
+.summary-band-flags { display: inline-flex; gap: var(--space-2); flex-wrap: wrap; }
+
+/* Sub-total / grand-total row inside a detail list — a rule-off above and no
+   underline, so the running totals read apart from the line items. */
+.detail-list > div.row-total { border-top: 1px solid var(--color-line-strong); border-bottom: none; margin-top: 2px; padding-top: 0.6rem; }
 
 /* ── Calendar (specialized month grid; replaces the raw .att-cal table) ── */
 .calendar { display: grid; gap: var(--space-4); }

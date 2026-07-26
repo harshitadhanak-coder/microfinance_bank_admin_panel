@@ -9,12 +9,13 @@ import { Badge } from '../../components/Badge';
 import { Tabs, TabDef } from '../../components/Tabs';
 import { ActionMenu } from '../../components/ActionMenu';
 import { Drawer } from '../../components/Drawer';
-import { Modal } from '../../components/Modal';
-import { CalendarCheck, Check, Loader, Wallet, X } from '../../components/icons';
+import { Modal, ConfirmDialog } from '../../components/Modal';
+import { CalendarCheck, Check, ListChecks, Loader, Wallet, X } from '../../components/icons';
 import { fmtDate, fmtDayMonth, titleCase, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import LeavePolicies from './LeavePolicies';
 
 interface LeaveRow {
   id: string;
@@ -49,15 +50,17 @@ export default function LeavePage() {
   const qc = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
-  const [view, setView] = useState<'list' | 'calendar'>('list');
+  const [view, setView] = useState<'list' | 'calendar' | 'policies'>('list');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
   const [balancesFor, setBalancesFor] = useState<LeaveRow | null>(null);
+  const [backfillOpen, setBackfillOpen] = useState(false);
 
   const canDecide = can(user?.role, 'leave:decide');
   const canAccrue = can(user?.role, 'leave:accrue');
+  const canManagePolicy = can(user?.role, 'leave:managePolicy');
 
   const listUrl = `/human-resources/leaves?pageSize=100${status === 'ALL' ? '' : `&status=${status}`}`;
   const query = useQuery({
@@ -116,6 +119,22 @@ export default function LeavePage() {
     },
   });
 
+  // Catch-up accrual: runs every un-run month in the trailing year so a mid-year
+  // policy change (e.g. a newly-paid leave type) reflects in balances at once.
+  const backfill = useMutation({
+    mutationFn: () => api.post('/human-resources/leaves/accrual/backfill', { month: CURRENT_MONTH, year: CURRENT_YEAR }),
+    onSuccess: (res) => {
+      const data = res.data?.data as { monthsRun: number; monthsSkipped: number; employeeCount: number } | undefined;
+      const base = (res.data?.message as string | undefined) || 'Leave balances brought up to date.';
+      setBackfillOpen(false);
+      toast.success(data
+        ? `${base} ${data.monthsRun} month${data.monthsRun === 1 ? '' : 's'} accrued${data.monthsSkipped ? `, ${data.monthsSkipped} already done` : ''}.`
+        : base);
+      refreshLeaves();
+    },
+    onError: (err) => { setBackfillOpen(false); toast.error(apiMessage(err, 'Could not back-fill leave accrual.')); },
+  });
+
   const columns: Column<LeaveRow>[] = [
     { header: 'Employee', render: (l) => <><strong>{l.employee.fullName}</strong><div className="muted sm-text">{l.employee.employeeCode}</div></>, sortValue: (l) => l.employee.fullName },
     { header: 'Branch', render: (l) => l.employee.branch?.name ?? '—', sortValue: (l) => l.employee.branch?.name ?? '' },
@@ -146,6 +165,7 @@ export default function LeavePage() {
   const viewTabs: TabDef[] = [
     { key: 'list', label: 'List' },
     { key: 'calendar', label: 'Calendar' },
+    ...(canManagePolicy ? [{ key: 'policies', label: 'Policies' }] : []),
   ];
 
   const typeChips = typeFilter !== 'ALL'
@@ -159,11 +179,16 @@ export default function LeavePage() {
         title="Leave requests"
         subtitle="Review and decide staff leave applications"
         actions={canAccrue && (
-          <button type="button" className="ghost" disabled={accrual.isPending} onClick={() => accrual.mutate()}>
-            {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
-          </button>
+          <>
+            <button type="button" className="ghost" disabled={backfill.isPending || accrual.isPending} onClick={() => setBackfillOpen(true)}>
+              {backfill.isPending ? <><Loader size={15} /> Backfilling…</> : <><ListChecks size={15} /> Back-fill accrual</>}
+            </button>
+            <button type="button" className="ghost" disabled={accrual.isPending || backfill.isPending} onClick={() => accrual.mutate()}>
+              {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
+            </button>
+          </>
         )}
-        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar')} />}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar' | 'policies')} />}
       />
 
       {view === 'list' ? (
@@ -201,8 +226,10 @@ export default function LeavePage() {
             selection={canDecide ? { selectedIds, onChange: setSelectedIds } : undefined}
           />
         </>
-      ) : (
+      ) : view === 'calendar' ? (
         <LeaveCalendarView />
+      ) : (
+        <LeavePolicies />
       )}
 
       {decisionTarget && (
@@ -218,6 +245,21 @@ export default function LeavePage() {
       )}
 
       {balancesFor && <BalancesDrawer leave={balancesFor} onClose={() => setBalancesFor(null)} />}
+
+      {backfillOpen && (
+        <ConfirmDialog
+          icon={<ListChecks size={20} />}
+          title="Back-fill leave accrual"
+          message={<>
+            Runs the monthly accrual for every month in the past year that hasn’t been run yet, bringing balances up to date for all active employees.
+            <br /><span className="muted sm-text">Safe to run — months already accrued are skipped, never double-counted.</span>
+          </>}
+          confirmLabel="Back-fill now"
+          loading={backfill.isPending}
+          onConfirm={() => backfill.mutate()}
+          onCancel={() => setBackfillOpen(false)}
+        />
+      )}
     </>
   );
 }
