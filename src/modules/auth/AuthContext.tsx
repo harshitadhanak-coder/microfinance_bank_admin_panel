@@ -1,5 +1,6 @@
 import { createContext, ReactNode, useContext, useEffect, useState } from 'react';
 import { api } from '../../api/client';
+import { setEffectivePermissions } from './permissions';
 
 interface AuthBranch { id: string; code: string; name: string; city: string; state: string }
 
@@ -14,6 +15,32 @@ interface AuthUser {
   lastLoginAt?: string | null;
   status?: string;
 }
+
+const PERMISSIONS_KEY = 'permissions';
+
+interface StoredPermissions {
+  wildcard?: boolean;
+  scope?: 'ALL' | 'BRANCH' | 'SELF' | 'ASSIGNED';
+  permissions?: string[];
+}
+
+/**
+ * Read the last-known permission set straight out of localStorage during module
+ * init, so the very first render already has it. Without this the app would
+ * render once with no permissions and bounce a matrix-driven role (Operations,
+ * or any custom role) to /profile before the fetch came back.
+ */
+const hydratePermissionsFromStorage = (): StoredPermissions | null => {
+  try {
+    const raw = localStorage.getItem(PERMISSIONS_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as StoredPermissions;
+    setEffectivePermissions(parsed);
+    return parsed;
+  } catch {
+    return null;
+  }
+};
 
 interface AuthCtx {
   user: AuthUser | null;
@@ -36,16 +63,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [mustChangePassword, setMustChangePassword] = useState<boolean>(
     () => localStorage.getItem('mustChangePassword') === 'true',
   );
+  // Bumped whenever the permission set changes, purely to re-render consumers:
+  // `can()` / `visibleModules()` read the set from the permissions module rather
+  // than from props, so React needs a state change to know to redraw the shell.
+  const [, setPermissionVersion] = useState(() => {
+    hydratePermissionsFromStorage();
+    return 0;
+  });
 
   const clearMustChangePassword = () => {
     localStorage.removeItem('mustChangePassword');
     setMustChangePassword(false);
   };
 
+  /**
+   * Load the effective permissions for the session. These decide the sidebar and
+   * every in-page action for roles outside the six built-ins — including every
+   * role created in Roles & Permissions.
+   */
+  const loadPermissions = async () => {
+    try {
+      const { data } = await api.get('/me/permissions');
+      localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(data.data));
+      setEffectivePermissions(data.data);
+      setPermissionVersion((version) => version + 1);
+    } catch {
+      // Leave whatever was hydrated from storage in place; the response
+      // interceptor handles an expired token.
+    }
+  };
+
   /** Load the full profile (incl. assigned branch) for the current session. */
   const loadProfile = async () => {
     try {
-      const { data } = await api.get('/auth/me');
+      const [{ data }] = await Promise.all([api.get('/auth/me'), loadPermissions()]);
       localStorage.setItem('user', JSON.stringify(data.data));
       setUser(data.data);
     } catch {
@@ -74,14 +125,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setMustChangePassword(mustChange);
     setUser(user);
     // Skip the profile refresh when a forced change is pending — the app will
-    // route straight to the change-password screen.
-    if (!mustChange) await loadProfile();
+    // route straight to the change-password screen. Permissions are still
+    // loaded, so the sidebar is correct the moment the change is done.
+    if (mustChange) await loadPermissions();
+    else await loadProfile();
     return mustChange;
   };
 
   const logout = () => {
     api.post('/auth/logout', { refreshToken: localStorage.getItem('refreshToken') }).catch(() => undefined);
     localStorage.clear();
+    setEffectivePermissions(null);
     setUser(null);
     setMustChangePassword(false);
   };
