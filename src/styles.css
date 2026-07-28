@@ -1563,3 +1563,35 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .row-btns { display: inline-flex; gap: 0.4rem; justify-content: flex-end; }
 .btn.sm.danger, button.sm.danger, .ghost.sm.danger { color: var(--red); }
 .ghost.sm { padding: 0.3rem 0.6rem; font: var(--text-sm); }
+
+/* ── Bank Deposits — deposit-progress panel ──────────────────────────────── */
+.deposit-progress { margin-bottom: var(--space-4); }
+.dp-head { display: flex; align-items: flex-start; justify-content: space-between; gap: var(--space-4); }
+.dp-title { display: inline-flex; align-items: center; gap: var(--space-2); margin: 0; font: var(--text-h2); color: var(--color-ink); }
+.dp-title svg { color: var(--brass); }
+
+/* Progress bars — overall + per-bank */
+.dp-bar { height: 10px; margin-top: var(--space-4); border-radius: var(--radius-pill); background: var(--color-line); overflow: hidden; }
+.dp-bar-sm { height: 6px; margin-top: var(--space-2); }
+.dp-bar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brass), var(--brass-dark)); transition: width 0.35s ease; }
+.dp-bar-fill.done { background: linear-gradient(90deg, #2a9d68, var(--green)); }
+.dp-bar-fill.over { background: linear-gradient(90deg, var(--amber), var(--red)); }
+.dp-caption { margin: var(--space-2) 0 0; }
+
+/* Headline metric tiles */
+.dp-metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap: var(--space-3); margin-top: var(--space-5); }
+.dp-metric { display: flex; flex-direction: column; gap: 2px; padding: var(--space-3) var(--space-4); background: var(--color-surface-2); border: 1px solid var(--line); border-radius: var(--radius); }
+.dp-metric-top { display: inline-flex; align-items: center; gap: var(--space-2); color: var(--muted); }
+.dp-metric-icon { display: inline-flex; color: var(--brass); }
+.dp-metric-label { font: var(--text-xs); text-transform: uppercase; letter-spacing: 0.04em; }
+.dp-metric-value { margin-top: 2px; font: var(--text-h1); color: var(--color-ink); }
+.dp-metric-accent { border-color: var(--color-line-strong); background: var(--status-brass-bg); }
+.dp-metric-ok .dp-metric-value { color: var(--green); }
+.dp-metric-warn .dp-metric-value { color: var(--amber); }
+
+/* Per-bank expected vs deposited breakdown */
+.dp-banks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px dashed var(--line); }
+.dp-bank-head { display: flex; align-items: center; justify-content: space-between; }
+.dp-bank-figs { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin-top: var(--space-2); font: var(--text-sm); color: var(--muted); }
+.dp-bank-figs b { color: var(--color-ink); font-weight: 600; }
+.dp-rem-open b { color: var(--amber); }

@@ -16,6 +16,7 @@ import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import LeavePolicies from './LeavePolicies';
+import MyLeave from './MyLeave';
 
 interface LeaveRow {
   id: string;
@@ -50,7 +51,7 @@ export default function LeavePage() {
   const qc = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
-  const [view, setView] = useState<'list' | 'calendar' | 'policies'>('list');
+  const [view, setView] = useState<'list' | 'calendar' | 'myLeave' | 'policies'>('list');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -165,6 +166,7 @@ export default function LeavePage() {
   const viewTabs: TabDef[] = [
     { key: 'list', label: 'List' },
     { key: 'calendar', label: 'Calendar' },
+    { key: 'myLeave', label: 'My leave' },
     ...(canManagePolicy ? [{ key: 'policies', label: 'Policies' }] : []),
   ];
 
@@ -178,7 +180,7 @@ export default function LeavePage() {
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Leave' }]}
         title="Leave requests"
         subtitle="Review and decide staff leave applications"
-        actions={canAccrue && (
+        actions={canAccrue && view !== 'myLeave' && (
           <>
             <button type="button" className="ghost" disabled={backfill.isPending || accrual.isPending} onClick={() => setBackfillOpen(true)}>
               {backfill.isPending ? <><Loader size={15} /> Backfilling…</> : <><ListChecks size={15} /> Back-fill accrual</>}
@@ -188,7 +190,7 @@ export default function LeavePage() {
             </button>
           </>
         )}
-        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar' | 'policies')} />}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar' | 'myLeave' | 'policies')} />}
       />
 
       {view === 'list' ? (
@@ -228,6 +230,8 @@ export default function LeavePage() {
         </>
       ) : view === 'calendar' ? (
         <LeaveCalendarView />
+      ) : view === 'myLeave' ? (
+        <MyLeave />
       ) : (
         <LeavePolicies />
       )}

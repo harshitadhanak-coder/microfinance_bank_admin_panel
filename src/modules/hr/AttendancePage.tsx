@@ -16,6 +16,8 @@ import { CardsSkeleton } from '../../components/Skeleton';
 import { CalendarCheck, ListChecks, LogOut, UserCheck, ArrowRight, FileSpreadsheet, Search } from '../../components/icons';
 import { fmtDate, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
+import { useAuth } from '../auth/AuthContext';
+import { can } from '../auth/permissions';
 import {
   AttendanceRow, SummaryRow, SummaryResponse, CalendarResponse, BranchOption, EmployeeOption,
   MONTHS, STATUS_FILTERS, statusLabel, STATUS_TONE, statusText, STATUS_LEGEND,
@@ -58,6 +60,10 @@ type ViewKey = 'list' | 'summary' | 'calendar';
  */
 export default function AttendancePage() {
   const toast = useToast();
+  const { user } = useAuth();
+  // Manual "Add attendance" is an HR write (backend: HR_MODULE_ROLES). View-only
+  // roles that can open this page — Branch Manager, Operations — must not see it.
+  const canManage = can(user?.role, 'attendance:approve');
   const queryClient = useQueryClient();
   const [manualOpen, setManualOpen] = useState(false);
   const navigate = useNavigate();
@@ -246,9 +252,11 @@ export default function AttendancePage() {
               </select>
             </div>
             <span className="hdr-sep" aria-hidden="true" />
-            <button type="button" className="ghost" onClick={() => setManualOpen(true)}>
-              <CalendarCheck size={15} /> Add attendance
-            </button>
+            {canManage && (
+              <button type="button" className="ghost" onClick={() => setManualOpen(true)}>
+                <CalendarCheck size={15} /> Add attendance
+              </button>
+            )}
             <button type="button" className="ghost" disabled={punchOut.isPending} onClick={() => punchOut.mutate()}>
               <LogOut size={15} /> {punchOut.isPending ? 'Checking out…' : 'Check out'}
             </button>

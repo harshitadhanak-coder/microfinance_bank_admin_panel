@@ -1,27 +1,29 @@
-import { useState } from 'react';
+import { ReactNode, useRef, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { FilterBar } from '../../components/FilterBar';
-import { StatCard } from '../../components/StatCard';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { useServerTable } from '../../components/useServerTable';
 import { useToast } from '../../components/Toast';
-import { Ban, Eye, Landmark, Plus } from '../../components/icons';
+import { Ban, Banknote, CheckCircle, Landmark, Pencil, Plus, Wallet } from '../../components/icons';
 import { inr, fmtDate, isoLocalDate, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can, canAccessModule } from '../auth/permissions';
 import {
+  BANK_TOTAL_KEY,
   BankDeposit,
   BranchRef,
   DEPOSIT_BANKS,
+  DEPOSIT_SETTLEMENT_STATUS_LABEL,
+  DEPOSIT_SETTLEMENT_STATUS_TONE,
   DEPOSIT_STATUS_LABEL,
   DEPOSIT_STATUS_TONE,
   DepositBank,
-  ReconciliationSummary,
+  DepositSettlementSummary,
 } from './reconShared';
 
 const STATUS_OPTIONS: { id: BankDeposit['status']; name: string }[] = [
@@ -30,22 +32,33 @@ const STATUS_OPTIONS: { id: BankDeposit['status']; name: string }[] = [
   { id: 'CANCELLED', name: 'Cancelled' },
 ];
 
+/** Compact date + time for the "Recorded" column (chronological audit trail). */
+const fmtDateTime = (iso?: string | null) =>
+  iso ? new Date(iso).toLocaleString('en-IN', { day: '2-digit', month: 'short', hour: 'numeric', minute: '2-digit' }) : '—';
+
+type DepositForm = { mode: 'create' } | { mode: 'edit'; deposit: BankDeposit };
+
 /**
- * Bank Deposits (stage 5). The branch manager records ONE consolidated deposit
- * per bank once the day's approved cash is paid in. Each deposit starts "in
- * transit" and is confirmed on the Bank Reconciliation screen when a matching
- * statement credit is found.
+ * Bank Deposits (stage 5). The branch manager records each consolidated pay-in
+ * once the day's approved cash reaches the bank. The DB-computed progress panel
+ * shows what the branch is due to bank (from approved day-end settlements), what
+ * has been deposited, and what remains — recomputed server-side on every add,
+ * edit or void so the totals are always the latest and survive a page refresh.
  */
 export default function BranchDepositsPage() {
   const qc = useQueryClient();
   const toast = useToast();
   const { user } = useAuth();
   const table = useServerTable({ pageSize: 20 });
+  const today = isoLocalDate(new Date());
   const [bank, setBank] = useState('');
   const [status, setStatus] = useState('');
-  const [from, setFrom] = useState('');
-  const [to, setTo] = useState('');
-  const [recording, setRecording] = useState(false);
+  // The deposit "settlement" is a day: default the window to today so the
+  // progress panel and the list both frame today's banking. The manager can
+  // widen the range to review history.
+  const [from, setFrom] = useState(today);
+  const [to, setTo] = useState(today);
+  const [form, setForm] = useState<DepositForm | null>(null);
   const [cancelling, setCancelling] = useState<BankDeposit | null>(null);
 
   const allowed = canAccessModule(user?.role, 'bankDeposits');
@@ -60,25 +73,31 @@ export default function BranchDepositsPage() {
     queryFn: () => api.get(url).then((r) => r.data),
     placeholderData: keepPreviousData,
   });
+
+  const rangeQs = [from ? `from=${from}` : '', to ? `to=${to}` : ''].filter(Boolean).join('&');
+  const summaryUrl = `/reconciliation/deposits/summary${rangeQs ? `?${rangeQs}` : ''}`;
   const summary = useQuery({
-    queryKey: ['/reconciliation/summary'],
+    queryKey: [summaryUrl],
     enabled: allowed,
-    queryFn: () => api.get('/reconciliation/summary').then((r) => r.data.data as ReconciliationSummary),
+    queryFn: () => api.get(summaryUrl).then((r) => r.data.data as DepositSettlementSummary),
+    placeholderData: keepPreviousData,
   });
 
+  // Every mutation invalidates the whole /reconciliation surface — list AND
+  // summary — so the DB stays the single source of truth and the panel refreshes
+  // the instant a deposit is added, edited or voided (no page reload).
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/reconciliation') });
 
   const cancel = useMutation({
     mutationFn: (id: string) => api.post(`/reconciliation/deposits/${id}/cancel`),
-    onSuccess: (res) => { toast.success(res.data?.message ?? 'Deposit cancelled.'); setCancelling(null); void refresh(); },
-    onError: (err) => { setCancelling(null); toast.error(apiMessage(err, 'Could not cancel the deposit.')); },
+    onSuccess: (res) => { toast.success(res.data?.message ?? 'Deposit voided.'); setCancelling(null); void refresh(); },
+    onError: (err) => { setCancelling(null); toast.error(apiMessage(err, 'Could not void the deposit.')); },
   });
 
   if (!allowed) return <p className="muted">You do not have permission to view bank deposits.</p>;
 
   const rows = (data?.data ?? []) as BankDeposit[];
   const totalItems = (data?.pagination?.totalItems ?? 0) as number;
-  const s = summary.data;
 
   const columns: Column<BankDeposit>[] = [
     { header: 'Deposit date', render: (d) => fmtDate(d.depositDate), sortKey: 'depositDate' },
@@ -88,13 +107,17 @@ export default function BranchDepositsPage() {
     { header: 'Slip no.', render: (d) => d.slipNumber ?? <span className="muted sm-text">—</span> },
     { header: 'Reference', render: (d) => d.reference ?? <span className="muted sm-text">—</span> },
     { header: 'Status', render: (d) => <Badge tone={DEPOSIT_STATUS_TONE[d.status]}>{DEPOSIT_STATUS_LABEL[d.status]}</Badge> },
+    { header: 'Recorded', render: (d) => <span className="muted sm-text">{fmtDateTime(d.createdAt)}</span> },
     {
       header: '',
       render: (d) => {
         if (!canManage || d.status !== 'DEPOSITED') return null;
         return (
           <div className="actions-cell">
-            <ActionMenu items={[{ key: 'cancel', label: 'Cancel deposit', icon: <Ban size={15} />, tone: 'danger', onSelect: () => setCancelling(d) }]} />
+            <ActionMenu items={[
+              { key: 'edit', label: 'Edit deposit', icon: <Pencil size={15} />, onSelect: () => setForm({ mode: 'edit', deposit: d }) },
+              { key: 'void', label: 'Void deposit', icon: <Ban size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setCancelling(d) },
+            ]} />
           </div>
         );
       },
@@ -104,10 +127,8 @@ export default function BranchDepositsPage() {
   const chips = [
     ...(bank ? [{ key: 'bank', label: `Bank: ${bank}`, onRemove: () => setBank('') }] : []),
     ...(status ? [{ key: 'status', label: `Status: ${DEPOSIT_STATUS_LABEL[status as BankDeposit['status']] ?? status}`, onRemove: () => setStatus('') }] : []),
-    ...(from ? [{ key: 'from', label: `From: ${fmtDate(from)}`, onRemove: () => setFrom('') }] : []),
-    ...(to ? [{ key: 'to', label: `To: ${fmtDate(to)}`, onRemove: () => setTo('') }] : []),
   ];
-  const resetAll = () => { setBank(''); setStatus(''); setFrom(''); setTo(''); table.setPage(1); };
+  const resetAll = () => { setBank(''); setStatus(''); setFrom(today); setTo(today); table.setPage(1); };
 
   return (
     <>
@@ -115,17 +136,12 @@ export default function BranchDepositsPage() {
         breadcrumb={[{ label: 'Operations' }, { label: 'Bank Deposits' }]}
         title="Bank Deposits"
         subtitle={<>Consolidated branch deposits into SBI / HDFC / AXIS{user?.branch ? ` — ${user.branch.name}` : ''}</>}
-        actions={canManage && <button className="btn-lg" onClick={() => setRecording(true)}><Plus size={16} /> Record deposit</button>}
+        actions={canManage && <button className="btn-lg" onClick={() => setForm({ mode: 'create' })}><Plus size={16} /> Record deposit</button>}
       />
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 12, marginBottom: 16 }}>
-        <StatCard label="In transit" value={s ? inr(s.inTransit.amount) : '—'} hint={s ? `${s.inTransit.count} deposit(s) awaiting the bank statement` : undefined} />
-        <StatCard label="Reconciled" value={s ? inr(s.reconciled.amount) : '—'} hint={s ? `${s.reconciled.count} confirmed by the bank` : undefined} />
-        <StatCard label="Unmatched credits" value={s ? inr(s.unmatchedLines.amount) : '—'} hint={s ? `${s.unmatchedLines.count} statement line(s)` : undefined} />
-        <StatCard label="Oldest in transit" value={s ? `${s.oldestInTransitDays} day(s)` : '—'} hint="Deposit not yet on a statement" />
-      </div>
+      <DepositProgressPanel summary={summary.data} loading={summary.isLoading} />
 
-      <FilterBar chips={chips} onReset={chips.length ? resetAll : undefined}>
+      <FilterBar chips={chips} onReset={chips.length || from !== today || to !== today ? resetAll : undefined}>
         <label>Bank
           <select value={bank} onChange={(e) => { setBank(e.target.value); table.setPage(1); }}>
             <option value="">All banks</option>
@@ -139,10 +155,10 @@ export default function BranchDepositsPage() {
           </select>
         </label>
         <label>From
-          <input type="date" value={from} onChange={(e) => { setFrom(e.target.value); table.setPage(1); }} aria-label="Deposit from date" />
+          <input type="date" value={from} max={to || undefined} onChange={(e) => { setFrom(e.target.value); table.setPage(1); }} aria-label="Deposit from date" />
         </label>
         <label>To
-          <input type="date" value={to} min={from || undefined} onChange={(e) => { setTo(e.target.value); table.setPage(1); }} aria-label="Deposit to date" />
+          <input type="date" value={to} min={from || undefined} max={today} onChange={(e) => { setTo(e.target.value); table.setPage(1); }} aria-label="Deposit to date" />
         </label>
       </FilterBar>
 
@@ -151,7 +167,7 @@ export default function BranchDepositsPage() {
         rows={rows}
         loading={isLoading}
         searchable={false}
-        empty="No bank deposits recorded yet. Record the day's consolidated deposit once the cash is paid into the bank."
+        empty="No bank deposits in this window. Record the day's consolidated deposit once the cash is paid into the bank."
         server={{
           page: table.page, pageSize: table.pageSize, totalItems,
           onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
@@ -159,15 +175,23 @@ export default function BranchDepositsPage() {
         }}
       />
 
-      {recording && <RecordDepositModal branchScoped={branchScoped} onClose={() => setRecording(false)} onDone={() => { setRecording(false); void refresh(); }} />}
+      {form && (
+        <DepositFormModal
+          editing={form.mode === 'edit' ? form.deposit : null}
+          branchScoped={branchScoped}
+          defaultDate={from || today}
+          onClose={() => setForm(null)}
+          onSaved={(opts) => { void refresh(); if (!opts?.keepOpen) setForm(null); }}
+        />
+      )}
 
       {cancelling && (
         <ConfirmDialog
           icon={<Ban size={20} />}
           tone="danger"
-          title="Cancel this deposit?"
-          message={`This voids the ${inr(cancelling.amount)} ${cancelling.bank} deposit dated ${fmtDate(cancelling.depositDate)}. Only an unreconciled deposit can be cancelled.`}
-          confirmLabel="Cancel deposit"
+          title="Void this deposit?"
+          message={`This voids (deletes) the ${inr(cancelling.amount)} ${cancelling.bank} deposit dated ${fmtDate(cancelling.depositDate)} and updates the totals. Only an unreconciled deposit can be voided.`}
+          confirmLabel="Void deposit"
           loading={cancel.isPending}
           onConfirm={() => cancel.mutate(cancelling.id)}
           onCancel={() => setCancelling(null)}
@@ -177,53 +201,176 @@ export default function BranchDepositsPage() {
   );
 }
 
-// ── Record a consolidated branch deposit ─────────────────────────────────────
-function RecordDepositModal({ branchScoped, onClose, onDone }: { branchScoped: boolean; onClose: () => void; onDone: () => void }) {
-  const toast = useToast();
-  const [branchId, setBranchId] = useState('');
-  const [bank, setBank] = useState<DepositBank>('SBI');
-  const [depositDate, setDepositDate] = useState(isoLocalDate(new Date()));
-  const [amount, setAmount] = useState('');
-  const [slipNumber, setSlipNumber] = useState('');
-  const [reference, setReference] = useState('');
-  const [notes, setNotes] = useState('');
-  const [error, setError] = useState('');
+// ── DB-computed deposit progress ─────────────────────────────────────────────
+function DepositProgressPanel({ summary, loading }: { summary?: DepositSettlementSummary; loading: boolean }) {
+  if (!summary) {
+    return (
+      <section className="panel pad deposit-progress">
+        <p className="muted">{loading ? 'Loading deposit progress…' : 'Deposit progress is unavailable.'}</p>
+      </section>
+    );
+  }
 
-  // Cross-branch roles pick the branch; branch-scoped users are pinned server-side.
+  const { expected, deposited, remaining, status } = summary;
+  const pct = expected.total > 0
+    ? Math.min(100, Math.round((deposited.total / expected.total) * 100))
+    : deposited.total > 0 ? 100 : 0;
+  const over = remaining.total < -0.005;
+  const noTarget = expected.total <= 0 && deposited.total > 0;
+  const scopeLabel = summary.scope.isToday
+    ? 'Today'
+    : summary.scope.from && summary.scope.to && summary.scope.from !== summary.scope.to
+      ? `${fmtDate(summary.scope.from)} – ${fmtDate(summary.scope.to)}`
+      : fmtDate(summary.scope.from ?? summary.scope.to);
+  const entryLabel = `${summary.entryCount} deposit ${summary.entryCount === 1 ? 'entry' : 'entries'}`;
+
+  return (
+    <section className="panel pad deposit-progress">
+      <header className="dp-head">
+        <div>
+          <h2 className="dp-title"><Landmark size={18} /> Deposit progress</h2>
+          <p className="muted sm-text">{scopeLabel} · {summary.approvedSettlements} approved settlement{summary.approvedSettlements === 1 ? '' : 's'} · {entryLabel}</p>
+        </div>
+        <Badge tone={DEPOSIT_SETTLEMENT_STATUS_TONE[status]} dot>{DEPOSIT_SETTLEMENT_STATUS_LABEL[status]}</Badge>
+      </header>
+
+      <div className="dp-bar" role="progressbar" aria-valuenow={pct} aria-valuemin={0} aria-valuemax={100} aria-label="Deposited vs expected">
+        <div className={`dp-bar-fill${over ? ' over' : ''}${status === 'COMPLETED' && !over ? ' done' : ''}`} style={{ width: `${pct}%` }} />
+      </div>
+      <p className="dp-caption muted sm-text">
+        {noTarget
+          ? 'No approved settlement in this window — deposits recorded without an expected target.'
+          : over
+            ? `Over-deposited by ${inr(Math.abs(remaining.total))} versus the expected amount.`
+            : `${pct}% of the expected amount banked.`}
+      </p>
+
+      <div className="dp-metrics">
+        <DepositMetric icon={<Wallet size={18} />} label="Total to deposit" value={inr(expected.total)} hint="expected from approved settlements" />
+        <DepositMetric icon={<Banknote size={18} />} label="Total deposited" value={inr(deposited.total)} hint={entryLabel} tone="accent" />
+        <DepositMetric icon={<CheckCircle size={18} />} label="Remaining" value={inr(Math.max(0, remaining.total))} hint={remaining.total > 0.005 ? 'still to bank' : 'fully deposited'} tone={remaining.total > 0.005 ? 'warn' : 'ok'} />
+        <DepositMetric label="Status" value={DEPOSIT_SETTLEMENT_STATUS_LABEL[status]} hint={`${summary.reconciled.count} reconciled · ${summary.inTransit.count} in transit`} />
+      </div>
+
+      <div className="dp-banks">
+        {DEPOSIT_BANKS.map((b) => {
+          const key = BANK_TOTAL_KEY[b];
+          const exp = expected[key];
+          const dep = deposited[key];
+          const rem = remaining[key];
+          const bpct = exp > 0 ? Math.min(100, Math.round((dep / exp) * 100)) : dep > 0 ? 100 : 0;
+          return (
+            <div key={b} className="dp-bank">
+              <div className="dp-bank-head"><strong>{b}</strong><span className="muted sm-text">{bpct}%</span></div>
+              <div className="dp-bar dp-bar-sm"><div className="dp-bar-fill" style={{ width: `${bpct}%` }} /></div>
+              <div className="dp-bank-figs">
+                <span>Expected <b className="num">{inr(exp)}</b></span>
+                <span>Deposited <b className="num">{inr(dep)}</b></span>
+                <span className={rem > 0.005 ? 'dp-rem-open' : ''}>Remaining <b className="num">{inr(Math.max(0, rem))}</b></span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </section>
+  );
+}
+
+function DepositMetric({
+  icon, label, value, hint, tone,
+}: {
+  icon?: ReactNode; label: string; value: string; hint?: string; tone?: 'accent' | 'ok' | 'warn';
+}) {
+  return (
+    <div className={`dp-metric${tone ? ` dp-metric-${tone}` : ''}`}>
+      <span className="dp-metric-top">
+        {icon && <span className="dp-metric-icon" aria-hidden="true">{icon}</span>}
+        <span className="dp-metric-label">{label}</span>
+      </span>
+      <span className="dp-metric-value num">{value}</span>
+      {hint && <span className="muted sm-text">{hint}</span>}
+    </div>
+  );
+}
+
+// ── Record / edit a consolidated branch deposit ──────────────────────────────
+function DepositFormModal({
+  editing, branchScoped, defaultDate, onClose, onSaved,
+}: {
+  editing: BankDeposit | null;
+  branchScoped: boolean;
+  defaultDate: string;
+  onClose: () => void;
+  onSaved: (opts?: { keepOpen?: boolean }) => void;
+}) {
+  const toast = useToast();
+  const isEdit = !!editing;
+  const [branchId, setBranchId] = useState('');
+  const [bank, setBank] = useState<DepositBank>(editing?.bank ?? 'SBI');
+  const [depositDate, setDepositDate] = useState(editing ? isoLocalDate(new Date(editing.depositDate)) : defaultDate);
+  const [amount, setAmount] = useState(editing ? String(Number(editing.amount)) : '');
+  const [slipNumber, setSlipNumber] = useState(editing?.slipNumber ?? '');
+  const [reference, setReference] = useState(editing?.reference ?? '');
+  const [notes, setNotes] = useState(editing?.notes ?? '');
+  const [error, setError] = useState('');
+  const amountRef = useRef<HTMLInputElement>(null);
+
+  // Cross-branch roles pick the branch on create; branch-scoped users are pinned
+  // server-side, and an edit never re-targets the branch.
   const branches = useQuery({
     queryKey: ['/branches', 'deposit-options'],
-    enabled: !branchScoped,
+    enabled: !branchScoped && !isEdit,
     queryFn: () => api.get('/branches?pageSize=100').then((r) => r.data.data as BranchRef[]),
   });
 
-  const record = useMutation({
-    mutationFn: () => api.post('/reconciliation/deposits', {
-      branchId: branchScoped ? undefined : branchId,
-      bank,
-      depositDate,
-      amount: Number(amount),
-      slipNumber: slipNumber.trim() || undefined,
-      reference: reference.trim() || undefined,
-      notes: notes.trim() || undefined,
-    }),
-    onSuccess: () => { toast.success('Bank deposit recorded.'); onDone(); },
-    onError: (err) => setError(apiMessage(err, 'Could not record the deposit.')),
+  const save = useMutation({
+    mutationFn: ({ keepOpen }: { keepOpen: boolean }) => {
+      const payload = {
+        bank,
+        depositDate,
+        amount: Number(amount),
+        slipNumber: slipNumber.trim() || undefined,
+        reference: reference.trim() || undefined,
+        notes: notes.trim() || undefined,
+      };
+      const request = isEdit
+        ? api.patch(`/reconciliation/deposits/${editing.id}`, payload)
+        : api.post('/reconciliation/deposits', { branchId: branchScoped ? undefined : branchId, ...payload });
+      return request.then(() => ({ keepOpen }));
+    },
+    onSuccess: ({ keepOpen }) => {
+      toast.success(isEdit ? 'Bank deposit updated.' : 'Bank deposit recorded.');
+      if (isEdit || !keepOpen) { onSaved(); return; }
+      // Keep the dialog open for the next pay-in: clear the entry-specific fields
+      // (keep bank + date) and refresh the totals behind the dialog.
+      setAmount(''); setSlipNumber(''); setReference(''); setNotes(''); setError('');
+      onSaved({ keepOpen: true });
+      amountRef.current?.focus();
+    },
+    onError: (err) => setError(apiMessage(err, 'Could not save the deposit.')),
   });
 
-  const disabled = record.isPending || !amount || Number(amount) <= 0 || !depositDate || (!branchScoped && !branchId);
+  const invalid = save.isPending || !amount || Number(amount) <= 0 || !depositDate || (!isEdit && !branchScoped && !branchId);
 
   return (
     <Modal
       size="md"
       onClose={onClose}
       icon={<Landmark size={20} />}
-      title="Record bank deposit"
-      subtitle="One consolidated deposit per bank. It stays 'in transit' until the bank statement confirms it."
+      title={isEdit ? 'Edit bank deposit' : 'Record bank deposit'}
+      subtitle={isEdit
+        ? 'Correct an in-transit deposit. A reconciled entry is locked.'
+        : "One consolidated deposit per pay-in. Totals update the moment it's saved."}
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-          <button type="button" disabled={disabled} onClick={() => { setError(''); record.mutate(); }}>
-            {record.isPending ? 'Recording…' : 'Record deposit'}
+          {!isEdit && (
+            <button type="button" className="ghost" disabled={invalid} onClick={() => { setError(''); save.mutate({ keepOpen: true }); }}>
+              Record &amp; add another
+            </button>
+          )}
+          <button type="button" disabled={invalid} onClick={() => { setError(''); save.mutate({ keepOpen: false }); }}>
+            {save.isPending ? 'Saving…' : isEdit ? 'Save changes' : 'Record deposit'}
           </button>
         </>
       }
@@ -231,10 +378,14 @@ function RecordDepositModal({ branchScoped, onClose, onDone }: { branchScoped: b
       <div className="form-grid">
         {!branchScoped && (
           <label className="span-all">Branch
-            <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
-              <option value="">Select a branch</option>
-              {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}
-            </select>
+            {isEdit
+              ? <input value={editing.branch?.name ?? '—'} readOnly disabled />
+              : (
+                <select value={branchId} onChange={(e) => setBranchId(e.target.value)}>
+                  <option value="">Select a branch</option>
+                  {(branches.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name}{b.code ? ` (${b.code})` : ''}</option>)}
+                </select>
+              )}
           </label>
         )}
         <label>Bank
@@ -246,7 +397,7 @@ function RecordDepositModal({ branchScoped, onClose, onDone }: { branchScoped: b
           <input type="date" value={depositDate} max={isoLocalDate(new Date())} onChange={(e) => setDepositDate(e.target.value)} />
         </label>
         <label>Amount (₹)
-          <input inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="100000" data-autofocus />
+          <input ref={amountRef} inputMode="decimal" value={amount} onChange={(e) => setAmount(e.target.value.replace(/[^0-9.]/g, ''))} placeholder="100000" data-autofocus />
         </label>
         <label>Deposit slip no.
           <input value={slipNumber} onChange={(e) => setSlipNumber(e.target.value)} placeholder="e.g. 4477" />

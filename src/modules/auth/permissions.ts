@@ -221,11 +221,15 @@ export const MODULES: ModuleDef[] = [
   // Employee personnel files — part of HR. Client/lead KYC lives on those records.
   { key: 'documents', to: '/documents', label: 'Document Center', permission: 'document:view', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
   { key: 'masters', to: '/masters', label: 'Organization Masters', permission: 'masters:view', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
-  // Settings hosts the RBAC role/permission editor, so HR is deliberately NOT
-  // here — HR must not be able to grant itself access beyond the HR module.
-  // The HR policy screen (hrPolicy) is hidden from the menu; it stays reachable
-  // at /settings/hr-policy by direct URL.
-  { key: 'settings', to: '/settings', label: 'Settings', permission: 'settings:view', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
+  // Settings hosts only the RBAC role/permission editor, so it is gated on
+  // 'roles:configure' — the code that unlocks that editor — not the broad
+  // 'settings:view'. A role with settings:view but no roles:configure (e.g.
+  // Operations, Auditor) would otherwise see a Settings menu whose single tile
+  // opens an empty Roles & Permissions page. HR is deliberately NOT in `roles`
+  // — HR must not be able to grant itself access beyond the HR module. The HR
+  // policy screen (hrPolicy) is hidden from the menu; it stays reachable at
+  // /settings/hr-policy by direct URL.
+  { key: 'settings', to: '/settings', label: 'Settings', permission: 'roles:configure', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
 ];
 
 /** In-page actions, each mapped to the roles the backend permits. */

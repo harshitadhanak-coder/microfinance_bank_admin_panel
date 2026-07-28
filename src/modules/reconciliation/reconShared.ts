@@ -83,6 +83,52 @@ export interface ReconciliationSummary {
   oldestInTransitDays: number;
 }
 
+export type DepositSettlementStatus = 'PENDING' | 'PARTIAL' | 'COMPLETED';
+
+/** Per-bank money split shared by expected / deposited / remaining figures. */
+export interface BankTotals {
+  total: number;
+  axis: number;
+  sbi: number;
+  hdfc: number;
+}
+
+/**
+ * DB-computed deposit position for the Bank Deposits screen, scoped to a branch
+ * and a settlement window (a single day, or a date range). Every figure is a
+ * fresh server aggregate — the single source of truth — so the UI never derives
+ * a running total from local state.
+ */
+export interface DepositSettlementSummary {
+  scope: { from: string | null; to: string | null; isToday: boolean };
+  /** What the branch is due to bank (from approved day-end settlements). */
+  expected: BankTotals;
+  /** What has actually been recorded as consolidated deposits (not cancelled). */
+  deposited: BankTotals;
+  /** expected − deposited (signed; negative means over-deposited). */
+  remaining: BankTotals;
+  entryCount: number;
+  approvedSettlements: number;
+  status: DepositSettlementStatus;
+  inTransit: { count: number; amount: number };
+  reconciled: { count: number; amount: number };
+}
+
+export const DEPOSIT_SETTLEMENT_STATUS_LABEL: Record<DepositSettlementStatus, string> = {
+  PENDING: 'Pending',
+  PARTIAL: 'Partial',
+  COMPLETED: 'Completed',
+};
+export const DEPOSIT_SETTLEMENT_STATUS_TONE: Record<DepositSettlementStatus, BadgeTone> = {
+  PENDING: 'warning',
+  PARTIAL: 'info',
+  COMPLETED: 'success',
+};
+
+export const BANK_TOTAL_KEY: Record<DepositBank, keyof Omit<BankTotals, 'total'>> = {
+  AXIS: 'axis', SBI: 'sbi', HDFC: 'hdfc',
+};
+
 export const DEPOSIT_STATUS_TONE: Record<BankDepositStatus, BadgeTone> = {
   DEPOSITED: 'warning',
   RECONCILED: 'success',
