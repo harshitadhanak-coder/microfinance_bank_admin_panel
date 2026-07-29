@@ -1572,7 +1572,6 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 
 /* Progress bars — overall + per-bank */
 .dp-bar { height: 10px; margin-top: var(--space-4); border-radius: var(--radius-pill); background: var(--color-line); overflow: hidden; }
-.dp-bar-sm { height: 6px; margin-top: var(--space-2); }
 .dp-bar-fill { height: 100%; border-radius: inherit; background: linear-gradient(90deg, var(--brass), var(--brass-dark)); transition: width 0.35s ease; }
 .dp-bar-fill.done { background: linear-gradient(90deg, #2a9d68, var(--green)); }
 .dp-bar-fill.over { background: linear-gradient(90deg, var(--amber), var(--red)); }
@@ -1589,9 +1588,16 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .dp-metric-ok .dp-metric-value { color: var(--green); }
 .dp-metric-warn .dp-metric-value { color: var(--amber); }
 
-/* Per-bank expected vs deposited breakdown */
-.dp-banks { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: var(--space-4); margin-top: var(--space-5); padding-top: var(--space-4); border-top: 1px dashed var(--line); }
-.dp-bank-head { display: flex; align-items: center; justify-content: space-between; }
-.dp-bank-figs { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-4); margin-top: var(--space-2); font: var(--text-sm); color: var(--muted); }
-.dp-bank-figs b { color: var(--color-ink); font-weight: 600; }
-.dp-rem-open b { color: var(--amber); }
+.dp-head-actions { display: inline-flex; align-items: center; gap: var(--space-3); flex-shrink: 0; }
+
+/* Bank Deposits table — running closing balance + voided entries */
+.dep-closing { font-weight: 600; }
+.dep-closing.open { color: var(--amber); }
+.dep-closing.done { color: var(--green); }
+.dep-closing.over { color: var(--red); }
+.dp-identity { margin-top: 2px; }
+/* A voided entry keeps its figures on screen but reads as struck from the day. */
+.amount-voided { color: var(--muted); text-decoration: line-through; }
+.dep-status-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
+.dep-void-reason { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.field-hint { display: block; margin-top: var(--space-1); }

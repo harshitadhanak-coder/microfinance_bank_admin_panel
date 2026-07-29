@@ -28,6 +28,15 @@ export interface BankDeposit {
   notes: string | null;
   reconciledAt: string | null;
   createdAt: string;
+  /** Why this entry was voided (cancelled entries only). */
+  cancelReason?: string | null;
+  cancelledAt?: string | null;
+  /** The day's total collection to bank (opening + collection + hospicash). */
+  dayCollection?: number;
+  /** Banked that day up to and including this entry. Null on a cancelled entry. */
+  runningDeposited?: number | null;
+  /** Closing cash still to bank after this entry: collection − deposited. */
+  runningClosing?: number | null;
 }
 
 /** The deposit a statement line is matched to (compact form on a line). */
@@ -85,14 +94,6 @@ export interface ReconciliationSummary {
 
 export type DepositSettlementStatus = 'PENDING' | 'PARTIAL' | 'COMPLETED';
 
-/** Per-bank money split shared by expected / deposited / remaining figures. */
-export interface BankTotals {
-  total: number;
-  axis: number;
-  sbi: number;
-  hdfc: number;
-}
-
 /**
  * DB-computed deposit position for the Bank Deposits screen, scoped to a branch
  * and a settlement window (a single day, or a date range). Every figure is a
@@ -101,12 +102,35 @@ export interface BankTotals {
  */
 export interface DepositSettlementSummary {
   scope: { from: string | null; to: string | null; isToday: boolean };
-  /** What the branch is due to bank (from approved day-end settlements). */
-  expected: BankTotals;
-  /** What has actually been recorded as consolidated deposits (not cancelled). */
-  deposited: BankTotals;
-  /** expected − deposited (signed; negative means over-deposited). */
-  remaining: BankTotals;
+  /**
+   * The deposit cash book for the window, derived from the approved day-end
+   * settlements: collection + hospicash − deposited = closing. The settlement's
+   * opening balance is excluded on purpose — it carries unresolved
+   * discrepancies, not bankable cash.
+   */
+  cashBook: {
+    collection: number;
+    hospicash: number;
+    /** collection + hospicash — the total to deposit. */
+    totalCollection: number;
+    /** Bank deposits actually recorded (cancelled entries excluded). */
+    deposited: number;
+    /** totalCollection − deposited: cash still to bank. */
+    closing: number;
+    /** What the officers themselves declared they banked, for comparison. */
+    settlementDeposit: number;
+  };
+  /** Where `cashBook.totalCollection` came from, so the UI can offer an override. */
+  target: {
+    source: 'DECLARED' | 'SETTLEMENT';
+    amount: number;
+    days: number;
+    notes: string | null;
+    updatedAt: string | null;
+    derivedAmount: number;
+  };
+  /** Voided entries in the window — excluded from every total above. */
+  cancelled: { count: number; amount: number };
   entryCount: number;
   approvedSettlements: number;
   status: DepositSettlementStatus;
@@ -123,10 +147,6 @@ export const DEPOSIT_SETTLEMENT_STATUS_TONE: Record<DepositSettlementStatus, Bad
   PENDING: 'warning',
   PARTIAL: 'info',
   COMPLETED: 'success',
-};
-
-export const BANK_TOTAL_KEY: Record<DepositBank, keyof Omit<BankTotals, 'total'>> = {
-  AXIS: 'axis', SBI: 'sbi', HDFC: 'hdfc',
 };
 
 export const DEPOSIT_STATUS_TONE: Record<BankDepositStatus, BadgeTone> = {
