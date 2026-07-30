@@ -6,6 +6,7 @@ import { Column, DataTable } from '../../components/DataTable';
 import { useServerTable } from '../../components/useServerTable';
 import { ConfirmDialog } from '../../components/Modal';
 import { PageHeader } from '../../components/PageHeader';
+import { PageBar } from '../../components/PageBar';
 import { Badge } from '../../components/Badge';
 import { FilterBar } from '../../components/FilterBar';
 import { ActionMenu } from '../../components/ActionMenu';
@@ -49,6 +50,11 @@ export default function EmployeesPage() {
   });
   const rows = (listQuery.data?.data ?? []) as EmployeeRow[];
   const totalItems = (listQuery.data?.pagination?.totalItems ?? 0) as number;
+
+  // Headcount pill in the header. Only shown on the unfiltered list, so the
+  // number always means "employees on record" and never a filtered subset.
+  const unfiltered = !status && !designationId && !roleId && !table.search;
+  const headcount = unfiltered && !listQuery.isLoading ? totalItems : null;
 
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/employees') });
 
@@ -109,14 +115,19 @@ export default function EmployeesPage() {
 
   return (
     <>
-      <PageHeader
-        breadcrumb={[{ label: 'Human Resources' }, { label: 'Employees' }]}
-        title="Employees"
-        subtitle="Staff profiles — personal details, branch, KYC documents and salary"
-        actions={canCreate && (
-          <button className="btn-lg" onClick={() => navigate('/employees/new')}><Plus size={16} /> Add employee</button>
-        )}
-      />
+      {/* One header surface: the trail and account chrome on top, the page's own
+          title/actions beneath it — see PageBar. */}
+      <PageBar breadcrumb={[{ label: 'Dashboard', to: '/' }, { label: 'Human Resources' }, { label: 'Employees' }]}>
+        <PageHeader
+          variant="feature"
+          title="Employees"
+          badge={headcount !== null && <Badge tone="neutral">{headcount.toLocaleString('en-IN')} employees</Badge>}
+          subtitle="Staff directory — personal details, branch posting, role, KYC documents and salary."
+          actions={canCreate && (
+            <button className="btn-lg" onClick={() => navigate('/employees/new')}><Plus size={16} /> Add employee</button>
+          )}
+        />
+      </PageBar>
 
       <FilterBar chips={filterChips} onReset={filterChips.length ? resetFilters : undefined}>
         <label>Status

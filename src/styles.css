@@ -268,7 +268,80 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
 
 /* Fill the whole viewport width; min-width:0 lets tables scroll inside the
    grid column instead of stretching the page. */
+.content-shell { min-width: 0; }
 .content { padding: 0.9rem 1.4rem 1.75rem; width: 100%; max-width: 1560px; margin: 0 auto; min-width: 0; }
+
+/* ── Page bar ── (rendered by <PageBar> into AppLayout's slot)
+   The page's header surface: ONE white block, ONE closing rule, no internal
+   tint and no internal divider.
+
+     ┌────────────────────────────────────────────────────────────┐
+     │ Dashboard / Human Resources / Employees    🔔  SF Sara F.  │  path row
+     │ Employees  ( 83 employees )              [+ Add employee]  │  title row
+     │ Staff directory — personal details, branch posting, …      │
+     └────────────────────────────────────────────────────────────┘  ← the only rule
+
+   A colour change or a rule *inside* a header splits it into pieces — the eye
+   reads every edge as a boundary between unrelated things. So the two rows are
+   separated by type weight and spacing only: a 12px muted path line sitting
+   tight above a 26px title. One surface, one boundary, one header.
+
+   Colour discipline on this surface: ink for text and the two "you are here"
+   marks (avatar, primary button), muted grey for support, hairlines for
+   structure. No brass — the accent belongs to links and hover states, not to
+   standing chrome.
+
+   Every row shares the page content's measure, so breadcrumb, title, subtitle
+   and the filter row below all start on the same left edge. Pages that don't
+   mount a PageBar leave the slot empty and it collapses — untouched. */
+.pagebar-slot:empty { display: none; }
+/* A hard rule above the content needs more air than the page's default top
+   padding gives. Scoped to the sibling combinator so pages without a bar keep
+   their existing rhythm. */
+.pagebar-slot:not(:empty) + .content { padding-top: var(--space-5); }
+.pagebar { background: var(--color-surface); border-bottom: 1px solid var(--color-line); }
+/* Shared measure: every row lines up with the page content below. */
+.pagebar-row { width: 100%; max-width: 1560px; margin: 0 auto; padding: 0 1.4rem; }
+.pagebar-path { display: flex; align-items: center; gap: var(--space-4); min-height: 42px; }
+.pagebar-head { padding-bottom: var(--space-4); }
+/* Tabs must touch the closing rule, so the row gives up its bottom padding. */
+.pagebar-head:has(.tabs) { padding-bottom: 0; }
+.pagebar .page-header .tabs { margin-bottom: 0; }
+/* The path line stays deliberately small so the title below owns the block:
+   ancestors recede, the leaf just closes the trail — it must not compete with
+   the H1 that repeats it. */
+.pagebar .breadcrumb { margin: 0; min-width: 0; font-size: 12px; }
+.pagebar .breadcrumb .crumb:last-child span { font-weight: 600; }
+.pagebar-actions { display: flex; align-items: center; gap: var(--space-1); margin-left: auto; flex: none; }
+.pagebar-account {
+  display: inline-flex; align-items: center; gap: var(--space-2);
+  padding: 3px 10px 3px 3px; border-radius: var(--radius-pill);
+  color: var(--color-ink); text-decoration: none;
+  font: 600 12.5px/1 var(--font-body);
+  transition: background var(--dur-fast) var(--ease);
+}
+.pagebar-account:hover { background: var(--color-surface-2); }
+.pagebar-account-name { max-width: 18ch; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Ink, not brass: on a white surface a brass disc reads as a warning colour and
+   pulls focus from the primary action it sits above. */
+.pagebar .user-avatar { background: var(--color-ink); color: #fff; }
+.user-avatar.sm { width: 26px; height: 26px; font-size: 0.68rem; }
+/* Unread count on the bar's bell — anchored to the button's top-right corner. */
+.pagebar .notif-bell { position: relative; }
+.pagebar .notif-badge {
+  position: absolute; top: -2px; right: -2px;
+  min-width: 15px; height: 15px; padding: 0 4px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: var(--radius-pill); background: var(--status-danger); color: #fff;
+  font: 700 10px/1 var(--font-body);
+}
+/* One bell per page: the bar takes over from the sidebar's when present. */
+.shell:has(.pagebar) .sidebar-brand-row .notif-bell { display: none; }
+@media (max-width: 1023px) {
+  .pagebar-row { padding: 0 1rem; }
+  .pagebar-path { min-height: 38px; }
+  .pagebar-account-name { display: none; }
+}
 
 /* ── Page chrome ── */
 .page-head { margin-bottom: 0.9rem; }
@@ -1282,6 +1355,40 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 @media (max-width: 640px) {
   .page-header-row { flex-direction: column; align-items: stretch; }
   .page-header-actions { width: 100%; }
+}
+
+/* ── Page header · feature variant ──
+   The title block as it appears on a header surface (<PageBar>), not on the
+   open page. Denser than the default: banking/HR consoles run 22–26px page
+   titles, not display type, because the header competes with a data-dense grid
+   directly below it. The action toolbar aligns to the TITLE's line, not to the
+   centre of the title+subtitle block — a right-hand button that floats between
+   two lines is the single most common giveaway of an unconsidered header. */
+.page-header--feature {
+  padding: 0;
+  margin: 0;
+  border-bottom: 0;
+}
+.page-header--feature .page-header-row { align-items: flex-start; gap: var(--space-3) var(--space-8); }
+.page-header--feature .page-header-title h1 { font-size: 26px; letter-spacing: -0.018em; }
+.page-header--feature .page-header-titlerow { gap: var(--space-2); align-items: baseline; }
+.page-header--feature .page-header-subtitle { margin-top: 3px; font-size: 13.5px; max-width: 78ch; }
+/* 40px primary, not 44px: the header is chrome around a data grid, so the CTA
+   matches the toolbar scale below it instead of shouting over it. */
+.page-header--feature .page-header-actions button.btn-lg { min-height: 40px; }
+/* Count chip beside the title: outlined, not filled. A filled grey pill reads
+   as a status badge (the grid below is full of them) and lands as a smudge next
+   to the title; a hairline outline with muted text reads as a data label. */
+.page-header--feature .page-header-badge .badge {
+  padding: 2px 8px;
+  background: transparent;
+  border: 1px solid var(--color-line);
+  color: var(--color-muted);
+  font: 600 11.5px/1.5 var(--font-body);
+  font-variant-numeric: tabular-nums;
+}
+@media (max-width: 640px) {
+  .page-header--feature .page-header-title h1 { font-size: 22px; }
 }
 
 /* Search field that lives inline in a FilterBar (filters + search on one row). */

@@ -5,6 +5,7 @@ import { navSections } from '../modules/auth/permissions';
 import type { ModuleDef, ModuleGroup, ModuleKey } from '../modules/auth/permissions';
 import { Modal } from '../components/Modal';
 import { NotificationsBell } from '../components/NotificationsBell';
+import { APP_BAR_SLOT_ID } from '../components/PageBar';
 import {
   AlertCircle, Banknote, CalendarCheck, CalendarOff, ChevronDown, FileSpreadsheet, HandCoins,
   Landmark, LayoutDashboard, ListChecks, LogOut, Menu, PanelLeft, Settings2, Target, UserCheck,
@@ -188,7 +189,12 @@ export default function AppLayout() {
         </div>
       </aside>
 
-      <main className="content"><Outlet /></main>
+      {/* The page column: an app-bar slot pages can fill via <PageBar> (it
+          collapses when unused), then the page itself. */}
+      <main className="content-shell">
+        <div id={APP_BAR_SLOT_ID} className="pagebar-slot" />
+        <div className="content"><Outlet /></div>
+      </main>
 
       {confirmSignOut && (
         <Modal size="sm" onClose={() => setConfirmSignOut(false)}>

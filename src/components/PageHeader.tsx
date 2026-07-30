@@ -39,6 +39,10 @@ export function Breadcrumb({ items }: { items: Crumb[] }) {
  * `actions` is the right-aligned action cluster (put the one primary action
  * last). `meta` sits under the title for record context/status. `tabs` renders
  * the page's sub-view switch beneath the header.
+ *
+ * `variant="feature"` is the opt-in treatment for a module's landing page: a
+ * denser, more deliberate title block, sized for a header surface (see
+ * <PageBar>) rather than for the open page.
  */
 export function PageHeader({
   breadcrumb,
@@ -48,6 +52,7 @@ export function PageHeader({
   meta,
   actions,
   tabs,
+  variant = 'default',
 }: {
   breadcrumb?: Crumb[];
   title: ReactNode;
@@ -57,9 +62,10 @@ export function PageHeader({
   meta?: ReactNode;
   actions?: ReactNode;
   tabs?: ReactNode;
+  variant?: 'default' | 'feature';
 }) {
   return (
-    <header className="page-header">
+    <header className={`page-header${variant === 'feature' ? ' page-header--feature' : ''}`}>
       {breadcrumb && breadcrumb.length > 0 && <Breadcrumb items={breadcrumb} />}
       <div className="page-header-row">
         <div className="page-header-title">
