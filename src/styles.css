@@ -1797,38 +1797,93 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
   background: #0E5149;
 }
 
-/* ── Table card: crisper elevation, quieter borders, denser rows. ── */
-.emp-list .panel { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); border-color: var(--color-line); }
+/* ── Table container: a premium enterprise card — 12px radius, clean warm
+      border, soft shadow. `.panel` clips overflow, so the sticky header's top
+      corners round with the card. ── */
+.emp-list .panel { border-radius: 12px; box-shadow: var(--shadow-1); border-color: var(--color-line); }
 .emp-list table { font-size: 0.84rem; }
 
-/* Header band — a warm neutral, clearly stepped off the white body; strong,
-   uppercase, tightly-tracked labels give the grid its enterprise hierarchy;
-   stays sticky. */
+/* Header — a taller band on a refined warm-gray fill, with 600-weight uppercase
+   labels and open tracking for a clear, elegant hierarchy; stays sticky under
+   scroll and transitions smoothly on hover. */
 .emp-list thead th {
   background: #ECE8DF;
   color: var(--color-muted);
-  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
-  padding: 0.6rem 1rem;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  padding: 0.72rem 1rem;
   border-bottom: 1px solid var(--color-line);
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
+.emp-list thead th.sortable { cursor: pointer; }
 .emp-list thead th.sortable:hover { background: #E3DDD1; color: var(--color-ink); }
 
-/* Body — white rows, subtle warm separators, one calm warm hover, and a soft
-   warm zebra for horizontal tracking on wide tables. */
+/* Rows — ~13% shorter for higher information density, quiet warm separators (not
+   heavy borders), one calm warm hover with a smooth transition, and a
+   whisper-soft zebra for horizontal tracking on wide tables. */
 .emp-list tbody td {
-  padding: 0.44rem 1rem;
+  padding: 0.38rem 1rem;
   border-bottom: 1px solid #EFEAE1;
-  color: var(--color-ink);
+  color: #475569;                 /* secondary cell text — one step back from the name */
   background: var(--color-surface);
+  transition: background var(--dur-fast) ease;
 }
 .emp-list tbody tr:nth-child(even) td { background: #FBF9F5; }
 .emp-list tbody tr:hover td { background: #F5F2EC; }
 .emp-list tbody tr:last-child td { border-bottom: none; }
 
-/* Identifiers read as quiet mono chips, names as the row's gold-hover anchor. */
-.emp-list td code { font-size: 0.72rem; background: #F2EEE6; color: var(--color-muted); padding: 2px 7px; }
-.emp-list .cell-link { color: var(--color-ink); font-weight: 600; }
+/* Selected row — a subtle warm-green wash with a single gold indicator bar on
+   the leading cell (gold stays reserved for the active/selected marker only). */
+.emp-list tbody tr.row-selected td { background: #EEF2E9; }
+.emp-list tbody tr.row-selected:hover td { background: #E8EFE1; }
+.emp-list tbody tr.row-selected td:first-child { box-shadow: inset 3px 0 0 var(--brass); }
+
+/* Typography — the employee name is the row's anchor: darkest ink, semibold,
+   gold on hover. Everything else sits a step back (the slate above). */
+.emp-list .cell-link { color: #1E293B; font-weight: 600; cursor: pointer; transition: color var(--dur-fast) ease; }
 .emp-list .cell-link:hover { color: var(--color-brass-dark); text-decoration: underline; }
+
+/* Employee code — a minimal pill badge: subtle warm fill, hairline border,
+   medium weight, tabular figures. */
+.emp-list td code {
+  display: inline-block;
+  font-size: 0.72rem; font-weight: 500; letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: #6B6350;
+  background: #F3EFE7;
+  border: 1px solid #E7E1D5;
+  border-radius: var(--radius-pill);
+  padding: 2px 9px; line-height: 1.5;
+}
+
+/* Sort carets — quiet at rest, brighter on header hover, gold when active. */
+.emp-list .sort-caret { opacity: 0.4; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+.emp-list thead th.sortable:hover .sort-caret { opacity: 0.75; }
+.emp-list .sort-caret.asc, .emp-list .sort-caret.desc { color: var(--brass-dark); opacity: 1; }
+
+/* Scrollbar — slim, warm and unobtrusive (WebKit + Firefox). */
+.emp-list .table-scroll { scrollbar-width: thin; scrollbar-color: #D0CABC transparent; }
+.emp-list .table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.emp-list .table-scroll::-webkit-scrollbar-track { background: transparent; }
+.emp-list .table-scroll::-webkit-scrollbar-thumb {
+  background: #D8D4CB; border-radius: var(--radius-pill);
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.emp-list .table-scroll::-webkit-scrollbar-thumb:hover { background: #C7C2B6; }
+
+/* Refined focus — a gold ring, softly offset, on the grid's interactive controls. */
+.emp-list .table-pager button:focus-visible,
+.emp-list .table-search input:focus-visible { outline: 2px solid var(--brass); outline-offset: 2px; }
+
+/* Loading — warm-toned skeleton so the placeholder matches the grid rather than
+   flashing cold gray. */
+.emp-list .skeleton { background: #ECE8DF; }
+
+/* Empty state — centred and calm, with real breathing room instead of a cramped
+   strip of muted text. */
+.emp-list .panel.pad.muted {
+  text-align: center; padding: 2.75rem 1.5rem;
+  color: var(--color-muted); font-size: 0.9rem;
+}
 
 /* Pager sits on the same card, calmly divided from the last row. */
 .emp-list .table-pager { padding: 0.6rem 1rem; border-top: 1px solid var(--color-line); }
