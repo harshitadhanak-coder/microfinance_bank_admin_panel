@@ -1713,22 +1713,52 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .dep-void-reason { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-hint { display: block; margin-top: var(--space-1); }
 
-/* ── Employees list — premium enterprise polish ─────────────────────────────────
-   ALL rules here are scoped under `.emp-list` so the shared FilterBar / DataTable
-   components keep their current look on every other module. This is purely
-   visual: colour hierarchy, toolbar balance, table density and scannability.
+/* ── Employees list — premium enterprise colour system ──────────────────────────
+   Warm-neutral banking / microfinance HRMS palette: a soft warm off-white well,
+   white card surfaces, a deep-green primary and a restrained gold accent. Warm
+   (not cold blue-gray, not beige/yellow) so the UI reads elegant and trustworthy
+   like modern wealth-management software. EVERYTHING stays scoped under
+   `.emp-list` (and the content column that hosts it) so the shared FilterBar /
+   DataTable / buttons keep their current look on every other module. Layout,
+   spacing, components and behaviour are unchanged — this is purely the colour
+   system.
 
-   Surface hierarchy (page → toolbar → table header → rows):
-     page bg      var(--paper)  #f7f6f2   (warm, recessed)
-     toolbar/card var(--surface) #ffffff  (raised, bordered, soft shadow)
-     header band  #efece3                 (clearly greyer than the body)
-     row body     #ffffff                 (crisp, with a soft hover)                */
+   Palette (surface hierarchy: page → card → table header → rows):
+     page well   #F8F6F1   cards       #FFFFFF
+     table head  #ECE8DF   rows        #FFFFFF   zebra #FBF9F5   hover #F5F2EC
+     borders     #D8D4CB   separators  #EFEAE1
+     text        #1E293B   secondary   #64748B
+     primary     #0B403A (hover #0E5149)         accent gold #C6953F              */
+
+/* Retheme the tokens the page and its child components consume. The semantic
+   aliases (--color-ink, --color-line, …) resolve to var(--ink), var(--line), …
+   at use time, so overriding the raw brand values *here* recolours everything
+   downstream — table, toolbar, inputs, chips — with no per-element edits. */
+.emp-list {
+  --paper: #F8F6F1;
+  --surface: #FFFFFF;
+  --line: #D8D4CB;
+  --color-line-strong: #C7C2B6;
+  --color-surface-2: #F5F2EC;
+  --ink: #1E293B;    /* primary text (buttons re-set to green below) */
+  --ink-2: #334155;
+  --muted: #64748B;  /* secondary text */
+  --brass: #C6953F;  /* gold accent */
+  --brass-dark: #A87C2E;
+  --shadow-1: 0 1px 2px rgba(45, 38, 25, 0.06), 0 1px 3px rgba(45, 38, 25, 0.05);
+  color: var(--color-ink);
+}
+
+/* Warm off-white page well behind the employee workspace, replacing the global
+   paper — scoped to the content column hosting this page so no other module's
+   background changes. */
+.content-shell:has(.emp-list) { background: #F8F6F1; }
 
 /* Title: keep the divider but let it breathe a little more above the toolbar. */
 .emp-list .page-header { margin-bottom: var(--space-5); }
 
-/* ── Toolbar: a self-contained card, so it reads as a distinct band above the
-      grid instead of floating on the page. ── */
+/* ── Toolbar: a self-contained white card, so it reads as a distinct band above
+      the grid instead of floating on the page. ── */
 .emp-list .filterbar {
   background: var(--color-surface);
   border: 1px solid var(--color-line);
@@ -1752,34 +1782,51 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
   text-transform: uppercase; letter-spacing: 0.05em; gap: var(--space-1);
 }
 .emp-list .filterbar-controls select { min-width: 172px; border-radius: var(--radius-sm); }
+/* Cool-gray control borders on hover (the global warm hover would reintroduce beige). */
+.emp-list input:hover, .emp-list select:hover, .emp-list textarea:hover { border-color: var(--color-line-strong); }
+
+/* ── Primary action: the deep-green banking CTA. Scoped to genuine primary
+      buttons only — ghost (pager, reset), icon-only and the search-clear button
+      keep their neutral treatment. ── */
+.emp-list button:not(.ghost):not(.icon-btn):not(.table-search-clear) {
+  background: #0B403A;
+  border-color: transparent;
+  color: #fff;
+}
+.emp-list button:not(.ghost):not(.icon-btn):not(.table-search-clear):hover {
+  background: #0E5149;
+}
 
 /* ── Table card: crisper elevation, quieter borders, denser rows. ── */
 .emp-list .panel { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); border-color: var(--color-line); }
 .emp-list table { font-size: 0.84rem; }
 
-/* Header band — a clear step darker than the white body, sticky as before. */
+/* Header band — a warm neutral, clearly stepped off the white body; strong,
+   uppercase, tightly-tracked labels give the grid its enterprise hierarchy;
+   stays sticky. */
 .emp-list thead th {
-  background: #efece3;
+  background: #ECE8DF;
   color: var(--color-muted);
   font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
   padding: 0.6rem 1rem;
-  border-bottom: 1px solid var(--color-line-strong);
+  border-bottom: 1px solid var(--color-line);
 }
-.emp-list thead th.sortable:hover { background: #e8e4d8; color: var(--color-ink); }
+.emp-list thead th.sortable:hover { background: #E3DDD1; color: var(--color-ink); }
 
-/* Body — tighter rows (more records on screen), softer separators, one calm
-   hover state, and a very light zebra for horizontal tracking on wide tables. */
+/* Body — white rows, subtle warm separators, one calm warm hover, and a soft
+   warm zebra for horizontal tracking on wide tables. */
 .emp-list tbody td {
   padding: 0.44rem 1rem;
-  border-bottom: 1px solid #edece4;
+  border-bottom: 1px solid #EFEAE1;
   color: var(--color-ink);
+  background: var(--color-surface);
 }
-.emp-list tbody tr:nth-child(even) td { background: #fbfaf7; }
-.emp-list tbody tr:hover td { background: #f4f1e8; }
+.emp-list tbody tr:nth-child(even) td { background: #FBF9F5; }
+.emp-list tbody tr:hover td { background: #F5F2EC; }
 .emp-list tbody tr:last-child td { border-bottom: none; }
 
-/* Identifiers read as quiet mono chips, names as the row's anchor. */
-.emp-list td code { font-size: 0.72rem; background: #f1efe8; color: var(--color-muted); padding: 2px 7px; }
+/* Identifiers read as quiet mono chips, names as the row's gold-hover anchor. */
+.emp-list td code { font-size: 0.72rem; background: #F2EEE6; color: var(--color-muted); padding: 2px 7px; }
 .emp-list .cell-link { color: var(--color-ink); font-weight: 600; }
 .emp-list .cell-link:hover { color: var(--color-brass-dark); text-decoration: underline; }
 
