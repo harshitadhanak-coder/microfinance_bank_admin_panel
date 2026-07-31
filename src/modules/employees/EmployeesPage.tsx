@@ -11,7 +11,7 @@ import { Badge } from '../../components/Badge';
 import { FilterBar } from '../../components/FilterBar';
 import { ActionMenu } from '../../components/ActionMenu';
 import { useToast } from '../../components/Toast';
-import { Eye, Pencil, Plus, Trash2 } from '../../components/icons';
+import { Eye, Pencil, Plus, Search, Trash2, X } from '../../components/icons';
 import { fmtDate, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
@@ -50,11 +50,6 @@ export default function EmployeesPage() {
   });
   const rows = (listQuery.data?.data ?? []) as EmployeeRow[];
   const totalItems = (listQuery.data?.pagination?.totalItems ?? 0) as number;
-
-  // Headcount pill in the header. Only shown on the unfiltered list, so the
-  // number always means "employees on record" and never a filtered subset.
-  const unfiltered = !status && !designationId && !roleId && !table.search;
-  const headcount = unfiltered && !listQuery.isLoading ? totalItems : null;
 
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/employees') });
 
@@ -113,23 +108,48 @@ export default function EmployeesPage() {
     }] : []),
   ];
 
+  // Search field for the toolbar — same control the DataTable used to render
+  // above the table, relocated into the page toolbar and wired to the shared
+  // server-table search state so behaviour is unchanged.
+  const searchField = (
+    <div className="table-search">
+      <Search size={16} />
+      <input
+        value={table.search}
+        onChange={(e) => table.onSearchChange(e.target.value)}
+        placeholder="Search by name, code, designation or branch…"
+        aria-label="Search employees"
+      />
+      {table.search && (
+        <button type="button" className="table-search-clear" onClick={() => table.onSearchChange('')} aria-label="Clear search"><X size={14} /></button>
+      )}
+    </div>
+  );
+
   return (
     <>
-      {/* One header surface: the trail and account chrome on top, the page's own
-          title/actions beneath it — see PageBar. */}
-      <PageBar breadcrumb={[{ label: 'Dashboard', to: '/' }, { label: 'Human Resources' }, { label: 'Employees' }]}>
+      {/* Global header surface carries only the breadcrumb trail (plus the
+          standard alerts + account chrome) — see PageBar. */}
+      <PageBar breadcrumb={[{ label: 'Dashboard', to: '/' }, { label: 'Human Resources' }, { label: 'Employees' }]} />
+
+      {/* `emp-list` scopes this page's premium visual polish (toolbar card, table
+          density, colour hierarchy) so none of it leaks into other modules that
+          share the FilterBar / DataTable components. */}
+      <div className="emp-list">
+        {/* Page title with the primary action aligned to its right, then a single
+            compact toolbar (search · filters), then the table. */}
         <PageHeader
-          variant="feature"
           title="Employees"
-          badge={headcount !== null && <Badge tone="neutral">{headcount.toLocaleString('en-IN')} employees</Badge>}
-          subtitle="Staff directory — personal details, branch posting, role, KYC documents and salary."
           actions={canCreate && (
             <button className="btn-lg" onClick={() => navigate('/employees/new')}><Plus size={16} /> Add employee</button>
           )}
         />
-      </PageBar>
 
-      <FilterBar chips={filterChips} onReset={filterChips.length ? resetFilters : undefined}>
+        <FilterBar
+        chips={filterChips}
+        onReset={filterChips.length ? resetFilters : undefined}
+        search={searchField}
+      >
         <label>Status
           <select value={status} onChange={(e) => { setStatus(e.target.value); table.setPage(1); }} aria-label="Filter by employment status">
             {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
@@ -152,20 +172,21 @@ export default function EmployeesPage() {
         </label>
       </FilterBar>
 
-      {error && <div className="error-box">{error}</div>}
+        {error && <div className="error-box">{error}</div>}
 
-      <DataTable
-        columns={columns}
-        rows={rows}
-        loading={listQuery.isLoading}
-        empty="No employees match this filter."
-        searchPlaceholder="Search by name, code, designation or branch…"
-        server={{
-          page: table.page, pageSize: table.pageSize, totalItems,
-          onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
-          search: table.search, onSearchChange: table.onSearchChange,
-        }}
-      />
+        <DataTable
+          columns={columns}
+          rows={rows}
+          loading={listQuery.isLoading}
+          empty="No employees match this filter."
+          searchable={false}
+          server={{
+            page: table.page, pageSize: table.pageSize, totalItems,
+            onPageChange: table.setPage, sort: table.sort, onSortChange: table.onSortChange,
+            search: table.search, onSearchChange: table.onSearchChange,
+          }}
+        />
+      </div>
 
       {deleteTarget && (
         <ConfirmDialog

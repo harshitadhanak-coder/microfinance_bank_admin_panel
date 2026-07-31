@@ -1473,6 +1473,10 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 /* Leading search grows to fill the row; everything else keeps its size. */
 .filterbar-search { flex: 1 1 280px; min-width: 220px; }
 .filterbar-search .filter-search { min-width: 0; max-width: none; }
+/* When the table search is reused inside the toolbar, drop its standalone
+   bottom margin so its box lines up with the filter selects (the row is
+   flex-end aligned, and the selects sit below their labels). */
+.filterbar-search .table-search { margin-bottom: 0; max-width: none; }
 .filterbar-controls { display: flex; align-items: flex-end; gap: var(--space-3); flex-wrap: wrap; }
 .filterbar-controls label { font: var(--text-sm); font-weight: 500; gap: 0.3rem; }
 .filterbar-reset { flex: none; }
@@ -1708,3 +1712,83 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .dep-status-cell { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 2px; }
 .dep-void-reason { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-hint { display: block; margin-top: var(--space-1); }
+
+/* ── Employees list — premium enterprise polish ─────────────────────────────────
+   ALL rules here are scoped under `.emp-list` so the shared FilterBar / DataTable
+   components keep their current look on every other module. This is purely
+   visual: colour hierarchy, toolbar balance, table density and scannability.
+
+   Surface hierarchy (page → toolbar → table header → rows):
+     page bg      var(--paper)  #f7f6f2   (warm, recessed)
+     toolbar/card var(--surface) #ffffff  (raised, bordered, soft shadow)
+     header band  #efece3                 (clearly greyer than the body)
+     row body     #ffffff                 (crisp, with a soft hover)                */
+
+/* Title: keep the divider but let it breathe a little more above the toolbar. */
+.emp-list .page-header { margin-bottom: var(--space-5); }
+
+/* ── Toolbar: a self-contained card, so it reads as a distinct band above the
+      grid instead of floating on the page. ── */
+.emp-list .filterbar {
+  background: var(--color-surface);
+  border: 1px solid var(--color-line);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-1);
+  padding: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+.emp-list .filterbar-row { justify-content: flex-start; column-gap: var(--space-5); row-gap: var(--space-3); }
+/* Search: a fixed, comfortable width instead of greedily filling the row. */
+.emp-list .filterbar-search { flex: 0 1 320px; min-width: 220px; }
+.emp-list .filterbar-search .table-search input { min-height: var(--control-h); border-radius: var(--radius-sm); }
+/* A thin separator sets the search apart from the filter cluster. */
+.emp-list .filterbar-controls {
+  gap: var(--space-4);
+  padding-left: var(--space-5);
+  border-left: 1px solid var(--color-line);
+}
+.emp-list .filterbar-controls label {
+  font: var(--text-xs); font-weight: 600; color: var(--color-muted);
+  text-transform: uppercase; letter-spacing: 0.05em; gap: var(--space-1);
+}
+.emp-list .filterbar-controls select { min-width: 172px; border-radius: var(--radius-sm); }
+
+/* ── Table card: crisper elevation, quieter borders, denser rows. ── */
+.emp-list .panel { border-radius: var(--radius-lg); box-shadow: var(--shadow-1); border-color: var(--color-line); }
+.emp-list table { font-size: 0.84rem; }
+
+/* Header band — a clear step darker than the white body, sticky as before. */
+.emp-list thead th {
+  background: #efece3;
+  color: var(--color-muted);
+  font-size: 0.68rem; font-weight: 700; letter-spacing: 0.07em;
+  padding: 0.6rem 1rem;
+  border-bottom: 1px solid var(--color-line-strong);
+}
+.emp-list thead th.sortable:hover { background: #e8e4d8; color: var(--color-ink); }
+
+/* Body — tighter rows (more records on screen), softer separators, one calm
+   hover state, and a very light zebra for horizontal tracking on wide tables. */
+.emp-list tbody td {
+  padding: 0.44rem 1rem;
+  border-bottom: 1px solid #edece4;
+  color: var(--color-ink);
+}
+.emp-list tbody tr:nth-child(even) td { background: #fbfaf7; }
+.emp-list tbody tr:hover td { background: #f4f1e8; }
+.emp-list tbody tr:last-child td { border-bottom: none; }
+
+/* Identifiers read as quiet mono chips, names as the row's anchor. */
+.emp-list td code { font-size: 0.72rem; background: #f1efe8; color: var(--color-muted); padding: 2px 7px; }
+.emp-list .cell-link { color: var(--color-ink); font-weight: 600; }
+.emp-list .cell-link:hover { color: var(--color-brass-dark); text-decoration: underline; }
+
+/* Pager sits on the same card, calmly divided from the last row. */
+.emp-list .table-pager { padding: 0.6rem 1rem; border-top: 1px solid var(--color-line); }
+
+/* Responsive: restore full-width stacking the scoped widths above would defeat. */
+@media (max-width: 900px) {
+  .emp-list .filterbar-controls { width: 100%; padding-left: 0; border-left: 0; }
+  .emp-list .filterbar-search { flex-basis: 100%; }
+  .emp-list .filterbar-controls select { min-width: 0; }
+}
