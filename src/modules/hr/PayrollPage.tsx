@@ -8,7 +8,8 @@ import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog } from '../../components/Modal';
 import { useToast } from '../../components/Toast';
-import { Eye, Wallet } from '../../components/icons';
+import { downloadExport } from '../../components/ExportButton';
+import { Eye, FileSpreadsheet, Loader, Wallet } from '../../components/icons';
 import { inr, fmtDate, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
@@ -26,6 +27,7 @@ export default function PayrollPage() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [markPaidTarget, setMarkPaidTarget] = useState<PayrollRun | null>(null);
+  const [exportingRunId, setExportingRunId] = useState<string | null>(null);
 
   const canRun = can(user?.role, 'payroll:run');
   const canMarkPaid = can(user?.role, 'payroll:markPaid');
@@ -45,6 +47,16 @@ export default function PayrollPage() {
     onError: (err) => { setMarkPaidTarget(null); toast.error(apiMessage(err, 'Could not mark the run as paid.')); },
   });
 
+  // Every month's salary register is one click from the history, so exporting
+  // "Payroll — Jul 2026" never means opening the run first.
+  const exportRun = (run: PayrollRun) => {
+    setExportingRunId(run.id);
+    downloadExport(`/human-resources/payroll/runs/${run.id}/export`, `Payroll-${periodLabel(run.month, run.year).replace(' ', '-')}`)
+      .then(() => toast.success(`${periodLabel(run.month, run.year)} payroll exported — check your downloads.`))
+      .catch((err) => toast.error(apiMessage(err, 'Export failed.')))
+      .finally(() => setExportingRunId(null));
+  };
+
   const runColumns: Column<PayrollRun>[] = [
     { header: 'Period', render: (r) => <a className="cell-link" onClick={() => navigate(`/payroll/${r.id}`)}><strong>{periodLabel(r.month, r.year)}</strong></a>, sortValue: (r) => r.year * 100 + r.month },
     { header: 'Status', render: (r) => <Badge status={r.status} />, sortValue: (r) => r.status },
@@ -63,7 +75,18 @@ export default function PayrollPage() {
     {
       header: '',
       render: (r) => (
-        <div className="actions-cell">
+        <div className="actions-cell" style={{ gap: 6 }}>
+          {/* Every month's register is one visible click from the history — no
+              need to open the run first, and no hunting in the overflow menu. */}
+          <button
+            type="button"
+            className="ghost sm brass"
+            disabled={exportingRunId === r.id}
+            title={`Export the ${periodLabel(r.month, r.year)} salary register to Excel`}
+            onClick={() => exportRun(r)}
+          >
+            {exportingRunId === r.id ? <Loader size={14} /> : <FileSpreadsheet size={14} />} Export
+          </button>
           <ActionMenu
             items={[
               { key: 'view', label: 'View breakdown', icon: <Eye size={15} />, onSelect: () => navigate(`/payroll/${r.id}`) },

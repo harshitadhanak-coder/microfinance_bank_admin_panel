@@ -10,7 +10,7 @@ import { Tabs, TabDef } from '../../components/Tabs';
 import { ActionMenu } from '../../components/ActionMenu';
 import { Drawer } from '../../components/Drawer';
 import { Modal, ConfirmDialog } from '../../components/Modal';
-import { CalendarCheck, Check, ListChecks, Loader, Wallet, X } from '../../components/icons';
+import { CalendarCheck, Check, ListChecks, Loader, Plus, Trash2, Wallet, X } from '../../components/icons';
 import { fmtDate, fmtDayMonth, titleCase, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
@@ -35,6 +35,9 @@ type StatusFilter = (typeof STATUS_FILTERS)[number];
 const LEAVE_TYPES = ['CASUAL', 'SICK', 'EARNED', 'UNPAID', 'MATERNITY', 'PATERNITY'] as const;
 type TypeFilter = 'ALL' | (typeof LEAVE_TYPES)[number];
 
+/** Minimal employee shape for the "Book leave" picker. */
+interface EmployeeOption { id: string; fullName: string; employeeCode: string }
+
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const now = new Date();
 const CURRENT_MONTH = now.getMonth() + 1;
@@ -58,10 +61,14 @@ export default function LeavePage() {
   const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
   const [balancesFor, setBalancesFor] = useState<LeaveRow | null>(null);
   const [backfillOpen, setBackfillOpen] = useState(false);
+  const [bookOpen, setBookOpen] = useState(false);
+  const [pendingDelete, setPendingDelete] = useState<LeaveRow | null>(null);
 
   const canDecide = can(user?.role, 'leave:decide');
   const canAccrue = can(user?.role, 'leave:accrue');
   const canManagePolicy = can(user?.role, 'leave:managePolicy');
+  // Booking and deleting leave — HR + Super Admin only, matching the backend.
+  const canManageLeave = can(user?.role, 'leave:manage');
 
   const listUrl = `/human-resources/leaves?pageSize=100${status === 'ALL' ? '' : `&status=${status}`}`;
   const query = useQuery({
@@ -103,6 +110,19 @@ export default function LeavePage() {
       else toast.info(`${ok} ${verb}, ${failed} could not be processed.`);
     },
     onError: (err) => { setDecisionTarget(null); toast.error(apiMessage(err, 'Could not process the bulk decision.')); },
+  });
+
+  // Employee list for the "Book leave" picker — only fetched for roles that can book.
+  const employeesQuery = useQuery({
+    queryKey: ['/employees', 'leave-book'],
+    queryFn: () => api.get('/employees?pageSize=100').then((r) => r.data.data as EmployeeOption[]),
+    enabled: canManageLeave,
+  });
+
+  const remove = useMutation({
+    mutationFn: (id: string) => api.delete(`/human-resources/leaves/${id}`),
+    onSuccess: () => { toast.success('Leave deleted.'); setPendingDelete(null); refreshLeaves(); },
+    onError: (err) => { toast.error(apiMessage(err, 'Could not delete the leave.')); setPendingDelete(null); },
   });
 
   const accrual = useMutation({
@@ -156,6 +176,9 @@ export default function LeavePage() {
                 { key: 'approve', label: 'Approve', icon: <Check size={15} />, separatorBefore: true, onSelect: () => setDecisionTarget({ kind: 'single', leave: l, decision: 'APPROVED' }) },
                 { key: 'reject', label: 'Reject', icon: <X size={15} />, tone: 'danger' as const, onSelect: () => setDecisionTarget({ kind: 'single', leave: l, decision: 'REJECTED' }) },
               ] : []),
+              ...(canManageLeave ? [
+                { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger' as const, separatorBefore: true, onSelect: () => setPendingDelete(l) },
+              ] : []),
             ]}
           />
         </div>
@@ -178,16 +201,23 @@ export default function LeavePage() {
     <>
       <PageHeader
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Leave' }]}
-        title="Leave requests"
-        subtitle="Review and decide staff leave applications"
-        actions={canAccrue && view !== 'myLeave' && (
+        title="Leave"
+        subtitle="Book, review and decide staff leave"
+        actions={view !== 'myLeave' && (
           <>
-            <button type="button" className="ghost" disabled={backfill.isPending || accrual.isPending} onClick={() => setBackfillOpen(true)}>
-              {backfill.isPending ? <><Loader size={15} /> Backfilling…</> : <><ListChecks size={15} /> Back-fill accrual</>}
-            </button>
-            <button type="button" className="ghost" disabled={accrual.isPending || backfill.isPending} onClick={() => accrual.mutate()}>
-              {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
-            </button>
+            {canAccrue && (
+              <>
+                <button type="button" className="ghost" disabled={backfill.isPending || accrual.isPending} onClick={() => setBackfillOpen(true)}>
+                  {backfill.isPending ? <><Loader size={15} /> Backfilling…</> : <><ListChecks size={15} /> Back-fill accrual</>}
+                </button>
+                <button type="button" className="ghost" disabled={accrual.isPending || backfill.isPending} onClick={() => accrual.mutate()}>
+                  {accrual.isPending ? <><Loader size={15} /> Running…</> : <><CalendarCheck size={15} /> Run leave accrual</>}
+                </button>
+              </>
+            )}
+            {canManageLeave && (
+              <button type="button" onClick={() => setBookOpen(true)}><Plus size={15} /> Book leave</button>
+            )}
           </>
         )}
         tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar' | 'myLeave' | 'policies')} />}
@@ -250,6 +280,30 @@ export default function LeavePage() {
 
       {balancesFor && <BalancesDrawer leave={balancesFor} onClose={() => setBalancesFor(null)} />}
 
+      {bookOpen && (
+        <BookLeaveModal
+          employees={employeesQuery.data ?? []}
+          onClose={() => setBookOpen(false)}
+          onDone={() => { setBookOpen(false); refreshLeaves(); }}
+        />
+      )}
+
+      {pendingDelete && (
+        <ConfirmDialog
+          icon={<Trash2 size={20} />}
+          tone="danger"
+          title="Delete leave?"
+          message={<>
+            {titleCase(pendingDelete.leaveType)} leave for <strong>{pendingDelete.employee.fullName}</strong> ({fmtDate(pendingDelete.fromDate)} – {fmtDate(pendingDelete.toDate)}) will be permanently removed. This cannot be undone.
+            {pendingDelete.status === 'APPROVED' && <><br /><span className="muted sm-text">It is approved — the consumed balance is restored and its on-leave attendance rows are removed.</span></>}
+          </>}
+          confirmLabel="Delete leave"
+          loading={remove.isPending}
+          onConfirm={() => remove.mutate(pendingDelete.id)}
+          onCancel={() => setPendingDelete(null)}
+        />
+      )}
+
       {backfillOpen && (
         <ConfirmDialog
           icon={<ListChecks size={20} />}
@@ -265,6 +319,74 @@ export default function LeavePage() {
         />
       )}
     </>
+  );
+}
+
+// ── Book leave for an employee (HR / Super Admin) ────────────────────────────
+/**
+ * Creating a leave is an HR action taken on an employee's behalf, so the
+ * employee is picked here rather than inferred from the signed-in user. The
+ * leave lands PENDING and still goes through the normal approve/reject flow —
+ * booking it does not approve it.
+ */
+function BookLeaveModal({
+  employees, onClose, onDone,
+}: {
+  employees: EmployeeOption[];
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const [employeeId, setEmployeeId] = useState('');
+  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number]>('CASUAL');
+  const [fromDate, setFromDate] = useState('');
+  const [toDate, setToDate] = useState('');
+  const [reason, setReason] = useState('');
+  const [error, setError] = useState('');
+
+  const save = useMutation({
+    mutationFn: () => api.post('/human-resources/leaves', {
+      employeeId,
+      leaveType,
+      fromDate,
+      toDate,
+      ...(reason.trim() ? { reason: reason.trim() } : {}),
+    }),
+    onSuccess: () => { toast.success('Leave recorded. It is pending a decision.'); onDone(); },
+    onError: (err) => setError(apiMessage(err, 'Could not record the leave.')),
+  });
+
+  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
+  const disabled = save.isPending || !employeeId || !fromDate || !toDate;
+
+  return (
+    <Modal
+      size="md" onClose={onClose} icon={<CalendarCheck size={20} />}
+      title="Book leave"
+      subtitle="Records leave on an employee's behalf. It still needs an approve/reject decision."
+      footer={<>
+        <button type="button" className="ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
+        <button type="submit" form="book-leave-form" disabled={disabled}>{save.isPending ? 'Saving…' : 'Book leave'}</button>
+      </>}
+    >
+      <form id="book-leave-form" className="form-grid" onSubmit={submit}>
+        <label className="span-all">Employee
+          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
+            <option value="">— Select employee —</option>
+            {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeCode})</option>)}
+          </select>
+        </label>
+        <label className="span-all">Leave type
+          <select value={leaveType} onChange={(e) => setLeaveType(e.target.value as (typeof LEAVE_TYPES)[number])}>
+            {LEAVE_TYPES.map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
+          </select>
+        </label>
+        <label>From<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} required /></label>
+        <label>To<input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} required /></label>
+        <label className="span-all">Reason<input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255} placeholder="optional" /></label>
+        {error && <div className="error-box span-all">{error}</div>}
+      </form>
+    </Modal>
   );
 }
 

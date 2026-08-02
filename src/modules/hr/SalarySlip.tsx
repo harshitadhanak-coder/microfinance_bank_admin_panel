@@ -4,11 +4,20 @@ import { amountInWords } from '../../lib/format';
  * Salary-slip rendering library: the shared HTML/CSS builder plus print and
  * vector-PDF exporters. Consumed by the printable Salary Slip page
  * (SalarySlipPage) — no React component lives here.
+ *
+ * The layout reproduces the client's reference workbook ("Salary Slip" sheet of
+ * Staff Master Data-2026.xlsx): a single bordered grid of five columns — company
+ * banner, pay-period line, a two-up employee block, an Earnings
+ * (Particulars / TFP PM / Total) vs Deductions (Particulars / Amount) split, the
+ * totals row, the net-payable-in-words line, and the payment-details block.
+ *
+ * "TFP PM" is the contracted monthly figure and "Total" what was actually earned
+ * in the month; they diverge whenever the month was prorated for loss of pay.
  */
 
 /** Salary-slip detail returned by GET /human-resources/payslips/:id. */
 export interface PayslipDetail {
-  company: { name: string; tagline: string };
+  company: { name: string; tagline: string; addressLine: string };
   payslipId: string;
   period: { month: number; year: number };
   generatedAt: string;
@@ -23,9 +32,11 @@ export interface PayslipDetail {
     location: string | null;
     dateOfBirth: string | null;
     joiningDate: string;
+    grade: string | null;
     uanNumber: string | null;
     providentFundNumber: string | null;
     stateInsuranceNumber: string | null;
+    bankName: string | null;
     bankIfscCode: string | null;
     bankAccountMasked: string | null;
     panMasked: string | null;
@@ -57,6 +68,10 @@ export interface PayslipDetail {
     bonus: number;
     grossEarnings: number;
   };
+  /** Contracted monthly ("TFP PM") counterpart of each earnings component. */
+  monthly: Omit<PayslipDetail['earnings'], 'grossEarnings'>;
+  /** Statutory rates, so PF/ESIC labels can quote the basis they were charged on. */
+  rates: { pfRate: number; esiRate: number };
   deductions: {
     providentFund: number;
     stateInsurance: number;
@@ -76,183 +91,213 @@ export interface PayslipDetail {
 
 export const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 
+/**
+ * Amounts print unprefixed, exactly as the reference sheet does — the slip
+ * states its currency once, in the net-payable line. Keeping the symbol out of
+ * the grid also means the HTML and the PDF render identical figures (the PDF's
+ * standard fonts carry no ₹ glyph).
+ */
 const money = (v: number): string =>
-  `₹${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+/** Day counts print as whole numbers unless the payslip carries a half day. */
+const days = (v: number): string => (Number.isInteger(v) ? String(v) : v.toFixed(1));
 
 const esc = (v: unknown): string =>
   String(v ?? '').replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]!));
 
 const fmtDate = (iso: string | null): string =>
-  iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }) : '—';
+  iso ? new Date(iso).toLocaleDateString('en-IN', { day: '2-digit', month: '2-digit', year: 'numeric' }) : '—';
 
-/** Employee identity rows — '—' for any missing value; dates go through fmtDate. */
-const employeePairs = (d: PayslipDetail): Array<[string, string]> => [
-  ['Employee Name', d.employee.fullName],
-  ['Employee ID', d.employee.employeeCode],
-  ['Designation', d.employee.designation],
-  ['Department', d.employee.department ?? '—'],
-  ['Branch', d.employee.branch ?? '—'],
-  ['Date of Birth', fmtDate(d.employee.dateOfBirth)],
-  ['Date of Joining', fmtDate(d.employee.joiningDate)],
-  ['PAN', d.employee.panMasked ?? '—'],
-  ['Bank A/c', d.employee.bankAccountMasked ?? '—'],
-  ['IFSC', d.employee.bankIfscCode ?? '—'],
-  ['UAN', d.employee.uanNumber ?? '—'],
-  ['PF No.', d.employee.providentFundNumber ?? '—'],
-  ['ESI No.', d.employee.stateInsuranceNumber ?? '—'],
+/** Paid days is the standard month less any loss of pay — the reference's "Paid Dayes". */
+const paidDays = (d: PayslipDetail): number =>
+  Math.max(0, d.attendance.standardDays - d.attendance.lossOfPayDays);
+
+/**
+ * The two-up identity block, in the reference sheet's order: left column reads
+ * down the employee's identity, right column their dates and day counts.
+ */
+export const identityPairs = (d: PayslipDetail): Array<[string, string]> => [
+  [`Employee Name: ${d.employee.fullName}`, `Date of Joining: ${fmtDate(d.employee.joiningDate)}`],
+  [`EMP. ID: ${d.employee.employeeCode}`, `Date of Birth: ${fmtDate(d.employee.dateOfBirth)}`],
+  [`Designation: ${d.employee.designation}`, `Total Days: ${days(d.attendance.standardDays)}`],
+  [`Grade: ${d.employee.grade ?? '—'}`, `Paid Days: ${days(paidDays(d))}`],
+  [`PAN Number: ${d.employee.panMasked ?? '—'}`, `LOP Days: ${days(d.attendance.lossOfPayDays)}`],
 ];
 
-/** Attendance summary chips. */
-const attendanceItems = (d: PayslipDetail): Array<[string, string]> => [
-  ['Standard Days', String(d.attendance.standardDays)],
-  ['Present Days', String(d.attendance.presentDays)],
-  ['Paid Leave', String(d.attendance.paidLeaveDays)],
-  ['Holidays', String(d.attendance.holidayDays)],
-  ['Weekly Offs', String(d.attendance.weeklyOffDays)],
-  ['LOP Days', String(d.attendance.lossOfPayDays)],
-  ['Late Count', String(d.attendance.lateCount)],
-  ['Overtime Hrs', String(d.attendance.overtimeHours)],
-];
+/** An earnings line: label, contracted monthly ("TFP PM"), earned this month. */
+export interface EarningRow { label: string; monthly: number; total: number }
 
-/** Full earnings list; Basic is always shown, the rest only when nonzero. */
-const earningRows = (d: PayslipDetail): Array<[string, number]> =>
-  ([
-    ['Basic', d.earnings.basicEarned],
-    ['House Rent Allowance', d.earnings.houseRentAllowance],
-    ['Dearness Allowance', d.earnings.dearnessAllowance],
-    ['Conveyance Allowance', d.earnings.conveyanceAllowance],
-    ['Medical Allowance', d.earnings.medicalAllowance],
-    ['Travel Allowance', d.earnings.travelAllowance],
-    ['Special Allowance', d.earnings.specialAllowance],
-    ['Food Allowance', d.earnings.foodAllowance],
-    ['Mobile Allowance', d.earnings.mobileAllowance],
-    ['Other Allowance', d.earnings.otherAllowance],
-    ['Overtime Pay', d.earnings.overtimePay],
-    ['Incentive', d.earnings.incentive],
-    ['Bonus', d.earnings.bonus],
-  ] as Array<[string, number]>).filter(([, v], i) => i === 0 || v > 0);
+/**
+ * Earnings in the reference sheet's order, then the remaining components. Basic
+ * always prints; every other line appears only when it carries a value in either
+ * column, so a contracted allowance fully wiped out by LOP still shows (at 0)
+ * rather than vanishing without explanation.
+ */
+export const earningRows = (d: PayslipDetail): EarningRow[] => {
+  const keys: Array<[string, keyof PayslipDetail['monthly']]> = [
+    ['Basic', 'basicEarned'],
+    ['HRA', 'houseRentAllowance'],
+    ['Monthly Bonus', 'bonus'],
+    ['Traveling Allowance', 'travelAllowance'],
+    ['Special Allowance', 'specialAllowance'],
+    ['Dearness Allowance', 'dearnessAllowance'],
+    ['Conveyance Allowance', 'conveyanceAllowance'],
+    ['Medical Allowance', 'medicalAllowance'],
+    ['Food Allowance', 'foodAllowance'],
+    ['Mobile Allowance', 'mobileAllowance'],
+    ['Other Allowance', 'otherAllowance'],
+    ['Overtime Pay', 'overtimePay'],
+    ['Incentive', 'incentive'],
+  ];
+  return keys
+    .map(([label, key]) => ({ label, monthly: d.monthly[key], total: d.earnings[key] }))
+    .filter((r, i) => i === 0 || r.monthly > 0 || r.total > 0);
+};
 
-/** Deduction list — only rows with a value greater than zero. */
-const deductionRows = (d: PayslipDetail): Array<[string, number]> =>
+const pct = (rate: number): string => `${(rate * 100).toFixed(2)} %`;
+
+/**
+ * Deduction lines, only those actually charged. Loss of pay is deliberately not
+ * a line here: payroll prorates the earnings columns instead of deducting from a
+ * full month, so an LOP row would double-count and stop the column summing to
+ * Total Deductions. It is reported as "LOP Days" in the identity block and,
+ * when it bit, as an amount in the note beneath the totals.
+ */
+export const deductionRows = (d: PayslipDetail): Array<[string, number]> =>
   ([
-    ['Provident Fund (PF)', d.deductions.providentFund],
-    ['State Insurance (ESI)', d.deductions.stateInsurance],
-    ['Professional Tax', d.deductions.professionalTax],
-    ['Tax Deducted at Source', d.deductions.taxDeductedAtSource],
-    ['Employee Loan EMI', d.deductions.loanDeduction],
-    ['Salary Advance Recovery', d.deductions.salaryAdvanceRecovery],
+    [`PF (Basic @ ${pct(d.rates.pfRate)})`, d.deductions.providentFund],
+    [`ESIC (Gross @ ${pct(d.rates.esiRate)})`, d.deductions.stateInsurance],
+    ['PT (on Gross)', d.deductions.professionalTax],
+    ['TDS', d.deductions.taxDeductedAtSource],
+    ['Loan EMI', d.deductions.loanDeduction],
+    ['Advance', d.deductions.salaryAdvanceRecovery],
     ['Late Deduction', d.deductions.lateDeduction],
     ['Other Deductions', d.deductions.otherDeductions],
   ] as Array<[string, number]>).filter(([, v]) => v > 0);
 
+/** The net-payable sentence, in the reference sheet's wording. */
+export const netPayableLine = (d: PayslipDetail): string =>
+  `Net Payable Amount - ${money(d.netPay)}  (INR ${amountInWords(d.netPay)})`;
+
+/** Payment-details rows: [left, right] pairs under the "Payment Details" banner. */
+export const paymentPairs = (d: PayslipDetail): Array<[string, string]> => [
+  ['Payment Mode: Bank', `Account Number: ${d.employee.bankAccountMasked ?? '—'}`],
+  [`Bank Name: ${d.employee.bankName ?? '—'}`, `IFSC Code: ${d.employee.bankIfscCode ?? '—'}`],
+];
+
+/** Loan / advance / LOP notes printed under the totals. */
+export const slipNotes = (d: PayslipDetail): string[] => {
+  const notes: string[] = [];
+  if (d.lossOfPayAmount > 0) {
+    notes.push(`Loss of pay: ${money(d.lossOfPayAmount)} for ${days(d.attendance.lossOfPayDays)} day(s) — earnings above are already prorated.`);
+  }
+  if (d.loan) notes.push(`Loan ${d.loan.loanNumber} — EMI ${money(d.loan.emiDeducted)} deducted; balance ${money(d.loan.outstandingAmount)}.`);
+  if (d.salaryAdvance) notes.push(`Salary advance — ${money(d.salaryAdvance.recovered)} recovered; balance ${money(d.salaryAdvance.outstandingAmount)}.`);
+  return notes;
+};
+
+// Column proportions carried over from the reference sheet's widths
+// (B 22.71, C 20.43, D 24.14, E 30.14, F 17.29 characters).
+const COL_WEIGHTS = [22.71, 20.43, 24.14, 30.14, 17.29];
+const COL_TOTAL = COL_WEIGHTS.reduce((a, b) => a + b, 0);
+const COL_PCT = COL_WEIGHTS.map((w) => (w / COL_TOTAL) * 100);
+
 /** Styling shared by the on-screen slip and the standalone print/PDF window. */
 export const SLIP_STYLES = `
-  .slip { color: #1c1e26; font-family: 'Segoe UI', system-ui, -apple-system, sans-serif; }
+  /* Fills whatever it is placed in rather than sitting at a fixed width — on the
+     slip page that is the full content card, so the grid reaches both edges
+     instead of floating in the middle of it. Column proportions are percentages,
+     so widening the container widens the columns and leaves the layout intact. */
+  .slip { color: #000; font-family: Arial, Helvetica, sans-serif; width: 100%; }
   .slip * { box-sizing: border-box; }
-  .slip .slip-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; padding-bottom: 16px; border-bottom: 2px solid #1c1e26; }
-  .slip .slip-brand { display: flex; align-items: center; gap: 12px; }
-  .slip .slip-mark { width: 46px; height: 46px; border-radius: 10px; background: #1c1e26; color: #d8b56a; font-weight: 700; font-size: 18px; letter-spacing: .5px; display: flex; align-items: center; justify-content: center; }
-  .slip .slip-co { font-size: 19px; font-weight: 700; }
-  .slip .slip-tag { font-size: 12px; color: #6b7080; margin-top: 2px; }
-  .slip .slip-title { text-align: right; }
-  .slip .slip-title h3 { margin: 0; font-size: 15px; letter-spacing: 1.5px; text-transform: uppercase; color: #6b7080; }
-  .slip .slip-period { font-size: 18px; font-weight: 700; margin-top: 2px; }
-  .slip .slip-status { font-size: 12px; font-weight: 600; color: #6b7080; margin-top: 4px; }
-  .slip .slip-section { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: .6px; color: #6b7080; margin: 18px 0 6px; }
-  .slip .slip-meta { display: grid; grid-template-columns: 1fr 1fr; gap: 6px 28px; margin: 6px 0; }
-  .slip .slip-meta div { display: flex; justify-content: space-between; gap: 12px; font-size: 13px; padding: 5px 0; border-bottom: 1px dashed #e4e6ee; }
-  .slip .slip-meta span:first-child { color: #6b7080; }
-  .slip .slip-meta span:last-child { font-weight: 600; text-align: right; }
-  .slip .slip-att { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 6px 0; }
-  .slip .slip-att div { border: 1px solid #e4e6ee; border-radius: 8px; padding: 7px 10px; }
-  .slip .slip-att span { display: block; font-size: 10px; text-transform: uppercase; letter-spacing: .4px; color: #6b7080; }
-  .slip .slip-att strong { font-size: 15px; }
-  .slip .slip-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; margin-top: 12px; }
-  .slip table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  .slip table caption { text-align: left; font-weight: 700; font-size: 13px; text-transform: uppercase; letter-spacing: .6px; padding: 8px 10px; background: #f4f5f8; border: 1px solid #e4e6ee; border-bottom: none; }
-  .slip th, .slip td { padding: 7px 10px; border: 1px solid #e4e6ee; }
-  .slip td.amt { text-align: right; font-variant-numeric: tabular-nums; }
-  .slip tfoot td { font-weight: 700; background: #f9fafb; }
-  .slip .slip-summary { margin-top: 18px; display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
-  .slip .slip-stat { border: 1px solid #e4e6ee; border-radius: 10px; padding: 12px 14px; }
-  .slip .slip-stat span { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: .5px; color: #6b7080; }
-  .slip .slip-stat strong { font-size: 17px; }
-  .slip .slip-stat.net { background: #1c1e26; border-color: #1c1e26; color: #fff; }
-  .slip .slip-stat.net span { color: #d8b56a; }
-  .slip .slip-stat.lop { border-color: #d9a441; background: #fdf6e9; }
-  .slip .slip-words { margin-top: 12px; font-size: 12px; color: #1c1e26; }
-  .slip .slip-words span { color: #6b7080; }
-  .slip .slip-note { margin-top: 10px; font-size: 12px; color: #6b7080; }
-  .slip .slip-foot { margin-top: 18px; font-size: 11px; color: #8a8f9e; text-align: center; border-top: 1px dashed #e4e6ee; padding-top: 10px; }
-  @media print { @page { size: A4; margin: 14mm; } body { margin: 0; } }
+  .slip table.slip-grid { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  .slip table.slip-grid td { border: 1px solid #000; padding: 5px 8px; font-size: 12.5px; vertical-align: middle; }
+  .slip .co-name { font-family: 'Arial Black', Arial, sans-serif; font-size: 20px; text-align: center; letter-spacing: .5px; padding: 10px 8px; }
+  .slip .co-addr { font-family: Verdana, Arial, sans-serif; font-size: 12px; font-weight: 700; text-align: center; }
+  .slip .period { font-family: 'Arial Black', Arial, sans-serif; font-size: 15px; padding: 8px; }
+  .slip .band { font-family: 'Arial Black', Arial, sans-serif; font-size: 15px; padding: 8px; }
+  .slip .sub-band { font-family: 'Arial Black', Arial, sans-serif; font-size: 13px; background: #ddebf7; }
+  .slip .col-head { font-family: 'Arial Black', Arial, sans-serif; font-size: 12px; background: #eeece1; }
+  .slip .amt { text-align: right; font-variant-numeric: tabular-nums; }
+  .slip .tot { font-weight: 700; background: #f2f2f2; }
+  .slip .net { font-weight: 700; font-size: 13.5px; padding: 8px; }
+  .slip .spacer td { border: none; height: 8px; padding: 0; }
+  .slip .note { font-size: 11.5px; color: #333; }
+  .slip .foot { font-size: 11px; text-align: center; font-style: italic; }
+  @media print { @page { size: A4 portrait; margin: 12mm; } body { margin: 0; } }
 `;
 
 /** Builds the slip's inner HTML — shared verbatim by the on-screen slip and the print window. */
 export function buildSlipInner(d: PayslipDetail): string {
-  const period = `${MONTHS[d.period.month - 1]} ${d.period.year}`;
-  const status = d.paymentStatus === 'PAID' ? 'Paid' : d.paymentStatus === 'PROCESSED' ? 'Processed' : 'Draft';
-  const paidLine = d.paidAt ? `${status} · ${fmtDate(d.paidAt)}` : status;
-
-  const meta = employeePairs(d);
-  const att = attendanceItems(d);
-
-  const row = ([label, value]: [string, number]) =>
-    `<tr><td>${esc(label)}</td><td class="amt">${money(value)}</td></tr>`;
+  const period = `${MONTHS[d.period.month - 1]} - ${d.period.year}`.toUpperCase();
 
   const earnings = earningRows(d);
   const deductions = deductionRows(d);
+  // The two columns are one grid, so the shorter side is padded with blank
+  // cells rather than left ragged — matching the reference sheet.
+  const bodyRows = Math.max(earnings.length, deductions.length);
 
-  const notes: string[] = [];
-  if (d.loan) {
-    notes.push(
-      `Loan ${esc(d.loan.loanNumber)} — EMI ${money(d.loan.emiDeducted)} deducted; remaining balance ${money(d.loan.outstandingAmount)}.`,
-    );
-  }
-  if (d.salaryAdvance) {
-    notes.push(
-      `Salary advance — ${money(d.salaryAdvance.recovered)} recovered; remaining balance ${money(d.salaryAdvance.outstandingAmount)}.`,
-    );
-  }
-  const notesHtml = notes.map((n) => `<div class="slip-note">${n}</div>`).join('');
+  const colgroup = `<colgroup>${COL_PCT.map((p) => `<col style="width:${p.toFixed(2)}%">`).join('')}</colgroup>`;
+  const full = (cls: string, html: string) => `<tr><td class="${cls}" colspan="5">${html}</td></tr>`;
+  const twoUp = (cls: string, left: string, right: string) =>
+    `<tr><td class="${cls}" colspan="3">${left}</td><td class="${cls}" colspan="2">${right}</td></tr>`;
+  const spacer = '<tr class="spacer"><td colspan="5"></td></tr>';
 
-  const lopCard =
-    d.lossOfPayAmount > 0
-      ? `<div class="slip-stat lop"><span>Loss of Pay</span><strong>${money(d.lossOfPayAmount)}</strong></div>`
-      : '';
+  const grid = (): string => {
+    const rows: string[] = [];
+    for (let i = 0; i < bodyRows; i += 1) {
+      const e = earnings[i];
+      const x = deductions[i];
+      rows.push(
+        '<tr>' +
+        (e ? `<td>${esc(e.label)}</td><td class="amt">${money(e.monthly)}</td><td class="amt">${money(e.total)}</td>`
+           : '<td></td><td></td><td></td>') +
+        (x ? `<td>${esc(x[0])}</td><td class="amt">${money(x[1])}</td>`
+           : '<td></td><td></td>') +
+        '</tr>',
+      );
+    }
+    return rows.join('');
+  };
+
+  const notes = slipNotes(d).map((n) => full('note', esc(n))).join('');
 
   return `
-    <div class="slip-head">
-      <div class="slip-brand">
-        <div class="slip-mark">MF</div>
-        <div><div class="slip-co">${esc(d.company.name)}</div><div class="slip-tag">${esc(d.company.tagline)}</div></div>
-      </div>
-      <div class="slip-title"><h3>Salary Slip</h3><div class="slip-period">${period}</div><div class="slip-status">${esc(paidLine)}</div></div>
-    </div>
-    <div class="slip-section">Employee Details</div>
-    <div class="slip-meta">${meta.map(([k, v]) => `<div><span>${esc(k)}</span><span>${esc(v)}</span></div>`).join('')}</div>
-    <div class="slip-section">Attendance</div>
-    <div class="slip-att">${att.map(([k, v]) => `<div><span>${esc(k)}</span><strong>${esc(v)}</strong></div>`).join('')}</div>
-    <div class="slip-cols">
-      <table>
-        <caption>Earnings</caption>
-        <tbody>${earnings.map(row).join('')}</tbody>
-        <tfoot><tr><td>Gross Earnings</td><td class="amt">${money(d.earnings.grossEarnings)}</td></tr></tfoot>
-      </table>
-      <table>
-        <caption>Deductions</caption>
-        <tbody>${deductions.length ? deductions.map(row).join('') : '<tr><td>No deductions</td><td class="amt">₹0.00</td></tr>'}</tbody>
-        <tfoot><tr><td>Total Deductions</td><td class="amt">${money(d.deductions.totalDeductions)}</td></tr></tfoot>
-      </table>
-    </div>
-    ${notesHtml}
-    <div class="slip-summary">
-      <div class="slip-stat"><span>Gross Earnings</span><strong>${money(d.earnings.grossEarnings)}</strong></div>
-      <div class="slip-stat"><span>Total Deductions</span><strong>${money(d.deductions.totalDeductions)}</strong></div>
-      <div class="slip-stat net"><span>Net Pay</span><strong>${money(d.netPay)}</strong></div>
-      ${lopCard}
-    </div>
-    <div class="slip-words"><span>Net pay in words:</span> ${esc(amountInWords(d.netPay))}</div>
-    <div class="slip-foot">This is a computer-generated salary slip and does not require a signature. Generated on ${fmtDate(d.generatedAt)}.</div>
+    <table class="slip-grid">
+      ${colgroup}
+      ${full('co-name', esc(d.company.name))}
+      ${d.company.addressLine ? full('co-addr', esc(d.company.addressLine)) : ''}
+      ${full('period', `Pay Slip for the month of ${esc(period)}`)}
+      ${spacer}
+      ${identityPairs(d).map(([l, r]) => twoUp('', esc(l), esc(r))).join('')}
+      ${spacer}
+      ${full('band', 'Salary Details')}
+      <tr>
+        <td class="sub-band" colspan="3">Earnings</td>
+        <td class="sub-band" colspan="2">Deductions</td>
+      </tr>
+      <tr>
+        <td class="col-head">Particulars</td>
+        <td class="col-head amt">TFP PM</td>
+        <td class="col-head amt">Total</td>
+        <td class="col-head">Particulars</td>
+        <td class="col-head amt">Amount</td>
+      </tr>
+      ${grid()}
+      <tr>
+        <td class="tot" colspan="2">Total Earning</td>
+        <td class="tot amt">${money(d.earnings.grossEarnings)}</td>
+        <td class="tot">Total Deductions</td>
+        <td class="tot amt">${money(d.deductions.totalDeductions)}</td>
+      </tr>
+      ${notes}
+      ${spacer}
+      ${full('net', esc(netPayableLine(d)))}
+      ${full('band', 'Payment Details')}
+      ${paymentPairs(d).map(([l, r]) => twoUp('', esc(l), esc(r))).join('')}
+      ${full('foot', `For any queries and clarification on this pay slip please contact your respective HR. Generated on ${esc(fmtDate(d.generatedAt))}.`)}
+    </table>
   `;
 }
 
@@ -270,216 +315,115 @@ export function printSlip(detail: PayslipDetail): void {
   win.setTimeout(() => win.print(), 250);
 }
 
-// The standard PDF fonts don't carry the ₹ glyph, so the downloaded PDF uses the
-// "Rs" prefix (on-screen and print keep ₹). Values stay identical.
-const pdfMoney = (v: number): string =>
-  `Rs ${Number(v).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+// ── Vector PDF ──────────────────────────────────────────────────────────────
 
-const INK: [number, number, number] = [28, 30, 38];
-const GOLD: [number, number, number] = [216, 181, 106];
-const MUTED: [number, number, number] = [107, 112, 128];
-const LINE: [number, number, number] = [228, 230, 238];
+const INK: [number, number, number] = [0, 0, 0];
+const BAND: [number, number, number] = [221, 235, 247]; // sub-band blue, as in the sheet
+const HEAD: [number, number, number] = [238, 236, 225]; // column-header beige
+const TOTAL_FILL: [number, number, number] = [242, 242, 242];
 
 /**
- * Renders the slip as a real, vector (selectable-text) PDF and downloads it.
+ * Renders the slip as a real, vector (selectable-text) PDF and downloads it,
+ * drawing the same five-column grid as the HTML so print and download match.
  * jsPDF is imported dynamically so it is only fetched when a slip is actually
  * downloaded, keeping it out of the initial app bundle.
  */
 export async function downloadSlipPdf(d: PayslipDetail): Promise<void> {
   const { jsPDF } = await import('jspdf');
   const doc = new jsPDF({ unit: 'mm', format: 'a4', orientation: 'portrait' });
-  const M = 14;
-  const RX = 196; // right content edge
-  let y = 18;
 
-  // ── Header ──
-  doc.setFillColor(...INK);
-  doc.roundedRect(M, y - 4, 12, 12, 2, 2, 'F');
-  doc.setTextColor(...GOLD);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(11);
-  doc.text('MF', M + 6, y + 3.4, { align: 'center' });
-  doc.setTextColor(...INK);
-  doc.setFontSize(15);
-  doc.text(d.company.name, M + 16, y + 1);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
-  doc.text(d.company.tagline, M + 16, y + 6);
-  doc.setFontSize(9);
-  doc.text('SALARY SLIP', RX, y - 1, { align: 'right' });
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(13);
-  doc.setTextColor(...INK);
-  doc.text(`${MONTHS[d.period.month - 1]} ${d.period.year}`, RX, y + 5, { align: 'right' });
-  const status = d.paymentStatus === 'PAID' ? 'Paid' : d.paymentStatus === 'PROCESSED' ? 'Processed' : 'Draft';
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
-  doc.text(d.paidAt ? `${status} · ${fmtDate(d.paidAt)}` : status, RX, y + 10, { align: 'right' });
+  const M = 12; // left margin
+  const W = 186; // grid width (A4 210 − 2×12)
+  const widths = COL_PCT.map((p) => (p / 100) * W);
+  // x offset of each column, plus the right edge as the final entry.
+  const x: number[] = widths.reduce<number[]>((acc, w) => [...acc, acc[acc.length - 1]! + w], [M]);
+  let y = 14;
 
-  y += 16;
+  doc.setLineWidth(0.2);
   doc.setDrawColor(...INK);
-  doc.setLineWidth(0.5);
-  doc.line(M, y, RX, y);
-  y += 8;
-
-  // ── Identity grid (two columns) ──
-  const pairs = employeePairs(d);
-  const colGap = 8;
-  const colW = (RX - M - colGap) / 2;
-  const cell = (x: number, label: string, value: string) => {
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(9);
-    doc.setTextColor(...MUTED);
-    doc.text(label, x, y + 3.5);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(...INK);
-    doc.text(value, x + colW, y + 3.5, { align: 'right' });
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.2);
-    doc.setLineDashPattern([0.6, 0.6], 0);
-    doc.line(x, y + 5.5, x + colW, y + 5.5);
-    doc.setLineDashPattern([], 0);
-  };
-  const idRows = Math.ceil(pairs.length / 2);
-  for (let r = 0; r < idRows; r += 1) {
-    const left = pairs[r * 2];
-    const right = pairs[r * 2 + 1];
-    if (left) cell(M, left[0], left[1]);
-    if (right) cell(M + colW + colGap, right[0], right[1]);
-    y += 7.5;
-  }
-  y += 3;
-
-  // ── Attendance strip ──
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
-  doc.text('ATTENDANCE', M, y);
-  y += 4.5;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
   doc.setTextColor(...INK);
-  const attLine = attendanceItems(d)
-    .map(([k, v]) => `${k}: ${v}`)
-    .join('     ');
-  const attLines = doc.splitTextToSize(attLine, RX - M) as string[];
-  doc.text(attLines, M, y);
-  y += attLines.length * 4.5 + 5;
 
-  // ── Earnings / Deductions tables ──
+  /** One grid row: cells are [text, colspan, align]. Returns the new y. */
+  type Cell = { text: string; span: number; align?: 'left' | 'right'; bold?: boolean; size?: number; fill?: [number, number, number]; center?: boolean };
+  const row = (cells: Cell[], height = 6.5) => {
+    let col = 0;
+    for (const c of cells) {
+      const left = x[col]!;
+      const width = x[col + c.span]! - left;
+      if (c.fill) {
+        doc.setFillColor(...c.fill);
+        doc.rect(left, y, width, height, 'FD');
+      } else {
+        doc.rect(left, y, width, height, 'S');
+      }
+      doc.setFont('helvetica', c.bold ? 'bold' : 'normal');
+      doc.setFontSize(c.size ?? 8.5);
+      const baseline = y + height / 2 + (c.size ?? 8.5) * 0.12;
+      if (c.center) doc.text(c.text, left + width / 2, baseline, { align: 'center' });
+      else if (c.align === 'right') doc.text(c.text, left + width - 2, baseline, { align: 'right' });
+      else doc.text(c.text, left + 2, baseline);
+      col += c.span;
+    }
+    y += height;
+  };
+  const gap = (h = 2.5) => { y += h; };
+
+  // ── Banner ──
+  row([{ text: d.company.name, span: 5, bold: true, size: 14, center: true }], 10);
+  if (d.company.addressLine) row([{ text: d.company.addressLine, span: 5, bold: true, size: 8.5, center: true }]);
+  row([{ text: `Pay Slip for the month of ${`${MONTHS[d.period.month - 1]} - ${d.period.year}`.toUpperCase()}`, span: 5, bold: true, size: 11 }], 8);
+  gap();
+
+  // ── Identity ──
+  for (const [left, right] of identityPairs(d)) {
+    row([{ text: left, span: 3 }, { text: right, span: 2 }]);
+  }
+  gap();
+
+  // ── Salary details ──
+  row([{ text: 'Salary Details', span: 5, bold: true, size: 11 }], 8);
+  row([
+    { text: 'Earnings', span: 3, bold: true, size: 9.5, fill: BAND },
+    { text: 'Deductions', span: 2, bold: true, size: 9.5, fill: BAND },
+  ]);
+  row([
+    { text: 'Particulars', span: 1, bold: true, size: 8, fill: HEAD },
+    { text: 'TFP PM', span: 1, bold: true, size: 8, align: 'right', fill: HEAD },
+    { text: 'Total', span: 1, bold: true, size: 8, align: 'right', fill: HEAD },
+    { text: 'Particulars', span: 1, bold: true, size: 8, fill: HEAD },
+    { text: 'Amount', span: 1, bold: true, size: 8, align: 'right', fill: HEAD },
+  ]);
+
   const earnings = earningRows(d);
   const deductions = deductionRows(d);
-  const deductionsForTable = deductions.length ? deductions : ([['No deductions', 0]] as Array<[string, number]>);
-  const ROW_H = 8;
-
-  const table = (x: number, title: string, rows: Array<[string, number]>, footLabel: string, footVal: number): number => {
-    let ty = y;
-    // header
-    doc.setFillColor(244, 245, 248);
-    doc.setDrawColor(...LINE);
-    doc.setLineWidth(0.2);
-    doc.rect(x, ty, colW, ROW_H, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(9);
-    doc.setTextColor(...INK);
-    doc.text(title.toUpperCase(), x + 3, ty + 5.4);
-    ty += ROW_H;
-    // body
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(...INK);
-    for (const [label, value] of rows) {
-      doc.rect(x, ty, colW, ROW_H, 'S');
-      doc.text(label, x + 3, ty + 5.4);
-      doc.text(pdfMoney(value), x + colW - 3, ty + 5.4, { align: 'right' });
-      ty += ROW_H;
-    }
-    // footer
-    doc.setFillColor(249, 250, 251);
-    doc.rect(x, ty, colW, ROW_H, 'FD');
-    doc.setFont('helvetica', 'bold');
-    doc.text(footLabel, x + 3, ty + 5.4);
-    doc.text(pdfMoney(footVal), x + colW - 3, ty + 5.4, { align: 'right' });
-    ty += ROW_H;
-    return ty;
-  };
-
-  const leftBottom = table(M, 'Earnings', earnings, 'Gross Earnings', d.earnings.grossEarnings);
-  const rightBottom = table(M + colW + colGap, 'Deductions', deductionsForTable, 'Total Deductions', d.deductions.totalDeductions);
-  y = Math.max(leftBottom, rightBottom) + 8;
-
-  // ── Loan / advance / LOP notes ──
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...MUTED);
-  if (d.loan) {
-    doc.text(
-      `Loan ${d.loan.loanNumber} — EMI ${pdfMoney(d.loan.emiDeducted)} deducted; remaining balance ${pdfMoney(d.loan.outstandingAmount)}.`,
-      M,
-      y,
-    );
-    y += 5.5;
+  for (let i = 0; i < Math.max(earnings.length, deductions.length); i += 1) {
+    const e = earnings[i];
+    const x2 = deductions[i];
+    row([
+      { text: e?.label ?? '', span: 1 },
+      { text: e ? money(e.monthly) : '', span: 1, align: 'right' },
+      { text: e ? money(e.total) : '', span: 1, align: 'right' },
+      { text: x2?.[0] ?? '', span: 1 },
+      { text: x2 ? money(x2[1]) : '', span: 1, align: 'right' },
+    ]);
   }
-  if (d.salaryAdvance) {
-    doc.text(
-      `Salary advance — ${pdfMoney(d.salaryAdvance.recovered)} recovered; remaining balance ${pdfMoney(d.salaryAdvance.outstandingAmount)}.`,
-      M,
-      y,
-    );
-    y += 5.5;
+  row([
+    { text: 'Total Earning', span: 2, bold: true, fill: TOTAL_FILL },
+    { text: money(d.earnings.grossEarnings), span: 1, bold: true, align: 'right', fill: TOTAL_FILL },
+    { text: 'Total Deductions', span: 1, bold: true, fill: TOTAL_FILL },
+    { text: money(d.deductions.totalDeductions), span: 1, bold: true, align: 'right', fill: TOTAL_FILL },
+  ]);
+
+  for (const note of slipNotes(d)) row([{ text: note, span: 5, size: 7.5 }], 5.5);
+  gap();
+
+  // ── Net payable + payment details ──
+  row([{ text: netPayableLine(d), span: 5, bold: true, size: 10 }], 8);
+  row([{ text: 'Payment Details', span: 5, bold: true, size: 11 }], 8);
+  for (const [left, right] of paymentPairs(d)) {
+    row([{ text: left, span: 3 }, { text: right, span: 2 }]);
   }
-  if (d.loan || d.salaryAdvance) y += 2;
-
-  // ── Summary cards ──
-  const cardGap = 6;
-  const showLop = d.lossOfPayAmount > 0;
-  const cardCount = showLop ? 4 : 3;
-  const cardW = (RX - M - (cardCount - 1) * cardGap) / cardCount;
-  const cardH = 18;
-  const card = (x: number, label: string, value: number, filled: boolean) => {
-    if (filled) {
-      doc.setFillColor(...INK);
-      doc.roundedRect(x, y, cardW, cardH, 2, 2, 'F');
-      doc.setTextColor(...GOLD);
-    } else {
-      doc.setDrawColor(...LINE);
-      doc.setLineWidth(0.3);
-      doc.roundedRect(x, y, cardW, cardH, 2, 2, 'S');
-      doc.setTextColor(...MUTED);
-    }
-    doc.setFont('helvetica', 'normal');
-    doc.setFontSize(7.5);
-    doc.text(label.toUpperCase(), x + 4, y + 6);
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(11);
-    doc.setTextColor(...(filled ? ([255, 255, 255] as [number, number, number]) : INK));
-    doc.text(pdfMoney(value), x + 4, y + 13);
-  };
-  card(M, 'Gross Earnings', d.earnings.grossEarnings, false);
-  card(M + (cardW + cardGap), 'Total Deductions', d.deductions.totalDeductions, false);
-  card(M + 2 * (cardW + cardGap), 'Net Pay', d.netPay, true);
-  if (showLop) card(M + 3 * (cardW + cardGap), 'Loss of Pay', d.lossOfPayAmount, false);
-  y += cardH + 7;
-
-  // ── Net pay in words ──
-  doc.setFont('helvetica', 'italic');
-  doc.setFontSize(8.5);
-  doc.setTextColor(...INK);
-  const wordLines = doc.splitTextToSize(`Net pay in words: ${amountInWords(d.netPay)}`, RX - M) as string[];
-  doc.text(wordLines, M, y);
-  y += wordLines.length * 4.5 + 6;
-
-  // ── Footer note ──
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  doc.setTextColor(...MUTED);
-  doc.text(
-    `This is a computer-generated salary slip and does not require a signature. Generated on ${fmtDate(d.generatedAt)}.`,
-    (M + RX) / 2,
-    y,
-    { align: 'center' },
-  );
+  row([{ text: `For any queries and clarification on this pay slip please contact your respective HR. Generated on ${fmtDate(d.generatedAt)}.`, span: 5, size: 7.5, center: true }]);
 
   const safeName = d.employee.fullName.replace(/[^a-z0-9]+/gi, '-').replace(/^-|-$/g, '');
   doc.save(`Salary-Slip-${safeName}-${MONTHS[d.period.month - 1]}-${d.period.year}.pdf`);

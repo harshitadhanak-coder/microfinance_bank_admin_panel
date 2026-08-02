@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { FilterBar } from '../../components/FilterBar';
+import { ExportButton } from '../../components/ExportButton';
 import { Badge, BadgeTone } from '../../components/Badge';
 import { Tabs, TabDef } from '../../components/Tabs';
 import { Card } from '../../components/Card';
@@ -99,7 +100,12 @@ export default function HolidaysPage() {
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Holidays' }]}
         title="Holidays"
         subtitle="National, state and company holiday calendar"
-        actions={canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
+        actions={(
+          <>
+            <ExportButton url="/human-resources/holidays/export" fileBase={`Holidays-${year}`} params={{ year }} />
+            {canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> Add holiday</button>}
+          </>
+        )}
         tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'list' | 'calendar')} />}
       />
 

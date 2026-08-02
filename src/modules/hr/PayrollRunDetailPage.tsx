@@ -7,11 +7,12 @@ import { PageHeader } from '../../components/PageHeader';
 import { StatCard } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { ConfirmDialog } from '../../components/Modal';
+import { ExportButton } from '../../components/ExportButton';
 import { useToast } from '../../components/Toast';
 import { Eye, Wallet } from '../../components/icons';
 import { inr, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
-import { can } from '../auth/permissions';
+import { can, canAccessModule } from '../auth/permissions';
 import { PayrollRun, Payslip, periodLabel } from './payrollShared';
 
 /**
@@ -29,6 +30,9 @@ export default function PayrollRunDetailPage() {
   const [markPaidOpen, setMarkPaidOpen] = useState(false);
 
   const canMarkPaid = can(user?.role, 'payroll:markPaid');
+  // The attendance route is module-guarded and would bounce a payroll-only role
+  // straight back home, so the name is only a link when it can actually open.
+  const canOpenAttendance = canAccessModule(user?.role, 'attendance');
 
   const runsQuery = useQuery({
     queryKey: ['/human-resources/payroll/runs'],
@@ -43,6 +47,25 @@ export default function PayrollRunDetailPage() {
   });
   const payslips = payslipsQuery.data ?? [];
 
+  /**
+   * `chargeableLates` is computed inside the payroll run and never stored, so it
+   * is re-derived here from the free-late allowance:
+   *
+   *   chargeable = lateCount − freeLatesPerMonth
+   *
+   * That reads the allowance in force NOW, not the one the run used. If the
+   * policy has been edited since, the derived figure will not reconcile with the
+   * stored Late deduction beside it — so the column is labelled as derived and
+   * the two stored values (Lates, Late deduction) sit next to it as the record.
+   */
+  const policyQuery = useQuery({
+    queryKey: ['/human-resources/policies'],
+    queryFn: () => api.get('/human-resources/policies').then((r) => r.data.data as { attendance: { freeLatesPerMonth: number } }),
+  });
+  const freeLates = policyQuery.data?.attendance.freeLatesPerMonth;
+  const chargeableLates = (p: Payslip): number | null =>
+    freeLates === undefined ? null : Math.max(0, (p.lateCount ?? 0) - freeLates);
+
   const markPaid = useMutation({
     mutationFn: () => api.post(`/human-resources/payroll/runs/${runId}/mark-paid`),
     onSuccess: () => {
@@ -55,11 +78,64 @@ export default function PayrollRunDetailPage() {
 
   const totalDeductions = payslips.reduce((s, p) => s + Number(p.totalDeductions ?? 0), 0);
 
+  // The name opens that employee's attendance for the run's own month, not the
+  // current one — the days the payslip was computed from are what you want to
+  // check when a figure looks wrong.
+  // (The run meta can still be in flight when the payslips have arrived; without
+  // it the attendance page falls back to its own default month.)
+  const openAttendance = (employeeId: string) =>
+    navigate(run ? `/attendance/${employeeId}?month=${run.month}&year=${run.year}` : `/attendance/${employeeId}`);
+
   const slipColumns: Column<Payslip>[] = [
-    { header: 'Employee', render: (p) => <><strong>{p.employee.fullName}</strong><div className="muted sm-text"><code>{p.employee.employeeCode}</code></div></>, sortValue: (p) => p.employee.fullName },
+    {
+      header: 'Employee',
+      render: (p) => (
+        <>
+          {canOpenAttendance ? (
+            <a
+              className="cell-link"
+              role="link"
+              tabIndex={0}
+              title={`View ${p.employee.fullName}'s attendance for this month`}
+              onClick={() => openAttendance(p.employee.id)}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openAttendance(p.employee.id); } }}
+            >
+              <strong>{p.employee.fullName}</strong>
+            </a>
+          ) : (
+            <strong>{p.employee.fullName}</strong>
+          )}
+          <div className="muted sm-text"><code>{p.employee.employeeCode}</code></div>
+        </>
+      ),
+      sortValue: (p) => p.employee.fullName,
+    },
     { header: 'Branch', render: (p) => p.employee.branch?.name ?? '—', sortValue: (p) => p.employee.branch?.name ?? '' },
     { header: 'Present', render: (p) => p.presentDays, sortValue: (p) => Number(p.presentDays) },
     { header: 'LOP', render: (p) => (Number(p.lossOfPayDays) > 0 ? p.lossOfPayDays : '—'), sortValue: (p) => Number(p.lossOfPayDays) },
+    // ── Late breakdown: raw count → chargeable (derived) → the money it cost.
+    // Table only, by request: the salary slip and its PDF are unchanged.
+    {
+      header: 'Lates',
+      render: (p) => (p.lateCount ? <span className="num">{p.lateCount}</span> : '—'),
+      sortValue: (p) => p.lateCount ?? 0,
+    },
+    {
+      header: 'Chargeable',
+      render: (p) => {
+        const n = chargeableLates(p);
+        if (n === null) return <span className="muted">…</span>;
+        return n > 0
+          ? <span className="num" title={`${p.lateCount ?? 0} lates − ${freeLates} free`}>{n}</span>
+          : '—';
+      },
+      sortValue: (p) => chargeableLates(p) ?? 0,
+    },
+    {
+      header: 'Late ded.',
+      render: (p) => (Number(p.lateDeduction ?? 0) > 0 ? <span className="num">{inr(p.lateDeduction)}</span> : '—'),
+      sortValue: (p) => Number(p.lateDeduction ?? 0),
+    },
     { header: 'Gross', render: (p) => <span className="num">{inr(p.grossEarnings)}</span>, sortValue: (p) => Number(p.grossEarnings) },
     { header: 'Deductions', render: (p) => <span className="num">{inr(p.totalDeductions)}</span>, sortValue: (p) => Number(p.totalDeductions) },
     { header: 'PF', render: (p) => <span className="num">{inr(p.providentFund)}</span>, sortValue: (p) => Number(p.providentFund) },
@@ -80,8 +156,18 @@ export default function PayrollRunDetailPage() {
         title={run ? `Payroll — ${periodLabel(run.month, run.year)}` : 'Payroll run'}
         subtitle={`${run?._count?.payslips ?? payslips.length} employees`}
         meta={run && <Badge status={run.status} />}
-        actions={run?.status === 'PROCESSED' && canMarkPaid && (
-          <button className="btn-lg" onClick={() => setMarkPaidOpen(true)}><Wallet size={15} /> Mark as paid</button>
+        actions={(
+          <>
+            {/* The month's salary register — "Payroll — Jul 2026" and so on. */}
+            <ExportButton
+              url={`/human-resources/payroll/runs/${runId}/export`}
+              fileBase={run ? `Payroll-${periodLabel(run.month, run.year).replace(' ', '-')}` : 'Payroll'}
+              disabled={!payslips.length}
+            />
+            {run?.status === 'PROCESSED' && canMarkPaid && (
+              <button className="btn-lg" onClick={() => setMarkPaidOpen(true)}><Wallet size={15} /> Mark as paid</button>
+            )}
+          </>
         )}
       />
 

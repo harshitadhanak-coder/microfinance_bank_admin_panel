@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { FilterBar } from '../../components/FilterBar';
+import { ExportButton } from '../../components/ExportButton';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
@@ -102,10 +103,18 @@ export default function SalaryAdvancesPage() {
         breadcrumb={[{ label: 'Payroll & Finance' }, { label: 'Salary Advances' }]}
         title="Salary Advances"
         subtitle="Staff advances recovered from monthly salary"
-        actions={canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
+        actions={(
+          <>
+            <ExportButton url="/human-resources/salary-advances/export" fileBase="Salary-Advances" params={{ status: status === 'ALL' ? undefined : status }} />
+            {canManage && <button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> New advance</button>}
+          </>
+        )}
       />
 
-      <FilterBar chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${titleCase(status)}`, onRemove: () => setStatus('ALL') }] : []} onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}>
+      <FilterBar
+        chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${titleCase(status)}`, onRemove: () => setStatus('ALL') }] : []}
+        onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}
+      >
         <label>Status
           <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Filter by status">
             {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All statuses' : titleCase(s)}</option>)}

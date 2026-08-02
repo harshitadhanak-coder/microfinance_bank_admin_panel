@@ -172,9 +172,10 @@ export const MODULES: ModuleDef[] = [
   { key: 'leave', to: '/leave', label: 'Leave', permission: 'leave:view', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
   { key: 'holidays', to: '/holidays', label: 'Holidays', permission: 'holiday:create', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
   { key: 'exit', to: '/hr/exit', label: 'Exit Management', permission: 'exit:view', roles: ['HUMAN_RESOURCES_ADMIN', 'BRANCH_MANAGER'], group: 'hr' },
-  // Hidden from the sidebar per request. The attendance/payroll rules screen
-  // stays routable at /settings/hr-policy (direct URL); it is no longer a menu item.
-  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'Attendance & Payroll Rules', permission: 'hr:configure', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr', hidden: true },
+  // Attendance + payroll rules (grace, late deductions, PF/ESI rates). Was
+  // hidden from the sidebar and reachable only by typing /settings/hr-policy,
+  // which made the late-handling settings look like they did not exist.
+  { key: 'hrPolicy', to: '/settings/hr-policy', label: 'Attendance & Payroll Rules', permission: 'hr:configure', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'hr' },
   // Company-wide info published by HR — everyone with admin-panel access sees these.
   { key: 'announcements', to: '/announcements', label: 'Announcements', permission: 'announcement:view', roles: ALL_ROLES, group: 'hr' },
   { key: 'hrPolicyLibrary', to: '/hr-policies', label: 'HR Policies', permission: 'hr_policy:view', roles: ALL_ROLES, group: 'hr' },
@@ -227,8 +228,8 @@ export const MODULES: ModuleDef[] = [
   // Operations, Auditor) would otherwise see a Settings menu whose single tile
   // opens an empty Roles & Permissions page. HR is deliberately NOT in `roles`
   // — HR must not be able to grant itself access beyond the HR module. The HR
-  // policy screen (hrPolicy) is hidden from the menu; it stays reachable at
-  // /settings/hr-policy by direct URL.
+  // policy screen lives under a /settings/ path but is listed in the Human
+  // Resources group (see `hrPolicy` above), so HR reaches it without this tile.
   { key: 'settings', to: '/settings', label: 'Settings', permission: 'roles:configure', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN'], group: 'admin' },
 ];
 
@@ -239,6 +240,9 @@ export const ACTION_ROLES = {
   'employee:create': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'employee:update': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'leave:decide': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // Booking a leave for an employee and deleting one. Backend gates both with
+  // authorizeRoles(HR_MODULE_ROLES) — HR + Super Admin, no matrix widening.
+  'leave:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'payroll:run': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'payroll:markPaid': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'holiday:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
@@ -303,6 +307,7 @@ export const ACTION_PERMISSIONS = {
   'employee:create': 'employee:create',
   'employee:update': 'employee:edit',
   'leave:decide': 'leave:approve',
+  'leave:manage': 'leave:approve',
   'payroll:run': 'payroll:run',
   'payroll:markPaid': 'payroll:approve',
   'holiday:manage': 'holiday:create',

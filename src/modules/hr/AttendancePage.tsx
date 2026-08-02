@@ -9,6 +9,7 @@ import { Card, StatCard } from '../../components/Card';
 import { Badge } from '../../components/Badge';
 import { Tabs, TabDef } from '../../components/Tabs';
 import { FilterBar, FilterChip } from '../../components/FilterBar';
+import { ExportButton } from '../../components/ExportButton';
 import { EmptyState } from '../../components/EmptyState';
 import { Calendar, CalendarDayCell } from '../../components/Calendar';
 import { Modal } from '../../components/Modal';
@@ -52,6 +53,8 @@ function Legend() {
 
 type ViewKey = 'list' | 'summary' | 'calendar';
 
+const PERIOD_OVERRIDE_HINT = 'A custom From/To range is set — clear it to filter by month again.';
+
 /**
  * Attendance — List + Calendar. A single browse surface with a view switch:
  * the daily records table and per-employee monthly summary (List), or a
@@ -82,8 +85,6 @@ export default function AttendancePage() {
     }, { replace: true });
 
   const setView = (v: ViewKey) => patchParams({ view: v });
-  const setMonth = (m: number) => patchParams({ month: String(m) });
-  const setYear = (y: number) => patchParams({ year: String(y) });
   const setCalEmployeeId = (id: string) => patchParams({ emp: id || null });
   const shiftMonth = (delta: number) => {
     const d = new Date(year, month - 1 + delta, 1);
@@ -98,6 +99,26 @@ export default function AttendancePage() {
   const employeeId = params.get('employee') || '';
 
   const setFilter = (key: string, value: string) => { patchParams({ [key]: value || null }); table.setPage(1); };
+  const setMonth = (m: number) => { patchParams({ month: String(m) }); table.setPage(1); };
+  const setYear = (y: number) => { patchParams({ year: String(y) }); table.setPage(1); };
+
+  /**
+   * The period picker bounds the List view too, not just Summary and Calendar.
+   * It previously drove only those two, so picking "May 2026" left the list
+   * showing every date on record — the filter looked broken because for this
+   * view it was.
+   *
+   * An explicit From/To still wins: a range is the more specific instruction,
+   * and it is the only way to look across a month boundary. When one is set the
+   * picker is disabled rather than silently ignored, so the two controls can
+   * never appear to disagree.
+   */
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const monthStart = `${year}-${pad(month)}-01`;
+  const monthEnd = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
+  const customRange = !!(from || to);
+  const effectiveFrom = customRange ? from : monthStart;
+  const effectiveTo = customRange ? to : monthEnd;
 
   const branchesQuery = useQuery({
     queryKey: ['/branches', 'attendance-filter'],
@@ -109,8 +130,8 @@ export default function AttendancePage() {
   });
 
   const extra = new URLSearchParams();
-  if (from) extra.set('from', from);
-  if (to) extra.set('to', to);
+  if (effectiveFrom) extra.set('from', effectiveFrom);
+  if (effectiveTo) extra.set('to', effectiveTo);
   if (branchId) extra.set('branchId', branchId);
   if (status) extra.set('status', status);
   if (employeeId) extra.set('employeeId', employeeId);
@@ -200,6 +221,8 @@ export default function AttendancePage() {
   const clearFilters = () => { patchParams({ from: null, to: null, branch: null, status: null, employee: null }); table.setPage(1); };
   const employeeName = (id: string) => employeesQuery.data?.find((e) => e.id === id);
   const chips: FilterChip[] = [
+    // Removing either range chip falls the list straight back to the month
+    // picker, so the chip doubles as the way out of the override.
     ...(from ? [{ key: 'from', label: `From ${from}`, onRemove: () => setFilter('from', '') }] : []),
     ...(to ? [{ key: 'to', label: `To ${to}`, onRemove: () => setFilter('to', '') }] : []),
     ...(branchId ? [{ key: 'branch', label: `Branch: ${branchesQuery.data?.find((b) => b.id === branchId)?.name ?? '…'}`, onRemove: () => setFilter('branch', '') }] : []),
@@ -207,7 +230,12 @@ export default function AttendancePage() {
     ...(status ? [{ key: 'status', label: `Status: ${statusLabel(status)}`, onRemove: () => setFilter('status', '') }] : []),
   ];
 
-  const yearOptions = [now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
+  const yearOptions = [now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
+
+  // A custom From/To only overrides the period on the List view — Summary and
+  // Calendar are month-based and have no range control, so the picker stays live
+  // there whatever the range says.
+  const periodOverridden = view === 'list' && customRange;
 
   const cal = calendarQuery.data;
   const calendarDays: CalendarDayCell[] = (cal?.days ?? []).map((d) => ({
@@ -241,22 +269,22 @@ export default function AttendancePage() {
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Attendance' }]}
         title="Attendance"
         subtitle="Track daily employee attendance across all branches."
+        // Four buttons was already a crowded cluster; the period selects made it
+        // seven controls and read as part of the actions rather than as a filter.
+        // The cluster is now just actions, split into "my punch" and the rest.
         actions={(
           <>
-            <div className="hdr-period" role="group" aria-label="Reporting period">
-              <select aria-label="Month" value={month} onChange={(e) => setMonth(Number(e.target.value))}>
-                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-              </select>
-              <select aria-label="Year" value={year} onChange={(e) => setYear(Number(e.target.value))}>
-                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
-              </select>
-            </div>
-            <span className="hdr-sep" aria-hidden="true" />
+            <ExportButton
+              url="/human-resources/attendance/export"
+              fileBase="Attendance"
+              params={{ from: effectiveFrom, to: effectiveTo, branchId, status, employeeId, search: table.search }}
+            />
             {canManage && (
               <button type="button" className="ghost" onClick={() => setManualOpen(true)}>
                 <CalendarCheck size={15} /> Add attendance
               </button>
             )}
+            <span className="hdr-sep" aria-hidden="true" />
             <button type="button" className="ghost" disabled={punchOut.isPending} onClick={() => punchOut.mutate()}>
               <LogOut size={15} /> {punchOut.isPending ? 'Checking out…' : 'Check out'}
             </button>
@@ -265,7 +293,35 @@ export default function AttendancePage() {
             </button>
           </>
         )}
-        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as ViewKey)} />}
+        /* Tabs left, period right, on one line: the period applies to all three
+           views, so it belongs beside the view switch rather than buried among
+           the List view's own filters. */
+        tabs={(
+          <div className="att-toolbar">
+            <Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as ViewKey)} />
+            <div className="att-period" role="group" aria-label="Reporting period">
+              <span>Period</span>
+              <select
+                aria-label="Month"
+                value={month}
+                disabled={periodOverridden}
+                title={periodOverridden ? PERIOD_OVERRIDE_HINT : 'Month to show'}
+                onChange={(e) => setMonth(Number(e.target.value))}
+              >
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </select>
+              <select
+                aria-label="Year"
+                value={year}
+                disabled={periodOverridden}
+                title={periodOverridden ? PERIOD_OVERRIDE_HINT : 'Year to show'}
+                onChange={(e) => setYear(Number(e.target.value))}
+              >
+                {yearOptions.map((y) => <option key={y} value={y}>{y}</option>)}
+              </select>
+            </div>
+          </div>
+        )}
       />
 
       {view === 'list' && (
@@ -296,9 +352,20 @@ export default function AttendancePage() {
             <select className="filter-control" value={status} onChange={(e) => setFilter('status', e.target.value)} aria-label="Status" title="Status">
               {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
             </select>
-            <label className="filter-field"><span>From</span><input type="date" value={from} onChange={(e) => setFilter('from', e.target.value)} aria-label="From date" /></label>
-            <label className="filter-field"><span>To</span><input type="date" value={to} onChange={(e) => setFilter('to', e.target.value)} aria-label="To date" /></label>
+            {/* Empty means "use the period above"; the placeholder date shown is
+                the month bound that is actually in force, so the row always
+                reads as the range being queried. */}
+            <label className="filter-field"><span>From</span><input type="date" value={from} max={to || undefined} onChange={(e) => setFilter('from', e.target.value)} aria-label="From date" title={`Empty = ${monthStart} (from the period above)`} /></label>
+            <label className="filter-field"><span>To</span><input type="date" value={to} min={from || undefined} onChange={(e) => setFilter('to', e.target.value)} aria-label="To date" title={`Empty = ${monthEnd} (from the period above)`} /></label>
           </FilterBar>
+
+          {/* Says plainly which dates the rows below cover — the previous layout
+              gave no clue, which is why the period picker read as broken. */}
+          <p className="muted sm-text att-range-note">
+            {customRange
+              ? <>Showing <strong>{effectiveFrom || 'the earliest record'}</strong> to <strong>{effectiveTo || 'the latest record'}</strong> — a custom range, so the period picker is paused.</>
+              : <>Showing <strong>{MONTHS[month - 1]} {year}</strong>{totalItems ? <> · {totalItems.toLocaleString('en-IN')} record{totalItems === 1 ? '' : 's'}</> : null}</>}
+          </p>
 
           <DataTable
             columns={columns}

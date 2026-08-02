@@ -93,10 +93,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
   };
 
-  /** Load the full profile (incl. assigned branch) for the current session. */
-  const loadProfile = async () => {
+  /**
+   * Load the full profile (incl. assigned branch) for the current session.
+   * `withPermissions` is false straight after signing in, where the login
+   * response already supplied them — refetching would be a wasted round trip.
+   */
+  const loadProfile = async (withPermissions = true) => {
     try {
-      const [{ data }] = await Promise.all([api.get('/auth/me'), loadPermissions()]);
+      const [{ data }] = await Promise.all([
+        api.get('/auth/me'),
+        withPermissions ? loadPermissions() : Promise.resolve(),
+      ]);
       localStorage.setItem('user', JSON.stringify(data.data));
       setUser(data.data);
     } catch {
@@ -115,7 +122,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // Portal lock: this is the Admin Panel website — field officers must use the
     // Field Officer site instead. The backend rejects a role/portal mismatch.
     const { data } = await api.post('/auth/login', { email, password, portal: 'ADMIN' });
-    const { accessToken, refreshToken, user } = data.data;
+    const { accessToken, refreshToken, user, permissions } = data.data;
     const mustChange = data.data.mustChangePassword === true;
     localStorage.setItem('accessToken', accessToken);
     localStorage.setItem('refreshToken', refreshToken);
@@ -124,11 +131,27 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     else localStorage.removeItem('mustChangePassword');
     setMustChangePassword(mustChange);
     setUser(user);
-    // Skip the profile refresh when a forced change is pending — the app will
-    // route straight to the change-password screen. Permissions are still
-    // loaded, so the sidebar is correct the moment the change is done.
-    if (mustChange) await loadPermissions();
-    else await loadProfile();
+
+    // The sign-in response already carries the effective permission set, so the
+    // sidebar and the landing-route decision are ready without waiting on a
+    // second request. Only fall back to fetching them when talking to an older
+    // backend that does not send them.
+    if (permissions) {
+      localStorage.setItem(PERMISSIONS_KEY, JSON.stringify(permissions));
+      setEffectivePermissions(permissions);
+      setPermissionVersion((version) => version + 1);
+    } else {
+      await loadPermissions();
+    }
+
+    // The full profile (assigned branch, lastLoginAt) is a nicety, not a gate:
+    // login already returned the user. Refreshing it in the background lets the
+    // app render immediately instead of holding the "Signing in…" button for
+    // another round trip. Skipped entirely when a forced password change is
+    // pending — that screen needs none of it.
+    // Permissions are already in place by here (from the response or the
+    // fallback fetch above), so the background refresh only needs the profile.
+    if (!mustChange) void loadProfile(false);
     return mustChange;
   };
 

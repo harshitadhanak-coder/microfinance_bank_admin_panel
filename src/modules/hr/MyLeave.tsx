@@ -6,17 +6,20 @@ import { FilterBar } from '../../components/FilterBar';
 import { Badge } from '../../components/Badge';
 import { Modal, ConfirmDialog } from '../../components/Modal';
 import { ActionMenu } from '../../components/ActionMenu';
-import { CalendarCheck, Pencil, Plus, Trash2, Ban, Wallet } from '../../components/icons';
+import { CalendarCheck, Pencil, Ban, Wallet } from '../../components/icons';
 import { fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 
 /**
  * My Leave — self-service tab on the Leave page. Every admin-panel employee
- * (Branch Manager, HR, Accountant, Operations, …) applies for and tracks their
- * own leave here. Applying is self-service — the backend routes (POST
- * /human-resources/leaves, /leaves/me, /leaves/balances/me) carry no role guard
- * and enforce ownership in the service — so this tab needs no permission gate.
- * The team review/decide surface stays on the List tab.
+ * (Branch Manager, HR, Accountant, Operations, …) tracks their own leave and
+ * balances here. The reads (/leaves/me, /leaves/balances/me) and the edit /
+ * cancel writes carry no role guard and enforce ownership in the service, so
+ * this tab needs no permission gate.
+ *
+ * Booking and deleting leave are NOT here: both are HR/Super-Admin-only on the
+ * backend and live on the List tab, which is where HR records leave on an
+ * employee's behalf. Adding an "Apply" button back would just earn a 403.
  */
 
 interface MyLeaveRow {
@@ -49,17 +52,14 @@ const isPending = (status: string) => status === 'PENDING';
 /** An ISO timestamp → the yyyy-mm-dd a <input type="date"> expects. */
 const toDateInput = (iso: string) => iso.slice(0, 10);
 
-const emptyForm = { leaveType: 'CASUAL' as LeaveType, fromDate: '', toDate: '', reason: '' };
-type LeaveForm = typeof emptyForm;
+type LeaveForm = { leaveType: LeaveType; fromDate: string; toDate: string; reason: string };
 
 export default function MyLeave() {
   const qc = useQueryClient();
   const toast = useToast();
   const [status, setStatus] = useState<StatusFilter>('ALL');
-  const [formOpen, setFormOpen] = useState(false);
   const [editing, setEditing] = useState<MyLeaveRow | null>(null);
   const [pendingCancel, setPendingCancel] = useState<MyLeaveRow | null>(null);
-  const [pendingDelete, setPendingDelete] = useState<MyLeaveRow | null>(null);
 
   const listQuery = useQuery({
     queryKey: ['/human-resources/leaves/me'],
@@ -78,18 +78,10 @@ export default function MyLeave() {
 
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/leaves') });
 
-  const openApply = () => { setEditing(null); setFormOpen(true); };
-  const openEdit = (leave: MyLeaveRow) => { setEditing(leave); setFormOpen(true); };
-
   const cancel = useMutation({
     mutationFn: (id: string) => api.post(`/human-resources/leaves/${id}/cancel`),
     onSuccess: () => { toast.success('Leave request cancelled.'); setPendingCancel(null); refresh(); },
     onError: (err) => { toast.error(apiMessage(err, 'Could not cancel the request.')); setPendingCancel(null); },
-  });
-  const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/human-resources/leaves/${id}`),
-    onSuccess: () => { toast.success('Leave request deleted.'); setPendingDelete(null); refresh(); },
-    onError: (err) => { toast.error(apiMessage(err, 'Could not delete the request.')); setPendingDelete(null); },
   });
 
   const columns: Column<MyLeaveRow>[] = [
@@ -105,9 +97,8 @@ export default function MyLeave() {
         const items = [
           ...(isPending(l.status)
             ? [
-                { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => openEdit(l) },
+                { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(l) },
                 { key: 'cancel', label: 'Cancel request', icon: <Ban size={15} />, tone: 'danger' as const, onSelect: () => setPendingCancel(l) },
-                { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger' as const, separatorBefore: true, onSelect: () => setPendingDelete(l) },
               ]
             : []),
           ...(l.status === 'APPROVED'
@@ -138,7 +129,7 @@ export default function MyLeave() {
         </section>
       )}
 
-      <FilterBar actions={<button type="button" onClick={openApply}><Plus size={15} /> Apply for leave</button>}>
+      <FilterBar>
         <label>Status
           <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)} aria-label="Filter by status">
             {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All statuses' : titleCase(s)}</option>)}
@@ -150,16 +141,16 @@ export default function MyLeave() {
         columns={columns}
         rows={rows}
         loading={listQuery.isLoading}
-        empty="You have no leave requests yet. Use “Apply for leave” to submit one."
+        empty="You have no leave records yet. HR books leave on your behalf."
         searchPlaceholder="Search my leave…"
       />
 
-      {formOpen && (
-        <ApplyLeaveModal
+      {editing && (
+        <EditLeaveModal
           editing={editing}
           balances={paidBalances}
-          onClose={() => setFormOpen(false)}
-          onDone={() => { setFormOpen(false); refresh(); }}
+          onClose={() => setEditing(null)}
+          onDone={() => { setEditing(null); refresh(); }}
         />
       )}
 
@@ -176,37 +167,26 @@ export default function MyLeave() {
         />
       )}
 
-      {pendingDelete && (
-        <ConfirmDialog
-          icon={<Trash2 size={20} />}
-          tone="danger"
-          title="Delete leave request?"
-          message={<>Your {titleCase(pendingDelete.leaveType)} leave for {fmtDate(pendingDelete.fromDate)} – {fmtDate(pendingDelete.toDate)} will be permanently removed. This cannot be undone.</>}
-          confirmLabel="Delete request"
-          loading={remove.isPending}
-          onConfirm={() => remove.mutate(pendingDelete.id)}
-          onCancel={() => setPendingDelete(null)}
-        />
-      )}
     </>
   );
 }
 
-// ── Apply / edit own leave ───────────────────────────────────────────────────
-function ApplyLeaveModal({
+// ── Edit own pending leave ───────────────────────────────────────────────────
+function EditLeaveModal({
   editing, balances, onClose, onDone,
 }: {
-  editing: MyLeaveRow | null;
+  editing: MyLeaveRow;
   balances: LeaveBalance[];
   onClose: () => void;
   onDone: () => void;
 }) {
   const toast = useToast();
-  const [form, setForm] = useState<LeaveForm>(
-    editing
-      ? { leaveType: editing.leaveType as LeaveType, fromDate: toDateInput(editing.fromDate), toDate: toDateInput(editing.toDate), reason: editing.reason ?? '' }
-      : emptyForm,
-  );
+  const [form, setForm] = useState<LeaveForm>({
+    leaveType: editing.leaveType as LeaveType,
+    fromDate: toDateInput(editing.fromDate),
+    toDate: toDateInput(editing.toDate),
+    reason: editing.reason ?? '',
+  });
   const [error, setError] = useState('');
 
   const payload = () => ({
@@ -217,10 +197,8 @@ function ApplyLeaveModal({
   });
 
   const save = useMutation({
-    mutationFn: () => (editing
-      ? api.patch(`/human-resources/leaves/${editing.id}`, payload())
-      : api.post('/human-resources/leaves', payload())),
-    onSuccess: () => { toast.success(editing ? 'Leave request updated.' : 'Leave request submitted. HR will review it.'); onDone(); },
+    mutationFn: () => api.patch(`/human-resources/leaves/${editing.id}`, payload()),
+    onSuccess: () => { toast.success('Leave request updated.'); onDone(); },
     onError: (err) => setError(apiMessage(err, 'Could not save the leave request.')),
   });
 
@@ -241,11 +219,11 @@ function ApplyLeaveModal({
   return (
     <Modal
       size="md" onClose={onClose} icon={<CalendarCheck size={20} />}
-      title={editing ? 'Edit leave request' : 'Apply for leave'}
-      subtitle={editing ? 'Only pending requests can be changed.' : 'Your branch manager / HR reviews every request.'}
+      title="Edit leave request"
+      subtitle="Only pending requests can be changed."
       footer={<>
         <button type="button" className="ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-        <button type="submit" form="my-leave-form" disabled={disabled}>{save.isPending ? 'Saving…' : editing ? 'Update request' : 'Submit request'}</button>
+        <button type="submit" form="my-leave-form" disabled={disabled}>{save.isPending ? 'Saving…' : 'Update request'}</button>
       </>}
     >
       <form id="my-leave-form" className="form-grid" onSubmit={submit}>

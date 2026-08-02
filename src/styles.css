@@ -8,18 +8,21 @@
    Existing raw vars (--ink, --green, …) are retained as aliases for the many
    screens built before the token layer; migrate them opportunistically. */
 :root {
-  /* Brand — raw values (source of truth) */
-  --ink: #11271f;
-  --ink-2: #2e4a3d;
-  --paper: #f7f6f2;
+  /* Brand — raw values (source of truth).
+     "Private Wealth" palette: green-charcoal ink, soft ivory paper, gold brass.
+     One warm temperature throughout so surfaces and text never clash; deep green
+     + gold (the logo gold) carry the luxury banking identity. */
+  --ink: #1C2621;        /* green-charcoal — text, sidebar, dark chrome */
+  --ink-2: #2A342E;
+  --paper: #F6F4EF;      /* soft ivory page well */
   --surface: #ffffff;
-  --line: #e2e0d8;
-  --brass: #b08a3c;
-  --brass-dark: #8f6e2c;
-  --green: #1d7a4f;
+  --line: #E8E4DB;       /* warm hairline */
+  --brass: #C6953F;      /* logo gold — the jewel accent */
+  --brass-dark: #A87C2E;
+  --green: #1d7a4f;      /* status success (semantic — unchanged) */
   --red: #b3392f;
   --amber: #a36a10;
-  --muted: #6e6a5e;
+  --muted: #6E7B72;      /* green-gray secondary text */
 
   /* Semantic colour aliases — components consume these */
   --color-ink: var(--ink);
@@ -30,8 +33,16 @@
   --color-brass: var(--brass);
   --color-brass-dark: var(--brass-dark);
   --color-muted: var(--muted);
-  --color-surface-2: #faf9f5;   /* subtle raised/zebra fill */
-  --color-line-strong: #cfccbf; /* hover borders */
+  --color-surface-2: #F3EFE6;   /* subtle warm raised/zebra fill */
+  --color-line-strong: #DAD4C7; /* warm hover borders */
+
+  /* Primary action + green-first aliases. Newer HR/report/attendance components
+     read var(--border, …) / var(--accent, …) with cold fallbacks; defining them
+     here brings that whole surface into the warm green palette. */
+  --primary: #0B403A;
+  --primary-hover: #0E5149;
+  --border: var(--line);
+  --accent: #0B403A;
 
   /* Semantic status — each has a solid, a tint (-bg) and a text (-fg) */
   --status-success: var(--green);      --status-success-bg: #e2f1e8;  --status-success-fg: #1d7a4f;
@@ -98,11 +109,11 @@ body {
 h1, h2, .brand, .stat-value { font-family: 'Archivo', 'Inter', sans-serif; }
 h1 { font-size: 1.5rem; margin: 0 0 0.2rem; letter-spacing: -0.01em; }
 h2 { font-size: 1.05rem; margin: 0 0 0.8rem; }
-code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 5px; }
+code { font-size: 0.85em; background: #F1EEE6; padding: 2px 6px; border-radius: 5px; }
 
 /* ── Shell ── */
 /* CSS var drives the sidebar column width so rail-collapse is a one-line change. */
-.shell { --sidebar-w: 236px; display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
+.shell { --sidebar-w: 244px; display: grid; grid-template-columns: var(--sidebar-w) 1fr; min-height: 100vh; }
 .shell-collapsed { --sidebar-w: 68px; }
 .sidebar {
   background: var(--ink);
@@ -110,13 +121,13 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
   display: flex; flex-direction: column;
   padding: 0.7rem 0.6rem 0.65rem;
   position: sticky; top: 0; height: 100vh;
-  /* Fixed rail: compact items keep all nav in view; scrolls only when the
-     viewport is genuinely too short. */
+  /* Several groups may be open at once, so the tree is allowed to scroll rather
+     than forcing a one-open-at-a-time accordion to make it fit. */
   overflow-y: auto; overflow-x: hidden;
   scrollbar-width: thin; scrollbar-color: rgba(255,255,255,0.25) transparent;
   z-index: 40;
 }
-.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding: 0.1rem 0.3rem 0.6rem; }
+.sidebar-brand-row { display: flex; align-items: center; justify-content: space-between; gap: 0.4rem; padding: 0.1rem 0.3rem 0.7rem; }
 .brand { display: flex; align-items: center; gap: 0.6rem; font-weight: 700; font-size: 1.02rem; color: inherit; text-decoration: none; cursor: pointer; min-width: 0; }
 .brand:hover .brand-mark.sm { background: var(--brass-dark); }
 .brand-name { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
@@ -130,74 +141,115 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
 .sidebar-collapse { color: #9aa79d; }
 .sidebar-collapse:hover { background: rgba(255,255,255,0.08) !important; color: #fff !important; }
 
-.sidebar-nav { display: flex; flex-direction: column; gap: 2px; flex: 1; }
+.sidebar-nav { display: flex; flex-direction: column; gap: 1px; flex: 1; }
 
-/* ── Collapsible menu groups (accordion) ──
-   One group of submenu links open at a time, so the whole nav always fits the
-   viewport with no sidebar scrollbar — banking-suite style. */
-.nav-group { display: flex; flex-direction: column; }
+/* ── Collapsible groups ──
+   Any number may be open at once and the open set is persisted, so navigating
+   never folds away the group you are working in. Group heads are deliberately
+   quieter than their links — muted and letter-spaced — so the two levels read
+   as label vs. destination rather than as one flat list of 35 rows. */
+.nav-group { display: flex; flex-direction: column; margin-top: 3px; }
 .nav-group-head {
-  display: flex; align-items: center; justify-content: flex-start; gap: 0.6rem; width: 100%;
+  display: flex; align-items: center; gap: 0.6rem; width: 100%;
   background: transparent; border: none; border-radius: 7px; text-align: left;
-  color: #c4cec6; padding: 0.38rem 0.6rem; min-height: 0;
-  font: inherit; font-weight: 600; font-size: 0.86rem; line-height: 1.25; cursor: pointer;
+  color: #97a49b; padding: 0.4rem 0.6rem; min-height: 0;
+  font: inherit; font-weight: 600; font-size: 0.8rem; letter-spacing: 0.02em; line-height: 1.25; cursor: pointer;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .nav-group-head:hover { background: rgba(255,255,255,0.07); color: #fff; }
-.nav-group-caret { margin-left: auto; flex: none; opacity: 0.55; transition: transform var(--dur) var(--ease); }
-.nav-group.open .nav-group-caret { transform: rotate(180deg); }
-/* A closed group still shows where the current page lives. */
+.nav-group-head .nav-item-icon { opacity: 0.7; }
+.nav-group-caret { margin-left: auto; flex: none; opacity: 0.5; transition: transform var(--dur) var(--ease), opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+.nav-group.open .nav-group-caret { transform: rotate(180deg); opacity: 0.9; color: var(--brass); }
+/* A group holding the current page stays marked even when closed. */
 .nav-group.has-active > .nav-group-head { color: #fff; }
 .nav-group.has-active > .nav-group-head .nav-item-icon { color: var(--brass); opacity: 1; }
-.nav-group.has-active:not(.open) > .nav-group-head { background: rgba(176,138,60,0.14); }
+.nav-group.has-active:not(.open) > .nav-group-head { background: rgba(11,64,58,0.55); }
 /* Smooth expand/collapse without measuring heights. */
 .nav-group-items { display: grid; grid-template-rows: 0fr; transition: grid-template-rows var(--dur) var(--ease); }
 .nav-group.open .nav-group-items { grid-template-rows: 1fr; }
-.nav-group-inner { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 1px; min-height: 0; }
-/* Submenu links indent under a soft connector line. */
+.nav-group-inner { position: relative; overflow: hidden; display: flex; flex-direction: column; gap: 1px; min-height: 0; padding: 2px 0 4px; }
+/* Child links hang off a connector line so the nesting is unmistakable. The
+   line draws itself downward as the group opens, which is what makes the
+   expand read as one deliberate motion instead of a jump. */
 .nav-group-inner::before {
-  content: ''; position: absolute; left: 1rem; top: 3px; bottom: 3px;
-  width: 1px; background: rgba(255,255,255,0.14);
+  content: ''; position: absolute; left: 1.05rem; top: 4px; bottom: 6px;
+  width: 1px; background: rgba(255,255,255,0.13);
+  transform-origin: top; transform: scaleY(0);
+  transition: transform var(--dur) var(--ease);
 }
-.nav-item.sub { margin-left: 1.2rem; padding: 0.28rem 0.55rem; font-size: 0.84rem; }
+.nav-group.open .nav-group-inner::before { transform: scaleY(1); }
+
+/* Child rows fade and slide in behind the line, each a beat after the last.
+   The stagger is small on purpose — enough to feel alive, not enough to make
+   anyone wait for the last row. */
+@keyframes nav-sub-in {
+  from { opacity: 0; transform: translateX(-7px); }
+  to { opacity: 1; transform: none; }
+}
+.nav-group.open .nav-item.sub {
+  animation: nav-sub-in var(--dur) var(--ease) backwards;
+  animation-delay: calc(var(--i, 0) * 24ms);
+}
+
 .nav-item {
+  position: relative;
   display: flex; align-items: center; gap: 0.6rem;
-  color: #c4cec6; text-decoration: none; padding: 0.32rem 0.6rem;
-  border-radius: 7px; font-weight: 500; font-size: 0.86rem; line-height: 1.25;
+  color: #c4cec6; text-decoration: none; padding: 0.38rem 0.6rem;
+  border-radius: 7px; font-weight: 500; font-size: 0.86rem; line-height: 1.3;
+  /* Transparent border reserves the indicator's space, so the active row never
+     nudges its neighbours sideways. */
   border-left: 2px solid transparent;
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
+.nav-item.sub { margin-left: 1.5rem; padding: 0.34rem 0.55rem; }
 .nav-item:hover { background: rgba(255,255,255,0.07); color: #fff; }
-.nav-item.active { background: rgba(176,138,60,0.16); color: #fff; border-left-color: var(--brass); }
-.nav-item-icon { display: inline-flex; flex: none; opacity: 0.82; }
+/* Green active row; gold is reserved for the left bar and the icon. */
+.nav-item.active { background: #0B403A; color: #fff; }
+/* The gold indicator wipes in from the centre rather than blinking on — the one
+   piece of motion that marks "you are here" after a navigation. */
+@keyframes nav-bar-in { from { transform: scaleY(0); opacity: 0; } to { transform: none; opacity: 1; } }
+.nav-item.active::before {
+  content: ''; position: absolute; left: -2px; top: 5px; bottom: 5px;
+  width: 2px; border-radius: 2px; background: var(--brass);
+  animation: nav-bar-in var(--dur) var(--ease);
+}
+.nav-item-icon { display: inline-flex; flex: none; opacity: 0.8; transition: color var(--dur-fast) ease, opacity var(--dur-fast) ease; }
+.nav-item:hover .nav-item-icon { opacity: 1; }
 .nav-item.active .nav-item-icon { color: var(--brass); opacity: 1; }
 .nav-item-label { min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 
 /* ── Rail (collapsed) — icons only, labels hidden, tooltips via title ──
-   The expand/collapse toggle stays visible in BOTH states (stacked under the
-   brand mark when collapsed) so the rail can always be reopened. */
+   The collapse toggle stays visible in BOTH states (stacked under the brand
+   mark when collapsed) so the rail can always be reopened. */
 .shell-collapsed .brand-name,
 .shell-collapsed .nav-item-label,
 .shell-collapsed .signout-label,
 .shell-collapsed .user-meta { display: none; }
 .shell-collapsed .sidebar-brand-row { flex-direction: column; justify-content: center; gap: 0.3rem; padding-left: 0; padding-right: 0; }
-.shell-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
+.shell-collapsed .nav-item { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; border-left-color: transparent; }
 .shell-collapsed .profile-link { justify-content: center; }
 .shell-collapsed .signout-btn { padding-left: 0; padding-right: 0; }
-/* Rail mode flattens the accordion: group heads hide, every module icon shows. */
-.shell-collapsed .nav-group-head { display: none; }
-.shell-collapsed .nav-group-items { grid-template-rows: 1fr; }
-.shell-collapsed .nav-item.sub { margin-left: 0; }
+/* Rail mode shows the TOP level only — Overview links plus one icon per group.
+   Flattening every module here instead produced a 35-icon column taller than
+   the viewport, which defeats the point of collapsing. Clicking a group icon
+   reopens the sidebar on that group. */
+.shell-collapsed .nav-group { margin-top: 0; }
+.shell-collapsed .nav-group-head { justify-content: center; padding-left: 0; padding-right: 0; gap: 0; }
+.shell-collapsed .nav-group-head .nav-item-icon { opacity: 0.85; }
+.shell-collapsed .nav-group-caret { display: none; }
+.shell-collapsed .nav-group-items { grid-template-rows: 0fr; }
 .shell-collapsed .nav-group-inner::before { display: none; }
+/* The group holding the current page stays marked even though it reads as
+   "open" in state — collapsed, nothing is actually expanded. */
+.shell-collapsed .nav-group.has-active > .nav-group-head { background: rgba(11,64,58,0.55); }
 
 .sidebar-foot { border-top: 1px solid rgba(255,255,255,0.1); padding-top: 0.5rem; margin-top: 0.35rem; display: grid; gap: 0.35rem; }
 
-/* Short screens: squeeze the nav further so it never needs to scroll
-   (scrolling remains only as a last resort on very small heights). */
+/* Short screens: tighten the tree a little before falling back to scrolling. */
 @media (max-height: 820px) {
-  .nav-item { padding-top: 0.22rem; padding-bottom: 0.22rem; font-size: 0.84rem; }
-  .nav-group-head { padding-top: 0.28rem; padding-bottom: 0.28rem; }
-  .sidebar-brand-row { padding-bottom: 0.4rem; }
+  .nav-item { padding-top: 0.28rem; padding-bottom: 0.28rem; }
+  .nav-group-head { padding-top: 0.32rem; padding-bottom: 0.32rem; }
+  .sidebar-brand-row { padding-bottom: 0.45rem; }
   .sidebar-foot { padding-top: 0.35rem; margin-top: 0.25rem; }
 }
 
@@ -213,7 +265,7 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
   .shell { grid-template-columns: 1fr; }
   .topbar { display: flex; }
   .sidebar {
-    position: fixed; top: 0; left: 0; height: 100vh; width: 236px;
+    position: fixed; top: 0; left: 0; height: 100vh; width: var(--sidebar-w);
     transform: translateX(-100%); transition: transform var(--dur) var(--ease);
     box-shadow: var(--shadow-2);
   }
@@ -222,20 +274,22 @@ code { font-size: 0.85em; background: #efede6; padding: 2px 6px; border-radius: 
     display: block; position: fixed; inset: 0; z-index: 35;
     background: rgba(11, 26, 20, 0.5);
   }
-  /* Rail-collapse is a desktop concept; force full labels inside the drawer
-     and hide the rail toggle (the drawer closes via backdrop/navigation). */
+  /* Rail-collapse is a desktop concept; force full labels inside the drawer and
+     hide the rail toggle (the drawer closes via backdrop/navigation). */
   .sidebar-collapse { display: none; }
-  .shell-collapsed .sidebar { --sidebar-w: 236px; }
+  .shell-collapsed { --sidebar-w: 244px; }
   .shell-collapsed .sidebar-brand-row { flex-direction: row; justify-content: space-between; padding-left: 0.3rem; padding-right: 0.3rem; }
   .shell-collapsed .brand-name,
   .shell-collapsed .nav-item-label, .shell-collapsed .signout-label,
   .shell-collapsed .user-meta { display: revert; }
-  .shell-collapsed .nav-item { justify-content: flex-start; padding-left: 0.55rem; padding-right: 0.55rem; gap: 0.6rem; }
-  /* Drawer keeps the full accordion even when the desktop rail is collapsed. */
-  .shell-collapsed .nav-group-head { display: flex; }
+  .shell-collapsed .nav-item { justify-content: flex-start; padding-left: 0.6rem; padding-right: 0.6rem; gap: 0.6rem; }
+  /* The drawer keeps the full tree even when the desktop rail is collapsed. */
+  .shell-collapsed .nav-group { margin-top: 3px; }
+  .shell-collapsed .nav-group-head { justify-content: flex-start; padding-left: 0.6rem; padding-right: 0.6rem; gap: 0.6rem; }
+  .shell-collapsed .nav-group-caret { display: block; }
   .shell-collapsed .nav-group-items { grid-template-rows: 0fr; }
   .shell-collapsed .nav-group.open .nav-group-items { grid-template-rows: 1fr; }
-  .shell-collapsed .nav-item.sub { margin-left: 1.2rem; }
+  .shell-collapsed .nav-item.sub { margin-left: 1.5rem; }
   .shell-collapsed .nav-group-inner::before { display: block; }
 }
 @media (prefers-reduced-motion: reduce) { .sidebar { transition: none; } }
@@ -565,18 +619,19 @@ a.kpi:hover { border-color: var(--brass); transform: translateY(-2px); box-shado
 table { width: 100%; border-collapse: separate; border-spacing: 0; font-size: 0.9rem; }
 th {
   text-align: left; font-size: 0.72rem; font-weight: 600; text-transform: uppercase;
-  letter-spacing: 0.06em; color: var(--muted); white-space: nowrap;
-  padding: 0.55rem 0.9rem; border-bottom: 1px solid var(--line);
-  background: #f3f1ea; position: sticky; top: 0; z-index: 2;
+  letter-spacing: 0.07em; color: #E4DBC4; white-space: nowrap;
+  padding: 0.62rem 0.9rem; border-bottom: 2px solid var(--brass);
+  background: #0B403A; position: sticky; top: 0; z-index: 2;
+  transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 td {
-  padding: 0.6rem 0.9rem; border-bottom: 1px solid var(--line);
+  padding: 0.6rem 0.9rem; border-bottom: 1px solid #F0ECE3;
   vertical-align: middle; white-space: nowrap;
   background: var(--surface); /* opaque so sticky columns cover scrolled content */
 }
-/* Zebra striping + hover for easy row scanning. */
-tbody tr:nth-child(even) td { background: #fbfaf7; }
-tbody tr:hover td { background: #f1ede1; }
+/* Warm zebra + soft hover for easy row scanning. */
+tbody tr:nth-child(even) td { background: #FAF8F3; }
+tbody tr:hover td { background: #F3EFE6; }
 tr:last-child td { border-bottom: none; }
 /* Action buttons stay reachable while the table scrolls sideways: the cell
    holding .row-actions pins to the right edge with a soft edge shadow. */
@@ -589,10 +644,31 @@ td.wrap { white-space: normal; }
 table.plain th, table.plain td { padding: 0.45rem 0.3rem; border: none; background: none; white-space: normal; position: static; box-shadow: none; }
 table.plain tbody tr:nth-child(even) td, table.plain tbody tr:hover td { background: none; }
 th.sortable { cursor: pointer; user-select: none; }
-th.sortable:hover { color: var(--ink); background: #ebe7db; }
+th.sortable:hover { color: #F4EDD8; background: #0E5149; }
 .th-inner { display: inline-flex; align-items: center; gap: 0.3rem; white-space: nowrap; }
-.sort-caret { display: inline-flex; color: var(--muted); opacity: 0.45; }
-.sort-caret.asc, .sort-caret.desc { color: var(--brass-dark); opacity: 1; }
+/* Carets tuned for contrast against the deep-green header band. */
+.sort-caret { display: inline-flex; color: #C3A667; opacity: 0.75; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+th.sortable:hover .sort-caret { opacity: 1; }
+.sort-caret.asc, .sort-caret.desc { color: #EBCB84; opacity: 1; }
+
+/* Code-style ids become quiet gold pills wherever they sit in a table (mirrors
+   the approved Employees grid) so the name always wins the row. */
+td code {
+  display: inline-block;
+  font-size: 0.72rem; font-weight: 500; letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  color: #A87C2E; background: #F5EFE0; border: 1px solid #EBE0C8;
+  border-radius: var(--radius-pill); padding: 2px 9px; line-height: 1.5;
+}
+/* Slim, warm scrollbar on every table scroll container (WebKit + Firefox). */
+.table-scroll { scrollbar-color: #D0CABC transparent; }
+.table-scroll::-webkit-scrollbar { width: 10px; height: 10px; }
+.table-scroll::-webkit-scrollbar-track { background: transparent; }
+.table-scroll::-webkit-scrollbar-thumb {
+  background: #D8D4CB; border-radius: var(--radius-pill);
+  border: 2px solid transparent; background-clip: padding-box;
+}
+.table-scroll::-webkit-scrollbar-thumb:hover { background: #C7C2B6; }
 
 /* ── Table search ── */
 .table-search { position: relative; margin-bottom: 0.9rem; max-width: 320px; }
@@ -603,7 +679,7 @@ th.sortable:hover { color: var(--ink); background: #ebe7db; }
   background: transparent; border: none; color: var(--muted);
   min-height: 0; width: 26px; height: 26px; padding: 0; border-radius: 6px;
 }
-.table-search-clear:hover { background: #efede6; color: var(--ink); }
+.table-search-clear:hover { background: #F3EFE6; color: var(--ink); }
 
 /* ── Table pagination ── */
 .table-pager {
@@ -629,35 +705,48 @@ input, select, textarea {
   border: 1px solid var(--line); border-radius: 8px; background: #fff;
   transition: border-color 0.12s ease, box-shadow 0.12s ease;
 }
-input:hover, select:hover, textarea:hover { border-color: #cfccbf; }
+input:hover, select:hover, textarea:hover { border-color: #DAD4C7; }
 input:focus, select:focus, textarea:focus, button:focus-visible { outline: 2px solid var(--brass); outline-offset: 1px; }
 button {
   display: inline-flex; align-items: center; justify-content: center; gap: 0.45rem;
   font: inherit; font-weight: 600; cursor: pointer; white-space: nowrap;
-  background: var(--ink); color: #fff; border: 1px solid transparent;
+  background: var(--primary); color: #fff; border: 1px solid transparent;
   min-height: var(--control-h); padding: 0.45rem 1.1rem; border-radius: 8px;
   transition: background 0.12s ease, color 0.12s ease, border-color 0.12s ease, box-shadow 0.12s ease;
 }
-button:hover { background: var(--ink-2); }
+button:hover { background: var(--primary-hover); }
 button:active { transform: translateY(0.5px); }
 button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
 button.ghost { background: transparent; color: inherit; border-color: var(--line); }
-button.ghost:hover { background: #f3f1ea; border-color: #cfccbf; }
+button.ghost:hover { background: #F3EFE6; border-color: #DAD4C7; }
 .sidebar button.ghost { color: #c4cec6; border-color: rgba(255,255,255,0.25); }
 .sidebar button.ghost:hover { background: rgba(255,255,255,0.07); border-color: rgba(255,255,255,0.4); color: #fff; }
 button.sm { min-height: var(--control-h-sm); padding: 0.25rem 0.7rem; font-size: 0.82rem; border-radius: 7px; }
 button.ghost.danger { color: var(--red); border-color: color-mix(in srgb, var(--red) 45%, transparent); }
 button.ghost.danger:hover { background: var(--red); border-color: var(--red); color: #fff; }
+/* Brass secondary — the logo gold as a solid button. For an action that must
+   read as an action without becoming the page's primary (Export is the case it
+   exists for): a plain `.ghost` is fully transparent, so on the ivory page well
+   it is nothing but a hairline, and the brass *tint* is no better — #f3efe3 on
+   #f6f4ef is 1.05:1, invisible. Solid gold with ink text carries 5.7:1, and the
+   hue keeps it plainly subordinate to the dark-green primary.
+   Hover inverts to ink-on-brass, which holds the same 5.7:1. */
+button.ghost.brass {
+  background: var(--brass); color: var(--ink);
+  border-color: var(--brass);
+}
+button.ghost.brass:hover { background: var(--ink); border-color: var(--ink); color: var(--brass); }
+button.ghost.brass:disabled:hover { background: var(--brass); border-color: var(--brass); color: var(--ink); }
 /* Square icon-only button (modal close, small actions). */
 button.icon-btn {
   width: var(--control-h-sm); min-height: var(--control-h-sm); padding: 0;
   background: transparent; color: var(--muted); border-color: transparent; border-radius: 7px;
 }
-button.icon-btn:hover { background: #efede6; color: var(--ink); border-color: transparent; }
+button.icon-btn:hover { background: #F3EFE6; color: var(--ink); border-color: transparent; }
 button.icon-btn.danger { color: var(--red); }
 button.icon-btn.danger:hover { background: var(--red); color: #fff; }
 button.icon-btn:disabled { opacity: 0.45; cursor: not-allowed; }
-button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); }
+button.icon-btn.action-trigger.active { background: #F3EFE6; color: var(--ink); }
 
 /* Row-level actions dropdown (three-dot menu) — portal-rendered, fixed-positioned. */
 .action-menu {
@@ -675,7 +764,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
   padding: 0.5rem 0.6rem; border-radius: 7px; font-size: 0.86rem; font-weight: 500;
   min-height: var(--control-h-sm); cursor: pointer;
 }
-.action-menu button:hover:not(:disabled) { background: #f2f0ea; }
+.action-menu button:hover:not(:disabled) { background: #F3EFE6; }
 .action-menu button.danger { color: var(--red); }
 .action-menu button.danger:hover:not(:disabled) { background: var(--red); color: #fff; }
 .action-menu button:disabled { opacity: 0.4; cursor: not-allowed; }
@@ -690,7 +779,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 @keyframes spin { to { transform: rotate(360deg); } }
 
 /* ── Skeleton loaders (neutral grey, subtle shimmer) ──────────────────── */
-.skeleton { display: block; position: relative; overflow: hidden; background: #e9ebef; border-radius: 6px; }
+.skeleton { display: block; position: relative; overflow: hidden; background: #ECE4D6; border-radius: 6px; }
 .skeleton::after {
   content: ''; position: absolute; inset: 0; transform: translateX(-100%);
   background: linear-gradient(90deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.6) 50%, rgba(255, 255, 255, 0) 100%);
@@ -760,9 +849,50 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 0 7px 7px 0;
 }
-.password-toggle:hover { background: #efede6; color: var(--ink); }
+.password-toggle:hover { background: #F3EFE6; color: var(--ink); }
 
 /* ── Modal ── */
+/* ── Command palette (Ctrl-K) ──
+   Sits near the top of the viewport rather than centred: the eye is already
+   there after the shortcut, and results grow downward without shifting. */
+.palette-overlay {
+  position: fixed; inset: 0; background: rgba(11, 26, 20, 0.55);
+  backdrop-filter: blur(4px);
+  display: flex; justify-content: center; align-items: flex-start;
+  padding: 10vh 1rem 1rem; z-index: 60;
+  animation: overlay-in 0.18s ease-out;
+}
+.palette {
+  width: min(560px, 100%); max-height: 70vh; display: flex; flex-direction: column;
+  background: var(--surface); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: var(--shadow-2); overflow: hidden;
+}
+.palette-search { display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 0.85rem; border-bottom: 1px solid var(--line); color: var(--muted); }
+.palette-search input {
+  flex: 1; min-width: 0; border: none; outline: none; background: transparent;
+  font: inherit; font-size: 0.98rem; color: var(--ink); padding: 0;
+}
+.palette-kbd {
+  font: inherit; font-size: 0.68rem; color: var(--muted);
+  border: 1px solid var(--line); border-radius: 4px; padding: 0.05rem 0.3rem;
+}
+.palette-results { overflow-y: auto; padding: 0.35rem; }
+.palette-empty { margin: 0; padding: 1.1rem 0.6rem; text-align: center; color: var(--muted); font-size: 0.88rem; }
+.palette-group { margin: 0; padding: 0.5rem 0.6rem 0.25rem; font-size: 0.68rem; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; color: var(--muted); }
+.palette-row {
+  display: flex; align-items: center; gap: 0.65rem; width: 100%;
+  background: transparent; border: none; border-radius: 8px; text-align: left;
+  padding: 0.45rem 0.6rem; min-height: 0; font: inherit; font-size: 0.9rem; color: var(--ink); cursor: pointer;
+}
+/* Hover and keyboard selection are one state — the mouse moves the cursor. */
+.palette-row[data-active='true'] { background: var(--brand-soft, rgba(11,64,58,0.08)); }
+.palette-row-icon { display: inline-flex; flex: none; color: var(--muted); }
+.palette-row[data-active='true'] .palette-row-icon { color: var(--brass-dark); }
+.palette-row-label { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.palette-row-group { flex: none; font-size: 0.76rem; color: var(--muted); }
+.palette-foot { display: flex; gap: 1rem; padding: 0.45rem 0.85rem; border-top: 1px solid var(--line); font-size: 0.74rem; color: var(--muted); }
+.palette-foot .palette-kbd { margin-right: 0.25rem; }
+
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(11, 26, 20, 0.55);
   backdrop-filter: blur(4px);
@@ -895,7 +1025,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .step-hint { margin: 0; font-size: 0.82rem; color: var(--muted); }
 
 .import-cols { list-style: none; margin: 0; padding: 0; display: flex; flex-wrap: wrap; gap: 0.4rem; }
-.import-col { display: inline-flex; align-items: center; gap: 0.4rem; background: #f3f1ea; border: 1px solid var(--line); border-radius: 8px; padding: 0.22rem 0.35rem 0.22rem 0.55rem; }
+.import-col { display: inline-flex; align-items: center; gap: 0.4rem; background: #F3EFE6; border: 1px solid var(--line); border-radius: 8px; padding: 0.22rem 0.35rem 0.22rem 0.55rem; }
 .import-col code { background: none; padding: 0; font-size: 0.82rem; color: var(--ink); }
 .import-tag { font-size: 0.58rem; text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700; padding: 2px 6px; border-radius: 5px; }
 .import-tag.req { background: #efe6d1; color: var(--brass-dark); }
@@ -904,7 +1034,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .dropzone {
   display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;
   gap: 0.5rem; padding: 2rem 1.5rem; cursor: pointer;
-  border: 1.5px dashed #cfccbf; border-radius: 12px; background: #faf9f5;
+  border: 1.5px dashed #DAD4C7; border-radius: 12px; background: #faf9f5;
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 .dropzone:hover, .dropzone:focus-within { border-color: var(--brass); background: #f6f2e8; }
@@ -945,7 +1075,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .lead-actions-head {
   display: flex; align-items: center; gap: 0.5rem;
   padding: 0.85rem 1.1rem; border-bottom: 1px solid var(--line);
-  background: #f3f1ea;
+  background: #F3EFE6;
 }
 .lead-actions-head svg { color: var(--brass-dark); flex: none; }
 .lead-actions-head h3 { margin: 0; font-size: 0.92rem; font-family: 'Archivo', 'Inter', sans-serif; }
@@ -973,7 +1103,11 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
   .action-manage .action-btn-row { justify-content: stretch; }
   .action-manage .action-btn-row button { flex: 1; }
 }
-.detail-list { display: grid; grid-template-columns: repeat(2, 1fr); gap: 0.5rem 1.75rem; margin: 0; }
+.detail-list { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr)); gap: 0.5rem 1.75rem; margin: 0; }
+/* Record columns (Overview, Branch, Loan detail …) stay a steady two-up; only
+   full-width standalone field cards (e.g. Account & Access › Login account)
+   densify to fill their width instead of leaving half the card empty. */
+.detail-cols .detail-list { grid-template-columns: repeat(2, 1fr); }
 .detail-list > div { display: flex; justify-content: space-between; gap: 1rem; border-bottom: 1px solid var(--line); padding: 0.5rem 0; font-size: 0.88rem; }
 .detail-list dt { color: var(--muted); }
 .detail-list dd { margin: 0; text-align: right; }
@@ -997,6 +1131,32 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .detail-list .inline-edit input,
 .detail-list .inline-edit select { flex: 1 1 auto; min-width: 0; }
 .detail-list .inline-edit-hint { font-size: 0.72rem; color: var(--muted); margin-top: 0.25rem; text-align: left; }
+
+/* ── Record detail cards — premium stacked "data-sheet" layout ───────────────
+   In profile/record columns, render each field as a small uppercase label
+   sitting directly ON its value, left-aligned — far more scannable than the old
+   label-left / value-far-right form pattern, and long values (email, codes,
+   addresses) wrap cleanly instead of jamming against the right edge.
+
+   Scoped to TEXT field lists only: numeric breakdowns (e.g. the Salary tab)
+   contain `.num` / `.row-total`, so `:not(:has(…))` leaves those untouched and
+   their amounts stay right-aligned. Purely visual — the double-click / pencil
+   inline editing behaves exactly as before. */
+.detail-list:not(:has(.num)):not(:has(.row-total)) { gap: 1rem 2rem; }
+.detail-list:not(:has(.num)):not(:has(.row-total)) > div {
+  flex-direction: column; align-items: stretch; justify-content: flex-start;
+  gap: 3px; border-bottom: none; padding: 0;
+}
+.detail-list:not(:has(.num)):not(:has(.row-total)) dt {
+  font-size: 0.68rem; font-weight: 600; letter-spacing: 0.05em;
+  text-transform: uppercase; color: var(--color-muted);
+}
+.detail-list:not(:has(.num)):not(:has(.row-total)) dd {
+  text-align: left; color: var(--color-ink); font-weight: 500; font-size: 0.9rem;
+}
+/* Editing state keeps value + controls left-aligned and full-width under the label. */
+.detail-list:not(:has(.num)):not(:has(.row-total)) > div.editable dd { justify-content: flex-start; }
+.detail-list:not(:has(.num)):not(:has(.row-total)) > div.editing dd { margin-left: 0; }
 
 /* ── Salary advances ledger (employee Salary tab) ───────────────────────────
    One bordered block per advance; active ones inline-edit like the profile. */
@@ -1218,81 +1378,81 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .att-half_day, .att-half-day { background: #fff2d9; color: #a36a10; }
 .att-absent { background: #fbe4e2; color: #b3392f; }
 .att-on_leave, .att-on-leave { background: #e6edfb; color: #2a4d8f; }
-.att-weekly_off, .att-weekly-off { background: #eceef2; color: #5b6472; }
+.att-weekly_off, .att-weekly-off { background: #EFEAE1; color: #6E7B72; }
 .att-holiday { background: #efe7fb; color: #6a3fb0; }
 .att-late { background: #fdeede; color: #b5670d; }
-.att-upcoming { background: #f2f4f7; color: #9aa2ad; }
+.att-upcoming { background: #F3EFE6; color: #8A8578; }
 
 /* Month summary tiles */
 .att-summary { display: grid; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); gap: 10px; margin: 12px 0 16px; }
-.att-summary .sum-tile { background: var(--surface, #fff); border: 1px solid var(--border, #e6e8ec); border-radius: 10px; padding: 10px 12px; }
+.att-summary .sum-tile { background: var(--surface, #fff); border: 1px solid var(--border, #E8E4DB); border-radius: 10px; padding: 10px 12px; }
 .att-summary .sum-tile .sum-val { font-size: 20px; font-weight: 700; }
-.att-summary .sum-tile .sum-lbl { font-size: 11px; color: #6b7280; text-transform: uppercase; letter-spacing: .03em; }
+.att-summary .sum-tile .sum-lbl { font-size: 11px; color: #6E7B72; text-transform: uppercase; letter-spacing: .03em; }
 
 /* Attendance calendar grid */
 .att-cal { display: grid; grid-template-columns: repeat(7, 1fr); gap: 6px; }
-.att-cal .cal-dow { font-size: 11px; font-weight: 600; color: #6b7280; text-align: center; padding: 4px 0; }
-.att-cal .cal-cell { border: 1px solid var(--border, #e6e8ec); border-radius: 8px; min-height: 58px; padding: 6px; display: flex; flex-direction: column; gap: 3px; }
+.att-cal .cal-dow { font-size: 11px; font-weight: 600; color: #6E7B72; text-align: center; padding: 4px 0; }
+.att-cal .cal-cell { border: 1px solid var(--border, #E8E4DB); border-radius: 8px; min-height: 58px; padding: 6px; display: flex; flex-direction: column; gap: 3px; }
 .att-cal .cal-cell.empty { border: none; }
-.att-cal .cal-day { font-size: 12px; font-weight: 600; color: #374151; }
+.att-cal .cal-day { font-size: 12px; font-weight: 600; color: #2A342E; }
 .att-cal .cal-tag { font-size: 10px; font-weight: 600; border-radius: 5px; padding: 1px 4px; align-self: flex-start; }
 
 /* Leave balance chips */
 .bal-chips { display: flex; flex-wrap: wrap; gap: 10px; margin: 8px 0 16px; }
-.bal-chip { border: 1px solid var(--border, #e6e8ec); border-radius: 10px; padding: 8px 12px; min-width: 120px; }
-.bal-chip .bal-type { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6b7280; }
+.bal-chip { border: 1px solid var(--border, #E8E4DB); border-radius: 10px; padding: 8px 12px; min-width: 120px; }
+.bal-chip .bal-type { font-size: 11px; text-transform: uppercase; letter-spacing: .03em; color: #6E7B72; }
 .bal-chip .bal-avail { font-size: 18px; font-weight: 700; }
-.bal-chip .bal-sub { font-size: 11px; color: #9aa2ad; }
+.bal-chip .bal-sub { font-size: 11px; color: #8A8578; }
 .bal-chip.bal-low .bal-avail { color: #b3392f; }
 
 /* Salary slip */
-.slip { background: #fff; color: #1a1d23; border: 1px solid #e6e8ec; border-radius: 10px; padding: 22px; max-width: 780px; }
+.slip { background: #fff; color: #1C2621; border: 1px solid #E8E4DB; border-radius: 10px; padding: 22px; max-width: 780px; }
 .slip h2 { margin: 0; font-size: 20px; }
 .slip .slip-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
 .slip table { width: 100%; border-collapse: collapse; font-size: 13px; }
-.slip table td { padding: 5px 8px; border-bottom: 1px solid #eef0f3; }
+.slip table td { padding: 5px 8px; border-bottom: 1px solid #F0ECE3; }
 .slip table td.amt { text-align: right; font-variant-numeric: tabular-nums; }
-.slip .slip-total td { font-weight: 700; border-top: 2px solid #d2d6dd; }
+.slip .slip-total td { font-weight: 700; border-top: 2px solid #DAD4C7; }
 
 /* ── Organization masters + document management ─────────────────────────────── */
-.master-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border, #e6e8ec); }
-.master-tab { padding: 8px 14px; border: none; background: none; font-size: 13px; font-weight: 600; color: #6b7280; cursor: pointer; border-bottom: 2px solid transparent; }
+.master-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 16px; border-bottom: 1px solid var(--border, #E8E4DB); }
+.master-tab { padding: 8px 14px; border: none; background: none; font-size: 13px; font-weight: 600; color: #6E7B72; cursor: pointer; border-bottom: 2px solid transparent; }
 .master-tab.active { color: var(--accent, #2a4d8f); border-bottom-color: var(--accent, #2a4d8f); }
 
 /* Document management */
 .doc-cat { margin-bottom: 18px; }
 .doc-cat-head { display: flex; align-items: center; justify-content: space-between; margin-bottom: 8px; }
-.doc-cat-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #6b7280; }
+.doc-cat-head h4 { margin: 0; font-size: 13px; text-transform: uppercase; letter-spacing: .04em; color: #6E7B72; }
 .doc-list { display: flex; flex-direction: column; gap: 8px; }
-.doc-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border, #e6e8ec); border-radius: 8px; padding: 8px 12px; }
+.doc-row { display: flex; align-items: center; gap: 10px; border: 1px solid var(--border, #E8E4DB); border-radius: 8px; padding: 8px 12px; }
 .doc-row .doc-name { font-weight: 600; font-size: 13px; }
-.doc-row .doc-meta { font-size: 11px; color: #9aa2ad; }
+.doc-row .doc-meta { font-size: 11px; color: #8A8578; }
 .doc-row .doc-actions { margin-left: auto; display: flex; gap: 6px; }
 .doc-badge { font-size: 10px; font-weight: 700; border-radius: 5px; padding: 1px 6px; }
 .doc-badge.verified { background: #e4f4ec; color: #1d7a4f; }
 .doc-badge.unverified { background: #fdeede; color: #b5670d; }
 .doc-badge.mandatory { background: #e6edfb; color: #2a4d8f; }
 .doc-badge.expiring { background: #fbe4e2; color: #b3392f; }
-.doc-badge.version { background: #eceef2; color: #5b6472; }
+.doc-badge.version { background: #EFEAE1; color: #6E7B72; }
 .doc-missing { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 14px; }
 .doc-missing .miss-chip { font-size: 11px; font-weight: 600; background: #fbe4e2; color: #b3392f; border-radius: 999px; padding: 2px 9px; }
 
 /* ── HR Reports ─────────────────────────────────────────────────────────────── */
 .report-layout { display: grid; grid-template-columns: 260px 1fr; gap: 18px; align-items: start; }
 @media (max-width: 900px) { .report-layout { grid-template-columns: 1fr; } }
-.report-nav { border: 1px solid var(--border, #e6e8ec); border-radius: 10px; padding: 8px; max-height: 70vh; overflow: auto; }
-.report-nav .rn-cat { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #9aa2ad; padding: 10px 8px 4px; }
-.report-nav .rn-item { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 7px; font-size: 13px; color: #2b3038; cursor: pointer; }
-.report-nav .rn-item:hover { background: #f2f4f7; }
+.report-nav { border: 1px solid var(--border, #E8E4DB); border-radius: 10px; padding: 8px; max-height: 70vh; overflow: auto; }
+.report-nav .rn-cat { font-size: 11px; text-transform: uppercase; letter-spacing: .05em; color: #8A8578; padding: 10px 8px 4px; }
+.report-nav .rn-item { display: block; width: 100%; text-align: left; border: none; background: none; padding: 7px 10px; border-radius: 7px; font-size: 13px; color: #1C2621; cursor: pointer; }
+.report-nav .rn-item:hover { background: #F3EFE6; }
 .report-nav .rn-item.active { background: var(--accent, #2a4d8f); color: #fff; font-weight: 600; }
 .report-toolbar { display: flex; flex-wrap: wrap; gap: 10px; align-items: flex-end; margin-bottom: 14px; }
-.report-toolbar .rt-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6b7280; }
+.report-toolbar .rt-field { display: flex; flex-direction: column; gap: 3px; font-size: 12px; color: #6E7B72; }
 .report-toolbar .rt-field select, .report-toolbar .rt-field input { min-width: 120px; }
 .report-actions { margin-left: auto; display: flex; gap: 8px; }
 .report-summary { display: flex; flex-wrap: wrap; gap: 10px; margin-bottom: 12px; }
-.report-summary .rs-tile { border: 1px solid var(--border, #e6e8ec); border-radius: 9px; padding: 8px 14px; min-width: 120px; }
-.report-summary .rs-tile .rs-label { font-size: 11px; color: #9aa2ad; text-transform: uppercase; letter-spacing: .03em; }
-.report-summary .rs-tile .rs-value { font-size: 18px; font-weight: 700; color: #1c2330; }
+.report-summary .rs-tile { border: 1px solid var(--border, #E8E4DB); border-radius: 9px; padding: 8px 14px; min-width: 120px; }
+.report-summary .rs-tile .rs-label { font-size: 11px; color: #8A8578; text-transform: uppercase; letter-spacing: .03em; }
+.report-summary .rs-tile .rs-value { font-size: 18px; font-weight: 700; color: #1C2621; }
 
 /* ═══════════════════════════════════════════════════════════════════════════
    DESIGN SYSTEM COMPONENTS (redesign foundation)
@@ -1339,9 +1499,19 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .page-header-row { display: flex; align-items: center; justify-content: space-between; gap: var(--space-2) var(--space-6); flex-wrap: wrap; }
 .page-header-title { min-width: 0; }
 .page-header-titlerow { display: flex; align-items: center; gap: var(--space-3); flex-wrap: wrap; min-width: 0; }
-.page-header-title h1 { margin: 0; font: 600 28px/1.2 var(--font-head); letter-spacing: -0.015em; }
+/* Module name — green-charcoal, with a short gold accent rule beneath it that
+   ties the header to the brand and echoes the table header's gold hairline. The
+   rule is absolutely positioned, so it decorates the title without shifting any
+   surrounding spacing. */
+.page-header-title h1 { position: relative; margin: 0; font: 600 28px/1.2 var(--font-head); letter-spacing: -0.015em; color: var(--color-ink); }
+.page-header-title h1::after {
+  content: ''; position: absolute; left: 0; bottom: -7px;
+  width: 40px; height: 3px; border-radius: 2px; background: var(--brass);
+}
 .page-header-badge { flex: none; }
-.page-header-subtitle { margin: 2px 0 0; color: var(--color-muted); font: 400 14px/1.45 var(--font-body); max-width: 72ch; }
+/* Clears the title's gold accent rule (which sits ~7px below the title), so the
+   accent never overlaps the subtitle; the extra air also reads more premium. */
+.page-header-subtitle { margin: 12px 0 0; color: var(--color-muted); font: 400 14px/1.45 var(--font-body); max-width: 72ch; }
 .page-header-actions { display: flex; align-items: center; gap: var(--space-2); flex: none; flex-wrap: wrap; }
 /* Toolbar buttons: 14px/medium, 40px tall; the one primary keeps 44px weight.
    Selects living in the toolbar (e.g. period pickers) match the same height. */
@@ -1372,7 +1542,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 .page-header--feature .page-header-row { align-items: flex-start; gap: var(--space-3) var(--space-8); }
 .page-header--feature .page-header-title h1 { font-size: 26px; letter-spacing: -0.018em; }
 .page-header--feature .page-header-titlerow { gap: var(--space-2); align-items: baseline; }
-.page-header--feature .page-header-subtitle { margin-top: 3px; font-size: 13.5px; max-width: 78ch; }
+.page-header--feature .page-header-subtitle { margin-top: 12px; font-size: 13.5px; max-width: 78ch; }
 /* 40px primary, not 44px: the header is chrome around a data grid, so the CTA
    matches the toolbar scale below it instead of shouting over it. */
 .page-header--feature .page-header-actions button.btn-lg { min-height: 40px; }
@@ -1532,7 +1702,7 @@ button.icon-btn.action-trigger.active { background: #efede6; color: var(--ink); 
 /* Multi-select dropdown (branches, etc.) */
 .multiselect { position: relative; }
 button.ms-trigger { width: 100%; justify-content: space-between; gap: 0.5rem; background: #fff; color: var(--ink); border: 1px solid var(--line); font-weight: 500; padding: 0.5rem 0.75rem; }
-button.ms-trigger:hover { background: #fff; border-color: #cfccbf; }
+button.ms-trigger:hover { background: #fff; border-color: #DAD4C7; }
 .ms-trigger .ms-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .ms-trigger.has-value .ms-label { color: var(--ink); }
 .ms-pop { position: absolute; z-index: 40; top: calc(100% + 4px); left: 0; right: 0; min-width: 220px; background: var(--surface); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow-2); padding: var(--space-2); display: grid; gap: var(--space-2); }
@@ -1542,7 +1712,7 @@ button.ms-trigger:hover { background: #fff; border-color: #cfccbf; }
 .ms-search { width: 100%; }
 .ms-list { max-height: 210px; overflow-y: auto; display: grid; gap: 1px; }
 .ms-opt { display: flex; align-items: center; gap: 0.55rem; padding: 0.45rem 0.5rem; border-radius: 7px; font-weight: 500; font-size: 0.85rem; cursor: pointer; margin: 0; }
-.ms-opt:hover { background: #f2f0ea; }
+.ms-opt:hover { background: #F3EFE6; }
 .ms-opt input[type="checkbox"] { width: 16px; height: 16px; min-height: 0; margin: 0; flex: 0 0 auto; }
 .ms-opt > span { flex: 1 1 auto; }
 
@@ -1629,7 +1799,41 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .hdr-sep { width: 1px; align-self: stretch; min-height: var(--control-h); background: var(--color-line); margin: 0 var(--space-1); }
 @media (max-width: 640px) { .hdr-sep { display: none; } }
 
+/* ── Announcement detail ── */
+/* `.pill-info` was already being used (the list's "Pinned" chip) with no rule
+   behind it, so it rendered as bare text; the targeting pills need it too. */
+.pill-info { background: #e8e9f3; color: #3c4a8f; }
+.ann-targets { display: grid; gap: var(--space-3); margin-top: var(--space-3); padding-top: var(--space-3); border-top: 1px solid var(--color-line); }
+.ann-target-row { display: grid; gap: 0.35rem; }
+.ann-pills { display: flex; flex-wrap: wrap; gap: 0.35rem; }
+/* Separates a full-width section from the two-column block above it. */
+.stack-top { margin-top: var(--space-4); }
+
+/* ── HR policy detail ── */
+/* The attached PDF as one scannable strip: icon, filename + effective version,
+   download pushed to the far end. */
+.policy-doc { display: flex; align-items: center; gap: var(--space-3); padding: var(--space-3); border: 1px solid var(--color-line); border-radius: var(--radius); background: var(--color-surface); }
+.policy-doc > svg { color: var(--brass); flex: none; }
+.policy-doc > div { flex: 1; min-width: 0; }
+.policy-doc > div > strong { display: block; overflow-wrap: anywhere; }
+
 /* ── Attendance page helpers ── */
+/* View switch on the left, reporting period on the right, sharing one line. The
+   period governs all three views, so it sits with the view switch rather than
+   inside the List view's own filter row (or, as it once did, inside the header's
+   action cluster, where it read as a button and not a filter). */
+.att-toolbar { display: flex; align-items: center; justify-content: space-between; gap: var(--space-3); flex-wrap: wrap; width: 100%; }
+.att-period { display: inline-flex; align-items: center; gap: var(--space-2); }
+.att-period > span { font: var(--text-xs); font-weight: 700; letter-spacing: 0.5px; text-transform: uppercase; color: var(--color-muted); }
+.att-period select { min-height: var(--control-h-sm); padding-block: 0.2rem; }
+.att-period select:disabled { opacity: 0.5; cursor: not-allowed; }
+/* Plain-language statement of the range on screen, between filters and table. */
+.att-range-note { margin: 0 0 var(--space-2); }
+@media (max-width: 640px) {
+  .att-toolbar { align-items: flex-start; }
+  .att-period { width: 100%; }
+  .att-period select { flex: 1; }
+}
 .att-tiles { margin-bottom: 0; }
 .att-summary-band { margin-bottom: var(--space-4); }
 .att-summary-band-head { display: flex; align-items: baseline; justify-content: space-between; gap: var(--space-3); margin-bottom: var(--space-3); flex-wrap: wrap; }
@@ -1713,46 +1917,48 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .dep-void-reason { display: block; max-width: 190px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .field-hint { display: block; margin-top: var(--space-1); }
 
-/* ── Employees list — premium enterprise colour system ──────────────────────────
-   Warm-neutral banking / microfinance HRMS palette: a soft warm off-white well,
-   white card surfaces, a deep-green primary and a restrained gold accent. Warm
-   (not cold blue-gray, not beige/yellow) so the UI reads elegant and trustworthy
-   like modern wealth-management software. EVERYTHING stays scoped under
-   `.emp-list` (and the content column that hosts it) so the shared FilterBar /
-   DataTable / buttons keep their current look on every other module. Layout,
-   spacing, components and behaviour are unchanged — this is purely the colour
-   system.
+/* ── Employees list — "Private Wealth" premium colour system ─────────────────────
+   A luxury banking / microfinance HRMS palette built on colour theory: ONE warm
+   temperature (so surfaces and text never clash), a deep-green foundation that
+   ties the workspace to the green sidebar, and gold used ONLY as a jewel accent
+   (~10%) — the gold of the logo. Green-charcoal ink instead of cool blue-slate
+   keeps every colour in the same family. EVERYTHING stays scoped under `.emp-list`
+   (and the content column that hosts it) so the shared FilterBar / DataTable /
+   buttons keep their look on every other module. Layout, spacing, components and
+   behaviour are unchanged — this is purely the colour system.
 
+   60 · 30 · 10  →  neutral ivory · deep green · gold
    Palette (surface hierarchy: page → card → table header → rows):
-     page well   #F8F6F1   cards       #FFFFFF
-     table head  #ECE8DF   rows        #FFFFFF   zebra #FBF9F5   hover #F5F2EC
-     borders     #D8D4CB   separators  #EFEAE1
-     text        #1E293B   secondary   #64748B
-     primary     #0B403A (hover #0E5149)         accent gold #C6953F              */
+     page well   #F6F4EF   cards        #FFFFFF
+     table head  #0B403A (deep green) + gold hairline #C6953F; ivory labels #E4DBC4
+     rows        #FFFFFF   zebra #FAF8F3   hover #F3EFE6   separators #F0ECE3
+     borders     #E8E4DB
+     ink text    #1C2621 (green-charcoal)   secondary #6E7B72
+     primary btn #0B403A (hover #0E5149)    accent gold #C6953F                   */
 
 /* Retheme the tokens the page and its child components consume. The semantic
    aliases (--color-ink, --color-line, …) resolve to var(--ink), var(--line), …
    at use time, so overriding the raw brand values *here* recolours everything
    downstream — table, toolbar, inputs, chips — with no per-element edits. */
 .emp-list {
-  --paper: #F8F6F1;
+  --paper: #F6F4EF;
   --surface: #FFFFFF;
-  --line: #D8D4CB;
-  --color-line-strong: #C7C2B6;
-  --color-surface-2: #F5F2EC;
-  --ink: #1E293B;    /* primary text (buttons re-set to green below) */
-  --ink-2: #334155;
-  --muted: #64748B;  /* secondary text */
-  --brass: #C6953F;  /* gold accent */
+  --line: #E8E4DB;
+  --color-line-strong: #DAD4C7;
+  --color-surface-2: #F3EFE6;
+  --ink: #1C2621;    /* green-charcoal primary text (buttons re-set to green below) */
+  --ink-2: #2A342E;
+  --muted: #6E7B72;  /* green-gray secondary text */
+  --brass: #C6953F;  /* gold accent — the logo gold */
   --brass-dark: #A87C2E;
-  --shadow-1: 0 1px 2px rgba(45, 38, 25, 0.06), 0 1px 3px rgba(45, 38, 25, 0.05);
+  --shadow-1: 0 1px 2px rgba(40, 34, 20, 0.05), 0 1px 3px rgba(40, 34, 20, 0.06);
   color: var(--color-ink);
 }
 
-/* Warm off-white page well behind the employee workspace, replacing the global
+/* Soft ivory page well behind the employee workspace, replacing the global
    paper — scoped to the content column hosting this page so no other module's
    background changes. */
-.content-shell:has(.emp-list) { background: #F8F6F1; }
+.content-shell:has(.emp-list) { background: #F6F4EF; }
 
 /* Title: keep the divider but let it breathe a little more above the toolbar. */
 .emp-list .page-header { margin-bottom: var(--space-5); }
@@ -1782,7 +1988,7 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
   text-transform: uppercase; letter-spacing: 0.05em; gap: var(--space-1);
 }
 .emp-list .filterbar-controls select { min-width: 172px; border-radius: var(--radius-sm); }
-/* Cool-gray control borders on hover (the global warm hover would reintroduce beige). */
+/* Warm ivory control borders on hover, in step with the palette. */
 .emp-list input:hover, .emp-list select:hover, .emp-list textarea:hover { border-color: var(--color-line-strong); }
 
 /* ── Primary action: the deep-green banking CTA. Scoped to genuine primary
@@ -1803,32 +2009,32 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .emp-list .panel { border-radius: 12px; box-shadow: var(--shadow-1); border-color: var(--color-line); }
 .emp-list table { font-size: 0.84rem; }
 
-/* Header — a taller band on a refined warm-gray fill, with 600-weight uppercase
-   labels and open tracking for a clear, elegant hierarchy; stays sticky under
-   scroll and transitions smoothly on hover. */
+/* Header — the "letterhead": a deep-green band that ties the grid to the sidebar,
+   closed by a single gold hairline. Ivory 600-weight uppercase labels with open
+   tracking read as elegant, high-contrast hierarchy; stays sticky under scroll. */
 .emp-list thead th {
-  background: #ECE8DF;
-  color: var(--color-muted);
-  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.06em; text-transform: uppercase;
+  background: #0B403A;
+  color: #E4DBC4;
+  font-size: 0.7rem; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase;
   padding: 0.72rem 1rem;
-  border-bottom: 1px solid var(--color-line);
+  border-bottom: 2px solid var(--brass);
   transition: background var(--dur-fast) ease, color var(--dur-fast) ease;
 }
 .emp-list thead th.sortable { cursor: pointer; }
-.emp-list thead th.sortable:hover { background: #E3DDD1; color: var(--color-ink); }
+.emp-list thead th.sortable:hover { background: #0E5149; color: #F4EDD8; }
 
 /* Rows — ~13% shorter for higher information density, quiet warm separators (not
    heavy borders), one calm warm hover with a smooth transition, and a
    whisper-soft zebra for horizontal tracking on wide tables. */
 .emp-list tbody td {
   padding: 0.38rem 1rem;
-  border-bottom: 1px solid #EFEAE1;
-  color: #475569;                 /* secondary cell text — one step back from the name */
+  border-bottom: 1px solid #F0ECE3;
+  color: #6E7B72;                 /* green-gray secondary cell text — a step back from the name */
   background: var(--color-surface);
   transition: background var(--dur-fast) ease;
 }
-.emp-list tbody tr:nth-child(even) td { background: #FBF9F5; }
-.emp-list tbody tr:hover td { background: #F5F2EC; }
+.emp-list tbody tr:nth-child(even) td { background: #FAF8F3; }
+.emp-list tbody tr:hover td { background: #F3EFE6; }
 .emp-list tbody tr:last-child td { border-bottom: none; }
 
 /* Selected row — a subtle warm-green wash with a single gold indicator bar on
@@ -1837,28 +2043,30 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .emp-list tbody tr.row-selected:hover td { background: #E8EFE1; }
 .emp-list tbody tr.row-selected td:first-child { box-shadow: inset 3px 0 0 var(--brass); }
 
-/* Typography — the employee name is the row's anchor: darkest ink, semibold,
-   gold on hover. Everything else sits a step back (the slate above). */
-.emp-list .cell-link { color: #1E293B; font-weight: 600; cursor: pointer; transition: color var(--dur-fast) ease; }
+/* Typography — the employee name is the row's anchor: green-charcoal ink,
+   semibold, gold on hover. Everything else sits a step back (the green-gray
+   above), so the eye lands on the person first. */
+.emp-list .cell-link { color: #1C2621; font-weight: 600; cursor: pointer; transition: color var(--dur-fast) ease; }
 .emp-list .cell-link:hover { color: var(--color-brass-dark); text-decoration: underline; }
 
-/* Employee code — a minimal pill badge: subtle warm fill, hairline border,
-   medium weight, tabular figures. */
+/* Employee code — a quiet gold-tinted pill: it whispers the id instead of
+   shouting it, so the name keeps the row. Medium weight, tabular figures. */
 .emp-list td code {
   display: inline-block;
   font-size: 0.72rem; font-weight: 500; letter-spacing: 0.01em;
   font-variant-numeric: tabular-nums;
-  color: #6B6350;
-  background: #F3EFE7;
-  border: 1px solid #E7E1D5;
+  color: #A87C2E;
+  background: #F5EFE0;
+  border: 1px solid #EBE0C8;
   border-radius: var(--radius-pill);
   padding: 2px 9px; line-height: 1.5;
 }
 
-/* Sort carets — quiet at rest, brighter on header hover, gold when active. */
-.emp-list .sort-caret { opacity: 0.4; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
-.emp-list thead th.sortable:hover .sort-caret { opacity: 0.75; }
-.emp-list .sort-caret.asc, .emp-list .sort-caret.desc { color: var(--brass-dark); opacity: 1; }
+/* Sort carets — soft gold on the green header, brighter on hover, full gold when
+   active (tuned for contrast against the deep-green band). */
+.emp-list .sort-caret { color: #C3A667; opacity: 0.75; transition: opacity var(--dur-fast) ease, color var(--dur-fast) ease; }
+.emp-list thead th.sortable:hover .sort-caret { opacity: 1; }
+.emp-list .sort-caret.asc, .emp-list .sort-caret.desc { color: #EBCB84; opacity: 1; }
 
 /* Scrollbar — slim, warm and unobtrusive (WebKit + Firefox). */
 .emp-list .table-scroll { scrollbar-width: thin; scrollbar-color: #D0CABC transparent; }

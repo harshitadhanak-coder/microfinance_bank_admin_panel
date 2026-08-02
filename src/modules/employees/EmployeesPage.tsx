@@ -9,6 +9,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { PageBar } from '../../components/PageBar';
 import { Badge } from '../../components/Badge';
 import { FilterBar } from '../../components/FilterBar';
+import { ExportButton } from '../../components/ExportButton';
 import { ActionMenu } from '../../components/ActionMenu';
 import { useToast } from '../../components/Toast';
 import { Eye, Pencil, Plus, Search, Trash2, X } from '../../components/icons';
@@ -32,6 +33,11 @@ export default function EmployeesPage() {
   const [status, setStatus] = useState('');
   const [designationId, setDesignationId] = useState('');
   const [roleId, setRoleId] = useState('');
+  // The list has always shown a Branch column but had no way to filter by it.
+  // The API already honours ?branchId for cross-branch roles (a branch-scoped
+  // user stays pinned to their own branch regardless), so this only widens what
+  // HR/HQ can narrow to — never what anyone can see.
+  const [branchId, setBranchId] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<EmployeeRow | null>(null);
   const [error, setError] = useState('');
 
@@ -42,7 +48,8 @@ export default function EmployeesPage() {
 
   const listUrl = `/employees?${table.params}${status ? `&status=${status}` : ''}`
     + `${designationId ? `&designationId=${designationId}` : ''}`
-    + `${roleId ? `&roleId=${roleId}` : ''}`;
+    + `${roleId ? `&roleId=${roleId}` : ''}`
+    + `${branchId ? `&branchId=${branchId}` : ''}`;
   const listQuery = useQuery({
     queryKey: [listUrl],
     queryFn: () => api.get(listUrl).then((r) => r.data),
@@ -93,9 +100,14 @@ export default function EmployeesPage() {
     },
   ];
 
-  const resetFilters = () => { setStatus(''); setDesignationId(''); setRoleId(''); table.setPage(1); };
+  const resetFilters = () => { setStatus(''); setDesignationId(''); setRoleId(''); setBranchId(''); table.setPage(1); };
   const filterChips = [
     ...(status ? [{ key: 'status', label: `Status: ${statusLabel(status)}`, onRemove: () => { setStatus(''); table.setPage(1); } }] : []),
+    ...(branchId ? [{
+      key: 'branch',
+      label: `Branch: ${masters.branches.find((b) => b.id === branchId)?.name ?? branchId}`,
+      onRemove: () => { setBranchId(''); table.setPage(1); },
+    }] : []),
     ...(designationId ? [{
       key: 'designation',
       label: `Designation: ${masters.designations.find((d) => d.id === designationId)?.name ?? designationId}`,
@@ -140,8 +152,19 @@ export default function EmployeesPage() {
             compact toolbar (search · filters), then the table. */}
         <PageHeader
           title="Employees"
-          actions={canCreate && (
-            <button className="btn-lg" onClick={() => navigate('/employees/new')}><Plus size={16} /> Add employee</button>
+          actions={(
+            <>
+              {/* Exports the whole filtered directory, not the page on screen —
+                  the same filters, search and branch scope as the list. */}
+              <ExportButton
+                url="/employees/export"
+                fileBase="Employees"
+                params={{ status, designationId, roleId, branchId, search: table.search }}
+              />
+              {canCreate && (
+                <button className="btn-lg" onClick={() => navigate('/employees/new')}><Plus size={16} /> Add employee</button>
+              )}
+            </>
           )}
         />
 
@@ -155,6 +178,16 @@ export default function EmployeesPage() {
             {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
           </select>
         </label>
+        {/* Only cross-branch roles get the branch list at all; a branch-scoped
+            user is pinned server-side and has nothing to choose between. */}
+        {masters.branches.length > 0 && (
+          <label>Branch
+            <select value={branchId} onChange={(e) => { setBranchId(e.target.value); table.setPage(1); }} aria-label="Filter by branch">
+              <option value="">All branches</option>
+              {masters.branches.map((b) => <option key={b.id} value={b.id}>{b.name}</option>)}
+            </select>
+          </label>
+        )}
         <label>Designation
           <select value={designationId} onChange={(e) => { setDesignationId(e.target.value); table.setPage(1); }} aria-label="Filter by designation">
             <option value="">All designations</option>

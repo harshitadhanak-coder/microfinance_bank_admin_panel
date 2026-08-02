@@ -1,4 +1,5 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -7,7 +8,7 @@ import { FilterBar } from '../../components/FilterBar';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
-import { FileSpreadsheet, Pencil, Plus, Trash2, Download } from '../../components/icons';
+import { Eye, FileSpreadsheet, Pencil, Plus, Trash2, Download } from '../../components/icons';
 import { apiMessage, fmtDate, titleCase } from '../../lib/format';
 import { downloadFile, uploadFile } from '../../lib/download';
 import { useToast } from '../../components/Toast';
@@ -33,6 +34,8 @@ export default function HrPolicyLibraryPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const toast = useToast();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const canManage = can(user?.role, 'hrPolicy:manage');
 
   const [category, setCategory] = useState('ALL');
@@ -47,6 +50,19 @@ export default function HrPolicyLibraryPage() {
   });
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/policies-library') });
 
+  // The detail page has no edit form of its own — its Edit action sends you here
+  // with ?edit=<id>, which opens the same modal. Runs in an effect, not during
+  // render: it writes router state, and the param is consumed on open so a
+  // refresh doesn't reopen the modal.
+  const editId = params.get('edit');
+  const policies = query.data;
+  useEffect(() => {
+    if (!editId || !policies) return;
+    const match = policies.find((p) => p.id === editId);
+    if (match) setEditing(match);
+    setParams((p) => { p.delete('edit'); return p; }, { replace: true });
+  }, [editId, policies, setParams]);
+
   const remove = useMutation({
     mutationFn: (id: string) => api.delete(`/human-resources/policies-library/${id}`),
     onSuccess: () => { refresh(); setDeleteFor(null); toast.success('Policy removed.'); },
@@ -54,7 +70,16 @@ export default function HrPolicyLibraryPage() {
   });
 
   const columns: Column<Policy>[] = [
-    { header: 'Policy', render: (p) => <><strong>{p.title}</strong>{p.description && <div className="muted sm-text">{p.description}</div>}</>, sortValue: (p) => p.title },
+    {
+      header: 'Policy',
+      render: (p) => (
+        <>
+          <a className="cell-link" onClick={() => navigate(`/hr-policies/${p.id}`)}><strong>{p.title}</strong></a>
+          {p.description && <div className="muted sm-text">{p.description}</div>}
+        </>
+      ),
+      sortValue: (p) => p.title,
+    },
     { header: 'Category', render: (p) => <Badge status="INFO">{label(p.category)}</Badge>, sortValue: (p) => p.category },
     { header: 'Version', render: (p) => <span className="num">v{p.version}</span>, sortValue: (p) => p.version },
     { header: 'Effective', render: (p) => fmtDate(p.effectiveDate), sortValue: (p) => p.effectiveDate },
@@ -68,6 +93,7 @@ export default function HrPolicyLibraryPage() {
       render: (p) => (
         <div className="actions-cell">
           <ActionMenu items={[
+            { key: 'open', label: 'Open details', icon: <Eye size={15} />, onSelect: () => navigate(`/hr-policies/${p.id}`) },
             { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(p) },
             { key: 'del', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleteFor(p) },
           ]} />

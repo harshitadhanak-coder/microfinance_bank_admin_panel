@@ -1,4 +1,5 @@
-import { FormEvent, useState } from 'react';
+import { FormEvent, useEffect, useState } from 'react';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -7,7 +8,7 @@ import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
 import { MultiSelect } from '../../components/MultiSelect';
-import { AlertCircle, Pencil, Plus, Trash2, Check } from '../../components/icons';
+import { AlertCircle, Eye, Pencil, Plus, Trash2, Check } from '../../components/icons';
 import { apiMessage, fmtDate, titleCase } from '../../lib/format';
 import { uploadFile } from '../../lib/download';
 import { useToast } from '../../components/Toast';
@@ -32,6 +33,8 @@ interface Announcement {
   body: string;
   priority: string;
   publishAt: string | null;
+  /** Day staff begin seeing it in the feed — independent of when HR published it. */
+  startDate: string | null;
   expiresAt: string | null;
   isPinned: boolean;
   isPublished?: boolean;
@@ -68,7 +71,7 @@ function ViewerFeed() {
               {a.isPinned && <Badge status="INFO">Pinned</Badge>}
               <Badge status={a.priority === 'URGENT' || a.priority === 'HIGH' ? 'REJECTED' : 'INFO'}>{titleCase(a.priority)}</Badge>
               <strong>{a.title}</strong>
-              <span className="muted sm-text" style={{ marginLeft: 'auto' }}>{fmtDate(a.publishAt ?? a.createdAt)}</span>
+              <span className="muted sm-text" style={{ marginLeft: 'auto' }}>{fmtDate(a.startDate ?? a.publishAt ?? a.createdAt)}</span>
             </div>
             <p style={{ whiteSpace: 'pre-wrap', marginTop: 6 }}>{a.body}</p>
           </div>
@@ -94,6 +97,8 @@ function AudienceLabel({ audience }: { audience?: Audience }) {
 function ManageView() {
   const qc = useQueryClient();
   const toast = useToast();
+  const navigate = useNavigate();
+  const [params, setParams] = useSearchParams();
   const [editing, setEditing] = useState<Announcement | 'new' | null>(null);
   const [deleteFor, setDeleteFor] = useState<Announcement | null>(null);
 
@@ -102,6 +107,19 @@ function ManageView() {
     queryFn: () => api.get('/human-resources/announcements/manage').then((r) => r.data.data as Announcement[]),
     placeholderData: keepPreviousData,
   });
+
+  // The detail page has no edit form of its own — its Edit action sends you
+  // here with ?edit=<id>, which opens the same modal the list uses. Runs in an
+  // effect, not during render: it writes router state, and the param is consumed
+  // on open so a refresh doesn't reopen the modal.
+  const editId = params.get('edit');
+  const rows = query.data;
+  useEffect(() => {
+    if (!editId || !rows) return;
+    const match = rows.find((a) => a.id === editId);
+    if (match) setEditing(match);
+    setParams((p) => { p.delete('edit'); return p; }, { replace: true });
+  }, [editId, rows, setParams]);
   const refresh = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/announcements') });
 
   const mutate = (fn: () => Promise<unknown>, ok: string) => {
@@ -109,12 +127,22 @@ function ManageView() {
   };
 
   const columns: Column<Announcement>[] = [
-    { header: 'Title', render: (a) => <><strong>{a.title}</strong>{a.isPinned && <span className="pill pill-info"> Pinned</span>}</>, sortValue: (a) => a.title },
+    {
+      header: 'Title',
+      render: (a) => (
+        <>
+          <a className="cell-link" onClick={() => navigate(`/announcements/${a.id}`)}><strong>{a.title}</strong></a>
+          {a.isPinned && <span className="pill pill-info" style={{ marginLeft: 6 }}>Pinned</span>}
+        </>
+      ),
+      sortValue: (a) => a.title,
+    },
     { header: 'Priority', render: (a) => <Badge status={a.priority === 'URGENT' || a.priority === 'HIGH' ? 'REJECTED' : 'INFO'}>{titleCase(a.priority)}</Badge>, sortValue: (a) => a.priority },
     { header: 'Status', render: (a) => <Badge status={a.isPublished ? 'APPROVED' : 'PENDING'}>{a.isPublished ? 'Published' : 'Draft'}</Badge>, sortValue: (a) => String(a.isPublished) },
     { header: 'Audience', render: (a) => <AudienceLabel audience={a.audience} />, sortValue: (a) => a.audience?.matched ?? 0 },
     { header: 'Publish', render: (a) => a.publishAt ? fmtDate(a.publishAt) : '—' },
-    { header: 'Expires', render: (a) => a.expiresAt ? fmtDate(a.expiresAt) : '—' },
+    { header: 'Start', render: (a) => a.startDate ? fmtDate(a.startDate) : '—', sortValue: (a) => a.startDate ?? '' },
+    { header: 'End', render: (a) => a.expiresAt ? fmtDate(a.expiresAt) : '—', sortValue: (a) => a.expiresAt ?? '' },
     {
       header: '',
       render: (a) => (
@@ -122,6 +150,7 @@ function ManageView() {
           <ActionMenu items={[
             ...(!a.isPublished ? [{ key: 'pub', label: 'Publish', icon: <Check size={15} />, onSelect: () => mutate(() => api.post(`/human-resources/announcements/${a.id}/publish`), 'Published & broadcast.') }] : []),
             { key: 'pin', label: a.isPinned ? 'Unpin' : 'Pin', onSelect: () => mutate(() => api.post(`/human-resources/announcements/${a.id}/pin`, { isPinned: !a.isPinned }), 'Updated.') },
+            { key: 'open', label: 'Open details', icon: <Eye size={15} />, onSelect: () => navigate(`/announcements/${a.id}`) },
             { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(a) },
             { key: 'del', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleteFor(a) },
           ]} />
@@ -154,6 +183,7 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
   const [priority, setPriority] = useState(announcement?.priority ?? 'NORMAL');
   const [isPinned, setIsPinned] = useState(announcement?.isPinned ?? false);
   const [publishAt, setPublishAt] = useState(announcement?.publishAt?.slice(0, 10) ?? '');
+  const [startDate, setStartDate] = useState(announcement?.startDate?.slice(0, 10) ?? '');
   const [expiresAt, setExpiresAt] = useState(announcement?.expiresAt?.slice(0, 10) ?? '');
   const [branchIds, setBranchIds] = useState<string[]>(announcement?.branches?.map((b) => b.branchId) ?? []);
   const [departmentIds, setDepartmentIds] = useState<string[]>(announcement?.departments?.map((d) => d.departmentId) ?? []);
@@ -185,6 +215,7 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
         priority,
         isPinned,
         ...(publishAt ? { publishAt } : {}),
+        ...(startDate ? { startDate } : {}),
         ...(expiresAt ? { expiresAt } : {}),
         ...target,
       };
@@ -200,6 +231,10 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
 
   const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
 
+  // A window that closes before it opens would save fine and then never show,
+  // so it is blocked here as well as server-side.
+  const badWindow = !!startDate && !!expiresAt && expiresAt < startDate;
+
   return (
     <Modal
       size="lg" onClose={onClose} icon={<AlertCircle size={20} />}
@@ -207,7 +242,7 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
       subtitle="Leave all targeting empty to reach everyone"
       footer={<>
         <button type="button" className="ghost" onClick={onClose}>Cancel</button>
-        <button type="submit" form="ann-form" disabled={save.isPending || !title.trim() || !body.trim()}>{save.isPending ? 'Saving…' : 'Save'}</button>
+        <button type="submit" form="ann-form" disabled={save.isPending || !title.trim() || !body.trim() || badWindow}>{save.isPending ? 'Saving…' : 'Save'}</button>
       </>}
     >
       <form id="ann-form" className="form-grid" onSubmit={submit}>
@@ -216,7 +251,16 @@ function AnnouncementForm({ announcement, onClose, onDone }: { announcement: Ann
         <label>Priority<select value={priority} onChange={(e) => setPriority(e.target.value)}>{PRIORITIES.map((p) => <option key={p} value={p}>{titleCase(p)}</option>)}</select></label>
         <label className="checkbox"><input type="checkbox" checked={isPinned} onChange={(e) => setIsPinned(e.target.checked)} /> Pin to top</label>
         <label>Publish at<input type="date" value={publishAt} onChange={(e) => setPublishAt(e.target.value)} /></label>
-        <label>Expires at<input type="date" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></label>
+        <label>Start date<input type="date" value={startDate} onChange={(e) => setStartDate(e.target.value)} /></label>
+        <label>End date<input type="date" min={startDate || undefined} value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} /></label>
+        {/* Publish is the broadcast; start/end is the window staff actually see
+            it in. Spelling that out here stops the three dates reading as three
+            names for the same thing. */}
+        <p className="muted sm-text span-all">
+          <strong>Publish at</strong> is when the announcement is broadcast. <strong>Start</strong> and <strong>end</strong> are
+          the days it stays visible in the staff feed — leave them empty for “visible as soon as it is published, indefinitely”.
+        </p>
+        {badWindow && <div className="error-box span-all">End date must be on or after the start date.</div>}
         <label className="span-all">Target branches<MultiSelect options={branches.data ?? []} selected={branchIds} onChange={setBranchIds} allLabel="All branches" noun="branch" /></label>
         <label className="span-all">Target departments<MultiSelect options={departments.data ?? []} selected={departmentIds} onChange={setDepartmentIds} allLabel="All departments" noun="department" /></label>
         <label className="span-all">Target roles<MultiSelect options={roles.data ?? []} selected={roleIds} onChange={setRoleIds} allLabel="All roles" noun="role" /></label>

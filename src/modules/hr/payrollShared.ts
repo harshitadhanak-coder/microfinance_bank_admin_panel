@@ -26,10 +26,11 @@ export interface Payslip {
   loanDeduction: string;
   netPay: string;
   lateCount?: number;
+  lateDeduction?: string;
   overtimeHours?: number | string;
   incentive?: string;
   bonus?: string;
-  employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
+  employee: { id: string; fullName: string; employeeCode: string; branch?: { name: string } | null };
 }
 
 /** Short month labels for compact period columns. */

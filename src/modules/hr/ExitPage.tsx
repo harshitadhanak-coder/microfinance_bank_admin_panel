@@ -4,6 +4,7 @@ import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
 import { PageHeader } from '../../components/PageHeader';
 import { FilterBar } from '../../components/FilterBar';
+import { ExportButton } from '../../components/ExportButton';
 import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
 import { LogOut, Check } from '../../components/icons';
@@ -61,8 +62,12 @@ export default function ExitPage() {
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Exit Management' }]}
         title="Exit Management"
         subtitle={canManage ? 'Review resignations through notice, clearance, full-&-final settlement and exit.' : 'Team resignations (read-only).'}
+        actions={<ExportButton url="/human-resources/exit/resignations/export" fileBase="Exit-Management" params={{ status: status === 'ALL' ? undefined : status }} />}
       />
-      <FilterBar chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${label(status)}`, onRemove: () => setStatus('ALL') }] : []} onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}>
+      <FilterBar
+        chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${label(status)}`, onRemove: () => setStatus('ALL') }] : []}
+        onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}
+      >
         <label>Status
           <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)}>
             {STATUSES.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All' : label(s)}</option>)}

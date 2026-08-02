@@ -1,5 +1,5 @@
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { StrictMode } from 'react';
+import { lazy, StrictMode, Suspense } from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter, Navigate, Outlet, Route, Routes, useLocation } from 'react-router-dom';
 import './styles.css';
@@ -10,66 +10,83 @@ import { ToastProvider } from './components/Toast';
 import AppLayout from './layouts/AppLayout';
 import { AuthProvider, useAuth } from './modules/auth/AuthContext';
 import LoginPage from './modules/auth/LoginPage';
-import ChangePasswordPage from './modules/auth/ChangePasswordPage';
 import { canAccessModule, ModuleKey, visibleModules } from './modules/auth/permissions';
-import BranchesPage from './modules/branches/BranchesPage';
-import BranchCreatePage from './modules/branches/BranchCreatePage';
-import BranchDetailPage from './modules/branches/BranchDetailPage';
-import BranchEditPage from './modules/branches/BranchEditPage';
-import CollectionsPage from './modules/collections/CollectionsPage';
-import CollectionImportPage from './modules/collections/CollectionImportPage';
-import CollectionRecordsPage from './modules/collections/CollectionRecordsPage';
-import CollectionSettlementPage from './modules/collections/CollectionSettlementPage';
-import SettlementsPage from './modules/collections/SettlementsPage';
-import SettlementOffersPage from './modules/collections/SettlementOffersPage';
-import BranchDepositsPage from './modules/reconciliation/BranchDepositsPage';
-import BankReconciliationPage from './modules/reconciliation/BankReconciliationPage';
-import DashboardPage from './modules/dashboard/DashboardPage';
-import EmployeesPage from './modules/employees/EmployeesPage';
-import EmployeeCreatePage from './modules/employees/EmployeeCreatePage';
-import EmployeeImportPage from './modules/employees/EmployeeImportPage';
-import EmployeeDetailPage from './modules/employees/EmployeeDetailPage';
-import EmployeeEditPage from './modules/employees/EmployeeEditPage';
-import HrDashboardPage from './modules/hr/HrDashboardPage';
-import AttendancePage from './modules/hr/AttendancePage';
-import AttendanceEmployeePage from './modules/hr/AttendanceEmployeePage';
-import HolidaysPage from './modules/hr/HolidaysPage';
-import LeavePage from './modules/hr/LeavePage';
-import PayrollPage from './modules/hr/PayrollPage';
-import PayrollRunPage from './modules/hr/PayrollRunPage';
-import PayrollRunDetailPage from './modules/hr/PayrollRunDetailPage';
-import SalarySlipPage from './modules/hr/SalarySlipPage';
-import SalaryAdvancesPage from './modules/hr/SalaryAdvancesPage';
-import OrgChartPage from './modules/hr/OrgChartPage';
-import ShiftsPage from './modules/hr/ShiftsPage';
-import AttendanceRequestsPage from './modules/hr/AttendanceRequestsPage';
-import ExitPage from './modules/hr/ExitPage';
-import AnnouncementsPage from './modules/hr/AnnouncementsPage';
-import HrPolicyLibraryPage from './modules/hr/HrPolicyLibraryPage';
-import MastersPage from './modules/masters/MastersPage';
-import MasterResourcePage from './modules/masters/MasterResourcePage';
-import UsersPage from './modules/users/UsersPage';
-import DocumentCenterPage from './modules/documents/DocumentCenterPage';
-import SettingsHubPage from './modules/settings/SettingsHubPage';
-import HrPolicyPage from './modules/settings/HrPolicyPage';
-import RolesListPage from './modules/roles/RolesListPage';
-import RoleFormPage from './modules/roles/RoleFormPage';
-import RolePermissionMatrixPage from './modules/roles/RolePermissionMatrixPage';
-import ReportsCatalogPage from './modules/reports/ReportsCatalogPage';
-import ReportRunnerPage from './modules/reports/ReportRunnerPage';
-import EmployeeLoansPage from './modules/hr/EmployeeLoansPage';
-import EmployeeLoanCreatePage from './modules/hr/EmployeeLoanCreatePage';
-import EmployeeLoanDetailPage from './modules/hr/EmployeeLoanDetailPage';
-import LeadsPage from './modules/leads/LeadsPage';
-import LeadFormPage from './modules/leads/LeadFormPage';
-import LeadDetailPage from './modules/leads/LeadDetailPage';
-import MyProfilePage from './modules/profile/MyProfilePage';
-import ApplicationsPage from './modules/loans/ApplicationsPage';
-import LoansPage from './modules/loans/LoansPage';
-import LoanCreatePage from './modules/loans/LoanCreatePage';
-import LoanImportPage from './modules/loans/LoanImportPage';
-import LoanDetailPage from './modules/loans/LoanDetailPage';
-import LoanLinkPage from './modules/loans/LoanLinkPage';
+
+/**
+ * Every screen below is loaded on demand.
+ *
+ * These used to be static imports, which meant one bundle containing all ~70
+ * pages — plus the spreadsheet and PDF libraries the reports screens pull in.
+ * The browser had to download and parse the entire application before it could
+ * paint the sign-in form, which is the part of "logging in takes ages" that
+ * happens before a single request is sent. Route-level splitting means the
+ * login screen ships only what the login screen needs, and each page arrives
+ * when it is first opened.
+ *
+ * LoginPage and AppLayout stay static: they are on the critical path already,
+ * so deferring them would only add a round trip.
+ */
+const ChangePasswordPage = lazy(() => import('./modules/auth/ChangePasswordPage'));
+const BranchesPage = lazy(() => import('./modules/branches/BranchesPage'));
+const BranchCreatePage = lazy(() => import('./modules/branches/BranchCreatePage'));
+const BranchDetailPage = lazy(() => import('./modules/branches/BranchDetailPage'));
+const BranchEditPage = lazy(() => import('./modules/branches/BranchEditPage'));
+const CollectionsPage = lazy(() => import('./modules/collections/CollectionsPage'));
+const CollectionImportPage = lazy(() => import('./modules/collections/CollectionImportPage'));
+const CollectionRecordsPage = lazy(() => import('./modules/collections/CollectionRecordsPage'));
+const CollectionSettlementPage = lazy(() => import('./modules/collections/CollectionSettlementPage'));
+const SettlementsPage = lazy(() => import('./modules/collections/SettlementsPage'));
+const SettlementOffersPage = lazy(() => import('./modules/collections/SettlementOffersPage'));
+const BranchDepositsPage = lazy(() => import('./modules/reconciliation/BranchDepositsPage'));
+const BankReconciliationPage = lazy(() => import('./modules/reconciliation/BankReconciliationPage'));
+const DashboardPage = lazy(() => import('./modules/dashboard/DashboardPage'));
+const EmployeesPage = lazy(() => import('./modules/employees/EmployeesPage'));
+const EmployeeCreatePage = lazy(() => import('./modules/employees/EmployeeCreatePage'));
+const EmployeeImportPage = lazy(() => import('./modules/employees/EmployeeImportPage'));
+const EmployeeDetailPage = lazy(() => import('./modules/employees/EmployeeDetailPage'));
+const EmployeeEditPage = lazy(() => import('./modules/employees/EmployeeEditPage'));
+const HrDashboardPage = lazy(() => import('./modules/hr/HrDashboardPage'));
+const AttendancePage = lazy(() => import('./modules/hr/AttendancePage'));
+const AttendanceEmployeePage = lazy(() => import('./modules/hr/AttendanceEmployeePage'));
+const HolidaysPage = lazy(() => import('./modules/hr/HolidaysPage'));
+const LeavePage = lazy(() => import('./modules/hr/LeavePage'));
+const PayrollPage = lazy(() => import('./modules/hr/PayrollPage'));
+const PayrollRunPage = lazy(() => import('./modules/hr/PayrollRunPage'));
+const PayrollRunDetailPage = lazy(() => import('./modules/hr/PayrollRunDetailPage'));
+const SalarySlipPage = lazy(() => import('./modules/hr/SalarySlipPage'));
+const SalaryAdvancesPage = lazy(() => import('./modules/hr/SalaryAdvancesPage'));
+const OrgChartPage = lazy(() => import('./modules/hr/OrgChartPage'));
+const ShiftsPage = lazy(() => import('./modules/hr/ShiftsPage'));
+const AttendanceRequestsPage = lazy(() => import('./modules/hr/AttendanceRequestsPage'));
+const ExitPage = lazy(() => import('./modules/hr/ExitPage'));
+const AnnouncementsPage = lazy(() => import('./modules/hr/AnnouncementsPage'));
+const AnnouncementDetailPage = lazy(() => import('./modules/hr/AnnouncementDetailPage'));
+const HrPolicyLibraryPage = lazy(() => import('./modules/hr/HrPolicyLibraryPage'));
+const HrPolicyDetailPage = lazy(() => import('./modules/hr/HrPolicyDetailPage'));
+const MastersPage = lazy(() => import('./modules/masters/MastersPage'));
+const MasterResourcePage = lazy(() => import('./modules/masters/MasterResourcePage'));
+const UsersPage = lazy(() => import('./modules/users/UsersPage'));
+const DocumentCenterPage = lazy(() => import('./modules/documents/DocumentCenterPage'));
+const SettingsHubPage = lazy(() => import('./modules/settings/SettingsHubPage'));
+const HrPolicyPage = lazy(() => import('./modules/settings/HrPolicyPage'));
+const RolesListPage = lazy(() => import('./modules/roles/RolesListPage'));
+const RoleFormPage = lazy(() => import('./modules/roles/RoleFormPage'));
+const RolePermissionMatrixPage = lazy(() => import('./modules/roles/RolePermissionMatrixPage'));
+const ReportsCatalogPage = lazy(() => import('./modules/reports/ReportsCatalogPage'));
+const ReportRunnerPage = lazy(() => import('./modules/reports/ReportRunnerPage'));
+const EmployeeLoansPage = lazy(() => import('./modules/hr/EmployeeLoansPage'));
+const EmployeeLoanCreatePage = lazy(() => import('./modules/hr/EmployeeLoanCreatePage'));
+const EmployeeLoanDetailPage = lazy(() => import('./modules/hr/EmployeeLoanDetailPage'));
+const LeadsPage = lazy(() => import('./modules/leads/LeadsPage'));
+const LeadFormPage = lazy(() => import('./modules/leads/LeadFormPage'));
+const LeadDetailPage = lazy(() => import('./modules/leads/LeadDetailPage'));
+const MyProfilePage = lazy(() => import('./modules/profile/MyProfilePage'));
+const ApplicationsPage = lazy(() => import('./modules/loans/ApplicationsPage'));
+const LoansPage = lazy(() => import('./modules/loans/LoansPage'));
+const LoanCreatePage = lazy(() => import('./modules/loans/LoanCreatePage'));
+const LoanImportPage = lazy(() => import('./modules/loans/LoanImportPage'));
+const LoanDetailPage = lazy(() => import('./modules/loans/LoanDetailPage'));
+const LoanLinkPage = lazy(() => import('./modules/loans/LoanLinkPage'));
 
 // Retry transient failures (network drop while the dev backend restarts, or a
 // 5xx) with backoff so a brief blip self-heals instead of surfacing an error.
@@ -83,6 +100,9 @@ const queryClient = new QueryClient({
     },
   },
 });
+
+/** Shown while a route's chunk is in flight. */
+const RouteFallback = () => <div className="content"><p className="muted">Loading…</p></div>;
 
 function RequireAuth() {
   const { user, mustChangePassword } = useAuth();
@@ -129,6 +149,7 @@ createRoot(document.getElementById('root')!).render(
         <AuthProvider>
           <ErrorBoundary>
           <ToastProvider>
+          <Suspense fallback={<RouteFallback />}>
           <Routes>
             <Route path="/login" element={<LoginPage />} />
             <Route element={<RequireAuth />}>
@@ -157,7 +178,9 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="hr/attendance-requests" element={<RequireModule module="attendanceRequests"><AttendanceRequestsPage /></RequireModule>} />
                 <Route path="hr/exit" element={<RequireModule module="exit"><ExitPage /></RequireModule>} />
                 <Route path="announcements" element={<RequireModule module="announcements"><AnnouncementsPage /></RequireModule>} />
+                <Route path="announcements/:id" element={<RequireModule module="announcements"><AnnouncementDetailPage /></RequireModule>} />
                 <Route path="hr-policies" element={<RequireModule module="hrPolicyLibrary"><HrPolicyLibraryPage /></RequireModule>} />
+                <Route path="hr-policies/:id" element={<RequireModule module="hrPolicyLibrary"><HrPolicyDetailPage /></RequireModule>} />
                 <Route path="masters" element={<RequireModule module="masters"><MastersPage /></RequireModule>} />
                 <Route path="masters/:resource" element={<RequireModule module="masters"><MasterResourcePage /></RequireModule>} />
                 <Route path="users" element={<RequireModule module="users"><UsersPage /></RequireModule>} />
@@ -204,6 +227,7 @@ createRoot(document.getElementById('root')!).render(
             </Route>
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
+          </Suspense>
           </ToastProvider>
           </ErrorBoundary>
         </AuthProvider>
