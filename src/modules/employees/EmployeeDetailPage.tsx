@@ -22,6 +22,7 @@ import { AccessSummary } from './AccessSummary';
 import { InlineEditField, type InlineOption } from './InlineEditField';
 import EmployeeSalaryAdvances from './EmployeeSalaryAdvances';
 import EmployeeShiftTab from './EmployeeShiftTab';
+import { leaveApi, leaveKeys } from '../hr/leaveShared';
 import {
   SALARY_COMPONENTS, DOCUMENT_CATEGORIES, isExpiringSoon, useEmployeeMasters,
 } from './shared';
@@ -67,7 +68,7 @@ interface EmployeeDocument {
 interface DocTypeConfig { id: string; category: string; documentType: string; isMandatory: boolean; isExpiryTracked: boolean; isActive: boolean }
 interface MandatoryStatus { category: string; documentType: string; present: boolean }
 interface DocVersion { version: number; fileName: string; isSuperseded: boolean; createdAt: string }
-interface LeaveBalance { leaveType: string; isPaid: boolean; annualEntitlement: number; used: number; available: number }
+// Leave balances come from the ledger module; see modules/hr/leaveShared.ts.
 interface LoginHistoryEntry { success: boolean; reason?: string | null; ipAddress?: string | null; createdAt: string }
 interface AccountInfo {
   hasAccount: boolean; userId?: string; username?: string; officialEmail?: string; role?: string;
@@ -248,8 +249,8 @@ export default function EmployeeDetailPage() {
 
   // ── Leave ──
   const leaveQuery = useQuery({
-    queryKey: ['/human-resources/leaves/balances', id],
-    queryFn: () => api.get(`/human-resources/leaves/balances?employeeId=${id}`).then((r) => r.data.data as { year: number; balances: LeaveBalance[] }),
+    queryKey: leaveKeys.employeeBalances(id ?? ''),
+    queryFn: () => leaveApi.employeeBalances(id!),
     enabled: canManage && tab === 'leave',
   });
 
@@ -722,14 +723,17 @@ export default function EmployeeDetailPage() {
               ) : leaveQuery.data && leaveQuery.data.balances.length > 0 ? (
                 <dl className="detail-list">
                   {leaveQuery.data.balances.map((b) => (
-                    <div key={b.leaveType}>
-                      <dt>{titleCase(b.leaveType)}{b.isPaid ? '' : ' (unpaid)'}</dt>
-                      <dd><strong>{b.available}</strong> available · {b.used} used of {b.annualEntitlement}/yr</dd>
+                    <div key={b.leaveTypeId}>
+                      <dt>{b.name}{b.isPaid ? '' : ' (unpaid)'}</dt>
+                      <dd>
+                        <strong>{b.available}</strong> available · {b.used} used of {b.entitlement}/yr
+                        {b.pending > 0 ? ` · ${b.pending} on hold` : ''}
+                      </dd>
                     </div>
                   ))}
                 </dl>
               ) : (
-                <EmptyState variant="no-data" title="No leave balances" message={leaveQuery.data ? `Nothing on record for ${leaveQuery.data.year}.` : undefined} />
+                <EmptyState variant="no-data" title="No leave balances" message={leaveQuery.data ? `Nothing on record for ${leaveQuery.data.balances[0]?.periodLabel ?? 'this period'}.` : undefined} />
               )}
             </Card>
           )}

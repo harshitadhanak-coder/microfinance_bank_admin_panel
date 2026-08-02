@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthContext';
 import {
   Banknote, Briefcase, CalendarCheck, CalendarOff, HandCoins, Plus, UserCheck, Users, Wallet,
 } from '../../components/icons';
+import { leaveApi, leaveKeys, requestTypeLabel, type LeaveRequestRow } from './leaveShared';
 
 interface CelebrationRow { id: string; fullName: string; employeeCode: string; date: string; inDays: number; years?: number }
 interface HrSummary {
@@ -22,10 +23,8 @@ interface HrSummary {
 interface EmployeeRow {
   id: string; fullName: string; designation: string; joiningDate: string;
 }
-interface LeaveRow {
-  id: string; leaveType: string; fromDate: string; toDate: string; numberOfDays: string;
-  status: string; createdAt: string; employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
-}
+// Leave rows come from the ledger module; see leaveShared.ts. A request carries
+// lines rather than a single leaveType, so use requestTypeLabel() to display it.
 interface LoanRow {
   id: string; loanNumber: string; status: string; principalAmount: string; requestedAt: string;
   employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
@@ -73,8 +72,8 @@ export default function HrDashboardPage() {
     queryFn: () => api.get('/employees?pageSize=100').then((r) => r.data.data as EmployeeRow[]),
   });
   const leavesQuery = useQuery({
-    queryKey: ['/human-resources/leaves', 'dash'],
-    queryFn: () => api.get('/human-resources/leaves?pageSize=100').then((r) => r.data.data as LeaveRow[]),
+    queryKey: leaveKeys.requests('dash'),
+    queryFn: () => leaveApi.listRequests({ limit: 100 }),
   });
   const loansQuery = useQuery({
     queryKey: ['/employee-loans', 'dash'],
@@ -83,7 +82,7 @@ export default function HrDashboardPage() {
 
   const s = summaryQuery.data;
   const employees = employeesQuery.data ?? [];
-  const leaves = leavesQuery.data ?? [];
+  const leaves = leavesQuery.data?.items ?? [];
   const loans = loansQuery.data ?? [];
   const attendanceRate = s && s.headcount > 0 ? Math.round((s.presentToday / s.headcount) * 100) : 0;
 
@@ -119,6 +118,7 @@ export default function HrDashboardPage() {
     return leaves.filter((l) => l.status === 'APPROVED' && l.fromDate.slice(0, 10) <= today && l.toDate.slice(0, 10) >= today);
   }, [leaves]);
 
+
   const pendingLoans = useMemo(() => loans.filter((l) => l.status === 'PENDING').slice(0, 6), [loans]);
 
   const recentLeaves = useMemo(() =>
@@ -129,8 +129,8 @@ export default function HrDashboardPage() {
     const items: Act[] = [];
     for (const l of leaves.slice(0, 25)) items.push({
       date: l.createdAt, icon: <CalendarOff size={13} />,
-      text: <><strong>{l.employee.fullName}</strong> applied for {l.leaveType.toLowerCase()} leave</>,
-      sub: `${titleCase(l.status)} · ${fmtDate(l.createdAt)}`,
+      text: <><strong>{l.employee?.fullName}</strong> applied for {requestTypeLabel(l.lines).toLowerCase()}</>,
+      sub: `${titleCase(l.status.replace(/_/g, ' '))} · ${fmtDate(l.createdAt)}`,
     });
     for (const ln of loans.slice(0, 25)) items.push({
       date: ln.requestedAt, icon: <Banknote size={13} />,
@@ -145,12 +145,12 @@ export default function HrDashboardPage() {
     return items.sort((a, b) => +new Date(b.date) - +new Date(a.date)).slice(0, 7);
   }, [leaves, loans, employees]);
 
-  const leaveColumns: Column<LeaveRow>[] = [
-    { header: 'Employee', render: (l) => <><strong>{l.employee.fullName}</strong><div className="muted sm-text">{l.employee.employeeCode}</div></> },
-    { header: 'Type', render: (l) => titleCase(l.leaveType) },
+  const leaveColumns: Column<LeaveRequestRow>[] = [
+    { header: 'Employee', render: (l) => <><strong>{l.employee?.fullName}</strong><div className="muted sm-text">{l.employee?.employeeCode}</div></> },
+    { header: 'Type', render: (l) => requestTypeLabel(l.lines) },
     { header: 'From', render: (l) => fmtDate(l.fromDate) },
     { header: 'To', render: (l) => fmtDate(l.toDate) },
-    { header: 'Days', render: (l) => Number(l.numberOfDays) },
+    { header: 'Days', render: (l) => Number(l.totalDays) },
     { header: 'Status', render: (l) => <Badge status={l.status} /> },
   ];
 
@@ -215,10 +215,10 @@ export default function HrDashboardPage() {
                   <ul className="person-list">
                     {onLeaveToday.map((l) => (
                       <li key={l.id} className="person-row">
-                        <span className="person-av">{initials(l.employee.fullName)}</span>
+                        <span className="person-av">{initials(l.employee?.fullName ?? '')}</span>
                         <span className="person-meta">
-                          <strong>{l.employee.fullName}</strong>
-                          <span className="muted">{titleCase(l.leaveType)} leave{l.employee.branch ? ` · ${l.employee.branch.name}` : ''}</span>
+                          <strong>{l.employee?.fullName}</strong>
+                          <span className="muted">{requestTypeLabel(l.lines)}{l.employee?.branch ? ` · ${l.employee.branch.name}` : ''}</span>
                         </span>
                         <span className="person-tag">until {new Date(l.toDate).toLocaleDateString('en-IN', { day: '2-digit', month: 'short' })}</span>
                       </li>

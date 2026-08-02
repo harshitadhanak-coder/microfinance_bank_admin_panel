@@ -8,6 +8,7 @@ import { Briefcase, Loader, Plus, Upload, Trash2, Lock, Pencil } from '../../com
 import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import { leaveApi, leaveKeys } from '../hr/leaveShared';
 
 interface Props {
   employeeId: string;
@@ -67,10 +68,7 @@ interface EmployeeDetail {
 }
 interface EmployeeLite { id: string; fullName: string; designation: string }
 
-interface LeaveBalance {
-  leaveType: string; isPaid: boolean; annualEntitlement: number;
-  opening: number; accrued: number; used: number; encashed: number; available: number;
-}
+// Leave balances come from the ledger module; see modules/hr/leaveShared.ts.
 
 // ── Login-account (Account tab) ──
 interface LoginHistoryEntry { success: boolean; reason?: string | null; ipAddress?: string | null; createdAt: string }
@@ -307,8 +305,8 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
 
   // ── Leave balances ──
   const leaveQuery = useQuery({
-    queryKey: ['/human-resources/leaves/balances', employeeId],
-    queryFn: () => api.get(`/human-resources/leaves/balances?employeeId=${employeeId}`).then((r) => r.data.data as { year: number; balances: LeaveBalance[] }),
+    queryKey: leaveKeys.employeeBalances(employeeId),
+    queryFn: () => leaveApi.employeeBalances(employeeId),
     enabled: canManage && tab === 'leave',
   });
 
@@ -737,14 +735,17 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
               ) : leaveQuery.data && leaveQuery.data.balances.length > 0 ? (
                 <dl className="detail-list">
                   {leaveQuery.data.balances.map((b) => (
-                    <div key={b.leaveType}>
-                      <dt>{titleCase(b.leaveType)}{b.isPaid ? '' : ' (unpaid)'}</dt>
-                      <dd><strong>{b.available}</strong> available · {b.used} used of {b.annualEntitlement} / yr</dd>
+                    <div key={b.leaveTypeId}>
+                      <dt>{b.name}{b.isPaid ? '' : ' (unpaid)'}</dt>
+                      <dd>
+                        <strong>{b.available}</strong> available · {b.used} used of {b.entitlement} / yr
+                        {b.pending > 0 ? ` · ${b.pending} on hold` : ''}
+                      </dd>
                     </div>
                   ))}
                 </dl>
               ) : (
-                <p className="muted">No leave balances on record{leaveQuery.data ? ` for ${leaveQuery.data.year}` : ''}.</p>
+                <p className="muted">No leave balances on record{leaveQuery.data?.balances[0] ? ` for ${leaveQuery.data.balances[0].periodLabel}` : ''}.</p>
               )
             )}
 

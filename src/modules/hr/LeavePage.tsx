@@ -1,5 +1,4 @@
-import { FormEvent, useState } from 'react';
-import { AxiosError } from 'axios';
+import { FormEvent, useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../../api/client';
 import { Column, DataTable } from '../../components/DataTable';
@@ -10,32 +9,19 @@ import { Tabs, TabDef } from '../../components/Tabs';
 import { ActionMenu } from '../../components/ActionMenu';
 import { Drawer } from '../../components/Drawer';
 import { Modal, ConfirmDialog } from '../../components/Modal';
-import { CalendarCheck, Check, ListChecks, Loader, Plus, Trash2, Wallet, X } from '../../components/icons';
-import { fmtDate, fmtDayMonth, titleCase, apiMessage } from '../../lib/format';
+import { CalendarCheck, Check, ListChecks, Loader, Plus, Ban, Wallet, X } from '../../components/icons';
+import { fmtDate, fmtDayMonth, apiMessage } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import LeavePolicies from './LeavePolicies';
-import MyLeave from './MyLeave';
+import MyLeave, { ApplyLeaveModal } from './MyLeave';
+import {
+  leaveApi, leaveKeys, invalidateLeave, isOpen, isCancellable, requestTypeLabel, currentApprover,
+  STATUS_FILTERS, type StatusFilter, type LeaveRequestRow, type LedgerEntry,
+} from './leaveShared';
 
-interface LeaveRow {
-  id: string;
-  employeeId: string;
-  leaveType: string;
-  fromDate: string;
-  toDate: string;
-  numberOfDays: string;
-  reason?: string | null;
-  status: string;
-  employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
-}
-
-const STATUS_FILTERS = ['ALL', 'PENDING', 'APPROVED', 'REJECTED'] as const;
-type StatusFilter = (typeof STATUS_FILTERS)[number];
-const LEAVE_TYPES = ['CASUAL', 'SICK', 'EARNED', 'UNPAID', 'MATERNITY', 'PATERNITY'] as const;
-type TypeFilter = 'ALL' | (typeof LEAVE_TYPES)[number];
-
-/** Minimal employee shape for the "Book leave" picker. */
+/** Minimal employee shape for the "Record leave" picker. */
 interface EmployeeOption { id: string; fullName: string; employeeCode: string }
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -45,9 +31,9 @@ const CURRENT_YEAR = now.getFullYear();
 const CALENDAR_YEARS = [CURRENT_YEAR - 1, CURRENT_YEAR, CURRENT_YEAR + 1];
 
 type Decision = 'APPROVED' | 'REJECTED';
-/** A pending decision — one leave (`single`) or many selected leaves (`bulk`). */
+/** A pending decision — one request (`single`) or many selected (`bulk`). */
 type DecisionTarget =
-  | { kind: 'single'; leave: LeaveRow; decision: Decision }
+  | { kind: 'single'; leave: LeaveRequestRow; decision: Decision }
   | { kind: 'bulk'; ids: string[]; decision: Decision };
 
 export default function LeavePage() {
@@ -56,35 +42,39 @@ export default function LeavePage() {
   const { user } = useAuth();
   const [view, setView] = useState<'list' | 'calendar' | 'myLeave' | 'policies'>('list');
   const [status, setStatus] = useState<StatusFilter>('ALL');
-  const [typeFilter, setTypeFilter] = useState<TypeFilter>('ALL');
+  const [typeFilter, setTypeFilter] = useState<string>('ALL');
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [decisionTarget, setDecisionTarget] = useState<DecisionTarget | null>(null);
-  const [balancesFor, setBalancesFor] = useState<LeaveRow | null>(null);
+  const [balancesFor, setBalancesFor] = useState<LeaveRequestRow | null>(null);
   const [backfillOpen, setBackfillOpen] = useState(false);
   const [bookOpen, setBookOpen] = useState(false);
-  const [pendingDelete, setPendingDelete] = useState<LeaveRow | null>(null);
+  const [pendingCancel, setPendingCancel] = useState<LeaveRequestRow | null>(null);
 
   const canDecide = can(user?.role, 'leave:decide');
   const canAccrue = can(user?.role, 'leave:accrue');
   const canManagePolicy = can(user?.role, 'leave:managePolicy');
-  // Booking and deleting leave — HR + Super Admin only, matching the backend.
   const canManageLeave = can(user?.role, 'leave:manage');
 
-  const listUrl = `/human-resources/leaves?pageSize=100${status === 'ALL' ? '' : `&status=${status}`}`;
   const query = useQuery({
-    queryKey: [listUrl],
-    queryFn: () => api.get(listUrl).then((r) => r.data.data as LeaveRow[]),
+    queryKey: leaveKeys.requests(status),
+    queryFn: () => leaveApi.listRequests({ status, limit: 100 }),
   });
+  const typesQuery = useQuery({ queryKey: leaveKeys.types, queryFn: leaveApi.listTypes });
 
-  const rows = (query.data ?? []).filter((l) => typeFilter === 'ALL' || l.leaveType === typeFilter);
-  const refreshLeaves = () => qc.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).startsWith('/human-resources/leaves') });
+  const rows = useMemo(
+    () => (query.data?.items ?? []).filter(
+      (l) => typeFilter === 'ALL' || l.lines.some((line) => line.leaveType.code === typeFilter),
+    ),
+    [query.data, typeFilter],
+  );
+  const refreshLeaves = () => invalidateLeave(qc);
 
-  // Selected leaves that are actually decidable (PENDING) — the bulk bar targets these.
-  const pendingSelected = rows.filter((l) => selectedIds.has(l.id) && l.status === 'PENDING');
+  // Only open requests are decidable — the bulk bar targets those.
+  const openSelected = rows.filter((l) => selectedIds.has(l.id) && isOpen(l.status));
 
   const decide = useMutation({
-    mutationFn: ({ id, decision, decisionNote }: { id: string; decision: Decision; decisionNote?: string }) =>
-      api.post(`/human-resources/leaves/${id}/decision`, { decision, ...(decisionNote ? { decisionNote } : {}) }),
+    mutationFn: ({ id, decision, comments }: { id: string; decision: Decision; comments?: string }) =>
+      leaveApi.decide(id, decision, comments),
     onSuccess: (_res, variables) => {
       refreshLeaves();
       toast.success(variables.decision === 'APPROVED' ? 'Leave approved.' : 'Leave rejected.');
@@ -93,12 +83,10 @@ export default function LeavePage() {
     onError: (err) => toast.error(apiMessage(err, 'Could not record the decision.')),
   });
 
-  // Bulk = one single-decision request per leave (no bulk endpoint); reports a summary.
+  // Bulk = one request per leave (there is no bulk endpoint); reports a summary.
   const bulkDecide = useMutation({
-    mutationFn: async ({ ids, decision, decisionNote }: { ids: string[]; decision: Decision; decisionNote?: string }) => {
-      const results = await Promise.allSettled(
-        ids.map((id) => api.post(`/human-resources/leaves/${id}/decision`, { decision, ...(decisionNote ? { decisionNote } : {}) })),
-      );
+    mutationFn: async ({ ids, decision, comments }: { ids: string[]; decision: Decision; comments?: string }) => {
+      const results = await Promise.allSettled(ids.map((id) => leaveApi.decide(id, decision, comments)));
       return { ok: results.filter((r) => r.status === 'fulfilled').length, failed: results.filter((r) => r.status === 'rejected').length, decision };
     },
     onSuccess: ({ ok, failed, decision }) => {
@@ -112,58 +100,53 @@ export default function LeavePage() {
     onError: (err) => { setDecisionTarget(null); toast.error(apiMessage(err, 'Could not process the bulk decision.')); },
   });
 
-  // Employee list for the "Book leave" picker — only fetched for roles that can book.
   const employeesQuery = useQuery({
     queryKey: ['/employees', 'leave-book'],
     queryFn: () => api.get('/employees?pageSize=100').then((r) => r.data.data as EmployeeOption[]),
     enabled: canManageLeave,
   });
 
-  const remove = useMutation({
-    mutationFn: (id: string) => api.delete(`/human-resources/leaves/${id}`),
-    onSuccess: () => { toast.success('Leave deleted.'); setPendingDelete(null); refreshLeaves(); },
-    onError: (err) => { toast.error(apiMessage(err, 'Could not delete the leave.')); setPendingDelete(null); },
+  /**
+   * HR cancels a request. There is deliberately no delete: an approved leave is
+   * reversed with a contra entry so the history survives, which is exactly what
+   * the legacy hard-delete destroyed.
+   */
+  const cancelRequest = useMutation({
+    mutationFn: (id: string) => leaveApi.hrCancel(id),
+    onSuccess: () => { toast.success('Leave request cancelled.'); setPendingCancel(null); refreshLeaves(); },
+    onError: (err) => { toast.error(apiMessage(err, 'Could not cancel the request.')); setPendingCancel(null); },
   });
 
   const accrual = useMutation({
-    mutationFn: () => api.post('/human-resources/leaves/accrual/run', { month: CURRENT_MONTH, year: CURRENT_YEAR }),
-    onSuccess: (res) => {
-      const count = res.data?.data?.employeeCount as number | undefined;
-      const base = (res.data?.message as string | undefined) || 'Leave accrual completed.';
-      toast.success(typeof count === 'number' ? `${base} (${count} employees)` : base);
+    mutationFn: () => leaveApi.runAccrual(CURRENT_MONTH, CURRENT_YEAR),
+    onSuccess: (result) => {
+      toast.success(
+        `Accrual ${result.runNo}: ${result.totalCredited} day(s) credited to ${result.successCount} employee(s)`
+        + (result.skippedCount ? `, ${result.skippedCount} skipped.` : '.'),
+      );
       refreshLeaves();
     },
-    onError: (err) => {
-      const msg = apiMessage(err, 'Could not run leave accrual.');
-      if (err instanceof AxiosError && err.response?.status === 409) toast.info(msg);
-      else toast.error(msg);
-    },
+    onError: (err) => toast.error(apiMessage(err, 'Could not run leave accrual.')),
   });
 
-  // Catch-up accrual: runs every un-run month in the trailing year so a mid-year
-  // policy change (e.g. a newly-paid leave type) reflects in balances at once.
   const backfill = useMutation({
-    mutationFn: () => api.post('/human-resources/leaves/accrual/backfill', { month: CURRENT_MONTH, year: CURRENT_YEAR }),
-    onSuccess: (res) => {
-      const data = res.data?.data as { monthsRun: number; monthsSkipped: number; employeeCount: number } | undefined;
-      const base = (res.data?.message as string | undefined) || 'Leave balances brought up to date.';
+    mutationFn: () => leaveApi.backfillAccrual(12),
+    onSuccess: () => {
       setBackfillOpen(false);
-      toast.success(data
-        ? `${base} ${data.monthsRun} month${data.monthsRun === 1 ? '' : 's'} accrued${data.monthsSkipped ? `, ${data.monthsSkipped} already done` : ''}.`
-        : base);
+      toast.success('Leave balances brought up to date.');
       refreshLeaves();
     },
     onError: (err) => { setBackfillOpen(false); toast.error(apiMessage(err, 'Could not back-fill leave accrual.')); },
   });
 
-  const columns: Column<LeaveRow>[] = [
-    { header: 'Employee', render: (l) => <><strong>{l.employee.fullName}</strong><div className="muted sm-text">{l.employee.employeeCode}</div></>, sortValue: (l) => l.employee.fullName },
-    { header: 'Branch', render: (l) => l.employee.branch?.name ?? '—', sortValue: (l) => l.employee.branch?.name ?? '' },
-    { header: 'Type', render: (l) => titleCase(l.leaveType), sortValue: (l) => l.leaveType },
+  const columns: Column<LeaveRequestRow>[] = [
+    { header: 'Employee', render: (l) => <><strong>{l.employee?.fullName}</strong><div className="muted sm-text">{l.employee?.employeeCode}</div></>, sortValue: (l) => l.employee?.fullName ?? '' },
+    { header: 'Request', render: (l) => <span className="mono sm-text">{l.requestNo}</span>, sortValue: (l) => l.requestNo },
+    { header: 'Type', render: (l) => requestTypeLabel(l.lines), sortValue: (l) => requestTypeLabel(l.lines) },
     { header: 'From', render: (l) => fmtDate(l.fromDate), sortValue: (l) => l.fromDate },
     { header: 'To', render: (l) => fmtDate(l.toDate), sortValue: (l) => l.toDate },
-    { header: 'Days', render: (l) => <span className="num">{l.numberOfDays}</span>, sortValue: (l) => Number(l.numberOfDays) },
-    { header: 'Reason', render: (l) => l.reason ?? '—' },
+    { header: 'Days', render: (l) => <span className="num">{Number(l.totalDays)}</span>, sortValue: (l) => Number(l.totalDays) },
+    { header: 'With', render: (l) => currentApprover(l) },
     { header: 'Status', render: (l) => <Badge status={l.status} />, sortValue: (l) => l.status },
     {
       header: '',
@@ -171,13 +154,13 @@ export default function LeavePage() {
         <div className="actions-cell">
           <ActionMenu
             items={[
-              { key: 'balances', label: 'View balances', icon: <Wallet size={15} />, onSelect: () => setBalancesFor(l) },
-              ...(canDecide && l.status === 'PENDING' ? [
+              { key: 'balances', label: 'Balances & ledger', icon: <Wallet size={15} />, onSelect: () => setBalancesFor(l) },
+              ...(canDecide && isOpen(l.status) ? [
                 { key: 'approve', label: 'Approve', icon: <Check size={15} />, separatorBefore: true, onSelect: () => setDecisionTarget({ kind: 'single', leave: l, decision: 'APPROVED' }) },
                 { key: 'reject', label: 'Reject', icon: <X size={15} />, tone: 'danger' as const, onSelect: () => setDecisionTarget({ kind: 'single', leave: l, decision: 'REJECTED' }) },
               ] : []),
-              ...(canManageLeave ? [
-                { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger' as const, separatorBefore: true, onSelect: () => setPendingDelete(l) },
+              ...(canManageLeave && isCancellable(l) ? [
+                { key: 'cancel', label: 'Cancel request', icon: <Ban size={15} />, tone: 'danger' as const, separatorBefore: true, onSelect: () => setPendingCancel(l) },
               ] : []),
             ]}
           />
@@ -193,8 +176,9 @@ export default function LeavePage() {
     ...(canManagePolicy ? [{ key: 'policies', label: 'Policies' }] : []),
   ];
 
+  const typeName = (code: string) => typesQuery.data?.find((t) => t.code === code)?.name ?? code;
   const typeChips = typeFilter !== 'ALL'
-    ? [{ key: 'type', label: `Type: ${titleCase(typeFilter)}`, onRemove: () => setTypeFilter('ALL') }]
+    ? [{ key: 'type', label: `Type: ${typeName(typeFilter)}`, onRemove: () => setTypeFilter('ALL') }]
     : [];
 
   return (
@@ -202,7 +186,7 @@ export default function LeavePage() {
       <PageHeader
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Leave' }]}
         title="Leave"
-        subtitle="Book, review and decide staff leave"
+        subtitle="Record, review and decide staff leave"
         actions={view !== 'myLeave' && (
           <>
             {canAccrue && (
@@ -216,7 +200,7 @@ export default function LeavePage() {
               </>
             )}
             {canManageLeave && (
-              <button type="button" onClick={() => setBookOpen(true)}><Plus size={15} /> Book leave</button>
+              <button type="button" onClick={() => setBookOpen(true)}><Plus size={15} /> Record leave</button>
             )}
           </>
         )}
@@ -228,23 +212,25 @@ export default function LeavePage() {
           <FilterBar chips={typeChips} onReset={typeChips.length ? () => setTypeFilter('ALL') : undefined}>
             <label>Status
               <select value={status} onChange={(e) => { setStatus(e.target.value as StatusFilter); setSelectedIds(new Set()); }} aria-label="Filter by status">
-                {STATUS_FILTERS.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All statuses' : titleCase(s)}</option>)}
+                {STATUS_FILTERS.map((s) => (
+                  <option key={s} value={s}>{s === 'ALL' ? 'All statuses' : s.replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase())}</option>
+                ))}
               </select>
             </label>
             <label>Type
-              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value as TypeFilter)} aria-label="Filter by leave type">
+              <select value={typeFilter} onChange={(e) => setTypeFilter(e.target.value)} aria-label="Filter by leave type">
                 <option value="ALL">All types</option>
-                {LEAVE_TYPES.map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
+                {(typesQuery.data ?? []).map((t) => <option key={t.id} value={t.code}>{t.name}</option>)}
               </select>
             </label>
           </FilterBar>
 
-          {canDecide && pendingSelected.length > 0 && (
+          {canDecide && openSelected.length > 0 && (
             <div className="bulk-bar">
-              <span className="bulk-count">{pendingSelected.length} pending selected</span>
+              <span className="bulk-count">{openSelected.length} awaiting decision</span>
               <span className="bulk-spacer" />
-              <button type="button" onClick={() => setDecisionTarget({ kind: 'bulk', ids: pendingSelected.map((l) => l.id), decision: 'APPROVED' })}><Check size={14} /> Approve all</button>
-              <button type="button" className="ghost" onClick={() => setDecisionTarget({ kind: 'bulk', ids: pendingSelected.map((l) => l.id), decision: 'REJECTED' })}><X size={14} /> Reject all</button>
+              <button type="button" onClick={() => setDecisionTarget({ kind: 'bulk', ids: openSelected.map((l) => l.id), decision: 'APPROVED' })}><Check size={14} /> Approve all</button>
+              <button type="button" className="ghost" onClick={() => setDecisionTarget({ kind: 'bulk', ids: openSelected.map((l) => l.id), decision: 'REJECTED' })}><X size={14} /> Reject all</button>
               <button type="button" className="ghost" onClick={() => setSelectedIds(new Set())}>Clear</button>
             </div>
           )}
@@ -254,7 +240,7 @@ export default function LeavePage() {
             rows={rows}
             loading={query.isLoading}
             empty="No leave requests found."
-            searchPlaceholder="Search by employee or branch…"
+            searchPlaceholder="Search by employee or request no…"
             selection={canDecide ? { selectedIds, onChange: setSelectedIds } : undefined}
           />
         </>
@@ -272,8 +258,8 @@ export default function LeavePage() {
           pending={decide.isPending || bulkDecide.isPending}
           onClose={() => setDecisionTarget(null)}
           onConfirm={(note) => {
-            if (decisionTarget.kind === 'single') decide.mutate({ id: decisionTarget.leave.id, decision: decisionTarget.decision, decisionNote: note || undefined });
-            else bulkDecide.mutate({ ids: decisionTarget.ids, decision: decisionTarget.decision, decisionNote: note || undefined });
+            if (decisionTarget.kind === 'single') decide.mutate({ id: decisionTarget.leave.id, decision: decisionTarget.decision, comments: note || undefined });
+            else bulkDecide.mutate({ ids: decisionTarget.ids, decision: decisionTarget.decision, comments: note || undefined });
           }}
         />
       )}
@@ -281,26 +267,28 @@ export default function LeavePage() {
       {balancesFor && <BalancesDrawer leave={balancesFor} onClose={() => setBalancesFor(null)} />}
 
       {bookOpen && (
-        <BookLeaveModal
+        <RecordLeaveModal
           employees={employeesQuery.data ?? []}
           onClose={() => setBookOpen(false)}
           onDone={() => { setBookOpen(false); refreshLeaves(); }}
         />
       )}
 
-      {pendingDelete && (
+      {pendingCancel && (
         <ConfirmDialog
-          icon={<Trash2 size={20} />}
+          icon={<Ban size={20} />}
           tone="danger"
-          title="Delete leave?"
+          title="Cancel leave request?"
           message={<>
-            {titleCase(pendingDelete.leaveType)} leave for <strong>{pendingDelete.employee.fullName}</strong> ({fmtDate(pendingDelete.fromDate)} – {fmtDate(pendingDelete.toDate)}) will be permanently removed. This cannot be undone.
-            {pendingDelete.status === 'APPROVED' && <><br /><span className="muted sm-text">It is approved — the consumed balance is restored and its on-leave attendance rows are removed.</span></>}
+            {requestTypeLabel(pendingCancel.lines)} leave for <strong>{pendingCancel.employee?.fullName}</strong> ({fmtDate(pendingCancel.fromDate)} – {fmtDate(pendingCancel.toDate)}) will be cancelled.
+            {pendingCancel.status === 'APPROVED'
+              ? <><br /><span className="muted sm-text">Days not yet taken are credited back with a reversing entry. Days already in the past stay consumed, and a locked payroll period is refused rather than silently rewritten.</span></>
+              : <><br /><span className="muted sm-text">The days held against their balance are released.</span></>}
           </>}
-          confirmLabel="Delete leave"
-          loading={remove.isPending}
-          onConfirm={() => remove.mutate(pendingDelete.id)}
-          onCancel={() => setPendingDelete(null)}
+          confirmLabel="Cancel request"
+          loading={cancelRequest.isPending}
+          onConfirm={() => cancelRequest.mutate(pendingCancel.id)}
+          onCancel={() => setPendingCancel(null)}
         />
       )}
 
@@ -310,7 +298,7 @@ export default function LeavePage() {
           title="Back-fill leave accrual"
           message={<>
             Runs the monthly accrual for every month in the past year that hasn’t been run yet, bringing balances up to date for all active employees.
-            <br /><span className="muted sm-text">Safe to run — months already accrued are skipped, never double-counted.</span>
+            <br /><span className="muted sm-text">Safe to run — accrual is idempotent per employee, so a month already credited is skipped rather than counted twice.</span>
           </>}
           confirmLabel="Back-fill now"
           loading={backfill.isPending}
@@ -322,75 +310,59 @@ export default function LeavePage() {
   );
 }
 
-// ── Book leave for an employee (HR / Super Admin) ────────────────────────────
+// ── Record leave for an employee (HR / Super Admin) ──────────────────────
 /**
- * Creating a leave is an HR action taken on an employee's behalf, so the
- * employee is picked here rather than inferred from the signed-in user. The
- * leave lands PENDING and still goes through the normal approve/reject flow —
- * booking it does not approve it.
+ * Picks the employee, then hands off to the same preview-first form employees
+ * use for themselves. HR sees the identical per-day breakdown and rule check
+ * the employee would, which is what stops "HR booked it so it must be fine"
+ * from quietly bypassing the policy.
  */
-function BookLeaveModal({
+function RecordLeaveModal({
   employees, onClose, onDone,
 }: {
   employees: EmployeeOption[];
   onClose: () => void;
   onDone: () => void;
 }) {
-  const toast = useToast();
   const [employeeId, setEmployeeId] = useState('');
-  const [leaveType, setLeaveType] = useState<(typeof LEAVE_TYPES)[number]>('CASUAL');
-  const [fromDate, setFromDate] = useState('');
-  const [toDate, setToDate] = useState('');
-  const [reason, setReason] = useState('');
-  const [error, setError] = useState('');
-
-  const save = useMutation({
-    mutationFn: () => api.post('/human-resources/leaves', {
-      employeeId,
-      leaveType,
-      fromDate,
-      toDate,
-      ...(reason.trim() ? { reason: reason.trim() } : {}),
-    }),
-    onSuccess: () => { toast.success('Leave recorded. It is pending a decision.'); onDone(); },
-    onError: (err) => setError(apiMessage(err, 'Could not record the leave.')),
+  const typesQuery = useQuery({ queryKey: leaveKeys.types, queryFn: leaveApi.listTypes });
+  const balancesQuery = useQuery({
+    queryKey: leaveKeys.employeeBalances(employeeId),
+    queryFn: () => leaveApi.employeeBalances(employeeId),
+    enabled: Boolean(employeeId),
   });
 
-  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
-  const disabled = save.isPending || !employeeId || !fromDate || !toDate;
+  if (employeeId) {
+    return (
+      <ApplyLeaveModal
+        types={typesQuery.data ?? []}
+        balances={balancesQuery.data?.balances ?? []}
+        employeeId={employeeId}
+        onBehalf
+        onClose={onClose}
+        onDone={onDone}
+      />
+    );
+  }
 
   return (
     <Modal
-      size="md" onClose={onClose} icon={<CalendarCheck size={20} />}
-      title="Book leave"
-      subtitle="Records leave on an employee's behalf. It still needs an approve/reject decision."
-      footer={<>
-        <button type="button" className="ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
-        <button type="submit" form="book-leave-form" disabled={disabled}>{save.isPending ? 'Saving…' : 'Book leave'}</button>
-      </>}
+      size="sm" onClose={onClose} icon={<CalendarCheck size={20} />}
+      title="Record leave"
+      subtitle="Choose whose leave you are recording."
+      footer={<button type="button" className="ghost" onClick={onClose}>Cancel</button>}
     >
-      <form id="book-leave-form" className="form-grid" onSubmit={submit}>
-        <label className="span-all">Employee
-          <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} required>
-            <option value="">— Select employee —</option>
-            {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeCode})</option>)}
-          </select>
-        </label>
-        <label className="span-all">Leave type
-          <select value={leaveType} onChange={(e) => setLeaveType(e.target.value as (typeof LEAVE_TYPES)[number])}>
-            {LEAVE_TYPES.map((t) => <option key={t} value={t}>{titleCase(t)}</option>)}
-          </select>
-        </label>
-        <label>From<input type="date" value={fromDate} onChange={(e) => setFromDate(e.target.value)} required /></label>
-        <label>To<input type="date" value={toDate} min={fromDate || undefined} onChange={(e) => setToDate(e.target.value)} required /></label>
-        <label className="span-all">Reason<input value={reason} onChange={(e) => setReason(e.target.value)} maxLength={255} placeholder="optional" /></label>
-        {error && <div className="error-box span-all">{error}</div>}
-      </form>
+      <label>Employee
+        <select value={employeeId} onChange={(e) => setEmployeeId(e.target.value)} data-autofocus>
+          <option value="">— Select employee —</option>
+          {employees.map((emp) => <option key={emp.id} value={emp.id}>{emp.fullName} ({emp.employeeCode})</option>)}
+        </select>
+      </label>
     </Modal>
   );
 }
 
-// ── Approve/Reject decision (single or bulk), with an optional note ──────────
+// ── Approve/Reject decision (single or bulk) ─────────────────────────────
 function DecisionModal({
   target, pending, onClose, onConfirm,
 }: {
@@ -403,8 +375,11 @@ function DecisionModal({
   const approve = target.decision === 'APPROVED';
   const count = target.kind === 'bulk' ? target.ids.length : 1;
   const subtitle = target.kind === 'single'
-    ? `${target.leave.employee.fullName} · ${titleCase(target.leave.leaveType)} · ${fmtDayMonth(target.leave.fromDate)}–${fmtDayMonth(target.leave.toDate)}`
-    : `${count} pending leave request${count === 1 ? '' : 's'}`;
+    ? `${target.leave.employee?.fullName} · ${requestTypeLabel(target.leave.lines)} · ${fmtDayMonth(target.leave.fromDate)}–${fmtDayMonth(target.leave.toDate)}`
+    : `${count} leave request${count === 1 ? '' : 's'} awaiting decision`;
+  // The backend rejects a rejection with no reason, so the form does too rather
+  // than letting the user discover it from a 400.
+  const noteRequired = !approve;
   const submit = (e: FormEvent) => { e.preventDefault(); onConfirm(note.trim()); };
 
   return (
@@ -416,75 +391,115 @@ function DecisionModal({
       footer={
         <>
           <button type="button" className="ghost" disabled={pending} onClick={onClose}>Cancel</button>
-          <button type="submit" form="decision-form" className={approve ? '' : 'danger'} disabled={pending}>
+          <button type="submit" form="decision-form" className={approve ? '' : 'danger'} disabled={pending || (noteRequired && !note.trim())}>
             {pending ? 'Working…' : approve ? 'Approve' : 'Reject'}
           </button>
         </>
       }
     >
       <form id="decision-form" onSubmit={submit}>
-        <label>Decision note
-          <textarea rows={3} value={note} onChange={(e) => setNote(e.target.value)} placeholder="Optional note for the applicant(s)" data-autofocus />
+        <label>{noteRequired ? 'Reason for rejection' : 'Decision note'}
+          <textarea
+            rows={3}
+            value={note}
+            onChange={(e) => setNote(e.target.value)}
+            placeholder={noteRequired ? 'Required — the applicant sees this' : 'Optional note for the applicant(s)'}
+            required={noteRequired}
+            data-autofocus
+          />
         </label>
       </form>
     </Modal>
   );
 }
 
-// ── Leave balances (peek) ────────────────────────────────────────────────────
-interface LeaveBalance {
-  leaveType: string; isPaid: boolean; annualEntitlement: number;
-  opening: number; accrued: number; used: number; encashed: number; available: number;
-}
-interface BalancesResponse { year: number; balances: LeaveBalance[] }
-
-function BalancesDrawer({ leave, onClose }: { leave: LeaveRow; onClose: () => void }) {
-  const url = `/human-resources/leaves/balances?employeeId=${encodeURIComponent(leave.employeeId)}`;
-  const query = useQuery({ queryKey: [url], queryFn: () => api.get(url).then((r) => r.data.data as BalancesResponse) });
-  const paid = (query.data?.balances ?? []).filter((b) => b.isPaid);
+// ── Balances + ledger statement ──────────────────────────────────────────
+/**
+ * The statement is the answer to "why is my balance 7.5?" — every credit and
+ * debit that produced it, in order. Under the legacy counters this drawer could
+ * only ever show the number itself.
+ */
+function BalancesDrawer({ leave, onClose }: { leave: LeaveRequestRow; onClose: () => void }) {
+  const balancesQuery = useQuery({
+    queryKey: leaveKeys.employeeBalances(leave.employeeId),
+    queryFn: () => leaveApi.employeeBalances(leave.employeeId),
+  });
+  const ledgerQuery = useQuery({
+    queryKey: leaveKeys.employeeLedger(leave.employeeId),
+    queryFn: () => leaveApi.employeeLedger(leave.employeeId, 50),
+  });
+  const tracked = (balancesQuery.data?.balances ?? []).filter((b) => b.isPaid);
+  const entries = ledgerQuery.data?.entries ?? [];
 
   return (
     <Drawer
       onClose={onClose}
       title="Leave balances"
-      subtitle={`${leave.employee.fullName}${query.data ? ` · ${query.data.year}` : ''}`}
+      subtitle={`${leave.employee?.fullName}${tracked[0] ? ` · ${tracked[0].periodLabel}` : ''}`}
       footer={<button onClick={onClose}>Close</button>}
     >
-      {query.isLoading ? (
+      {balancesQuery.isLoading ? (
         <p className="muted">Loading balances…</p>
-      ) : paid.length === 0 ? (
-        <p className="muted">No paid leave balances found for this employee.</p>
+      ) : tracked.length === 0 ? (
+        <p className="muted">No tracked leave balances found for this employee.</p>
       ) : (
         <div className="bal-chips">
-          {paid.map((b) => (
-            <div key={b.leaveType} className={`bal-chip${b.available <= 1 ? ' bal-low' : ''}`}>
-              <div className="bal-type">{titleCase(b.leaveType)}</div>
+          {tracked.map((b) => (
+            <div key={b.leaveTypeId} className={`bal-chip${b.available <= 1 ? ' bal-low' : ''}`}>
+              <div className="bal-type">{b.name}</div>
               <div className="bal-avail">{b.available}</div>
-              <div className="bal-sub">used {b.used} / {b.opening + b.accrued}</div>
+              <div className="bal-sub">used {b.used} / {b.opening + b.accrued}{b.pending > 0 ? ` · ${b.pending} held` : ''}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      <h3 style={{ marginTop: '1.25rem', marginBottom: '0.5rem' }}>Statement</h3>
+      {ledgerQuery.isLoading ? (
+        <p className="muted">Loading statement…</p>
+      ) : entries.length === 0 ? (
+        <p className="muted">No ledger entries yet.</p>
+      ) : (
+        <div className="table-scroll">
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Entry</th><th className="num">Cr</th><th className="num">Dr</th><th className="num">Balance</th></tr></thead>
+            <tbody>
+              {entries.map((e: LedgerEntry) => (
+                <tr key={e.id}>
+                  <td className="sm-text">{fmtDate(e.effectiveDate)}</td>
+                  <td className="sm-text">{e.leaveType?.code ?? '—'}</td>
+                  <td className="sm-text" title={e.reason ?? undefined}>{e.entryType.replace(/_/g, ' ').toLowerCase()}</td>
+                  <td className="num">{Number(e.credit) || ''}</td>
+                  <td className="num">{Number(e.debit) || ''}</td>
+                  <td className="num">{Number(e.balanceAfter)}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       )}
     </Drawer>
   );
 }
 
-// ── Team leave calendar ─────────────────────────────────────────────────────
-interface CalendarEntry {
-  leaveId: string;
-  employee: { fullName: string; employeeCode: string; branch?: { name: string } | null };
-  leaveType: string;
-  fromDate: string;
-  toDate: string;
-}
-interface CalendarResponse { month: number; year: number; entries: CalendarEntry[] }
-
+// ── Team leave calendar ──────────────────────────────────────────────────
+/**
+ * Who is off this month. The legacy module had a dedicated /calendar endpoint;
+ * the ledger module answers it from the request list filtered by date range,
+ * so there is one query path for "approved leave in a window" rather than two
+ * that can disagree.
+ */
 function LeaveCalendarView() {
   const [month, setMonth] = useState(CURRENT_MONTH);
   const [year, setYear] = useState(CURRENT_YEAR);
-  const url = `/human-resources/leaves/calendar?month=${month}&year=${year}`;
-  const query = useQuery({ queryKey: [url], queryFn: () => api.get(url).then((r) => r.data.data as CalendarResponse) });
-  const entries = query.data?.entries ?? [];
+  const from = new Date(Date.UTC(year, month - 1, 1)).toISOString().slice(0, 10);
+  const to = new Date(Date.UTC(year, month, 0)).toISOString().slice(0, 10);
+
+  const query = useQuery({
+    queryKey: [...leaveKeys.requests('calendar'), month, year],
+    queryFn: () => leaveApi.listRequests({ status: 'APPROVED', from, to, limit: 200 }),
+  });
+  const entries = query.data?.items ?? [];
 
   return (
     <>
@@ -509,14 +524,14 @@ function LeaveCalendarView() {
         <div className="panel">
           <div className="table-scroll">
             <table>
-              <thead><tr><th>Employee</th><th>Branch</th><th>Type</th><th>Dates</th></tr></thead>
+              <thead><tr><th>Employee</th><th>Type</th><th>Dates</th><th className="num">Days</th></tr></thead>
               <tbody>
                 {entries.map((e) => (
-                  <tr key={e.leaveId}>
-                    <td><strong>{e.employee.fullName}</strong> <span className="muted sm-text">{e.employee.employeeCode}</span></td>
-                    <td>{e.employee.branch?.name ?? '—'}</td>
-                    <td>{titleCase(e.leaveType)}</td>
+                  <tr key={e.id}>
+                    <td><strong>{e.employee?.fullName}</strong> <span className="muted sm-text">{e.employee?.employeeCode}</span></td>
+                    <td>{requestTypeLabel(e.lines)}</td>
                     <td>{fmtDayMonth(e.fromDate)}–{fmtDayMonth(e.toDate)}</td>
+                    <td className="num">{Number(e.totalDays)}</td>
                   </tr>
                 ))}
               </tbody>

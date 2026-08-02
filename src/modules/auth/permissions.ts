@@ -240,15 +240,22 @@ export const ACTION_ROLES = {
   'employee:create': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'employee:update': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'leave:decide': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  // Booking a leave for an employee and deleting one. Backend gates both with
-  // authorizeRoles(HR_MODULE_ROLES) — HR + Super Admin, no matrix widening.
+  // Recording leave on an employee's behalf and cancelling one. The ledger
+  // module has no delete — cancelling posts a reversing entry instead.
   'leave:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'payroll:run': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'payroll:markPaid': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'holiday:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'leave:accrue': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
-  // Org-wide leave-policy config (entitlement / accrual per leave type).
+  // Drafting a leave-policy version and assigning it to a group.
   'leave:managePolicy': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
+  // Activating a drafted version. Deliberately Super Admin only: entitlement is
+  // a real liability, so HR drafting and HR approving its own change would be
+  // no control at all. Mirrors the backend guard on POST …/versions/:id/activate.
+  'leave:approvePolicy': ['SUPER_ADMIN'],
+  // Creating a leave type. Types are data now, so this is an insert, not a
+  // migration plus a deploy.
+  'leave:manageTypes': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   'salaryAdvance:manage': ['SUPER_ADMIN', 'HUMAN_RESOURCES_ADMIN'],
   // ── HRJee HR-module actions. HR (+ Super Admin) only — Branch Managers hold
   // the modules for VIEW but never these write/approve actions (read-only).
@@ -312,7 +319,9 @@ export const ACTION_PERMISSIONS = {
   'payroll:markPaid': 'payroll:approve',
   'holiday:manage': 'holiday:create',
   'leave:accrue': 'leave:accrue',
-  'leave:managePolicy': 'leave:accrue',
+  'leave:managePolicy': 'leave:policyManage',
+  'leave:approvePolicy': 'leave:policyApprove',
+  'leave:manageTypes': 'leave:typeManage',
   'salaryAdvance:manage': 'salary_advance:create',
   'shift:manage': 'shift:create',
   'attendance:approve': 'attendance:approve',

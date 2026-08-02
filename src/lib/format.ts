@@ -26,10 +26,97 @@ export const isoLocalDate = (d: Date): string =>
 export const titleCase = (value: string): string =>
   value ? value.charAt(0).toUpperCase() + value.slice(1).toLowerCase().replace(/_/g, ' ') : value;
 
-/** Best human-readable message from an Axios/error, falling back to a default. */
+/** Domain acronyms that must not be sentence-cased into "Lwp" / "Hr". */
+const ACRONYMS = new Set(['lwp', 'hr', 'id', 'pf', 'esi', 'tds', 'emi', 'kyc', 'ifsc', 'upi']);
+
+/** 'periodSchemeId' → 'Period scheme'; 'lwpLeaveTypeId' → 'LWP leave type'. */
+const fieldLabel = (key: string): string =>
+  key
+    .replace(/Id$/, '')
+    .replace(/([A-Z])/g, (c) => ` ${c.toLowerCase()}`)
+    .replace(/[._]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .split(' ')
+    .map((word, index) =>
+      ACRONYMS.has(word) ? word.toUpperCase()
+      : index === 0 ? word.replace(/^./, (c) => c.toUpperCase())
+      : word,
+    )
+    .join(' ');
+
+/**
+ * Zod's default messages are written for developers ("Invalid uuid", "String
+ * must contain at least 3 character(s)"). Rewrite the common ones into
+ * something an HR user can act on. Anything unrecognised passes through, so a
+ * schema that supplies its own wording is never mangled.
+ */
+const humanizeValidation = (message: string): string => {
+  const rules: [RegExp, string | ((m: RegExpMatchArray) => string)][] = [
+    [/^required$/i, 'Required.'],
+    [/^invalid uuid$/i, 'Choose an option.'],
+    [/^invalid date/i, 'Choose a valid date.'],
+    [/^invalid email/i, 'Enter a valid email address.'],
+    [/^expected number, received nan$/i, 'Enter a number.'],
+    [/^expected (\w+), received (\w+)$/i, (m) => `Expected a ${m[1]}, got ${m[2]}.`],
+    [/^string must contain at least (\d+) character/i, (m) => `Use at least ${m[1]} character${m[1] === '1' ? '' : 's'}.`],
+    [/^string must contain at most (\d+) character/i, (m) => `Use at most ${m[1]} character${m[1] === '1' ? '' : 's'}.`],
+    [/^number must be greater than or equal to ([\d.]+)$/i, (m) => `Must be ${m[1]} or more.`],
+    [/^number must be less than or equal to ([\d.]+)$/i, (m) => `Must be ${m[1]} or less.`],
+    [/^number must be greater than ([\d.]+)$/i, (m) => `Must be more than ${m[1]}.`],
+    [/^array must contain at least (\d+) element/i, (m) => `Add at least ${m[1]}.`],
+  ];
+
+  for (const [pattern, replacement] of rules) {
+    const match = message.match(pattern);
+    if (match) return typeof replacement === 'string' ? replacement : replacement(match);
+  }
+  return message;
+};
+
+interface ApiErrorBody {
+  message?: string;
+  errors?: { message?: string }[];
+  /** Zod fieldErrors from validateRequest: { field: ['reason', …] }. */
+  details?: Record<string, string[] | undefined> | unknown;
+}
+
+const bodyOf = (error: unknown): ApiErrorBody | undefined =>
+  error instanceof AxiosError ? (error.response?.data as ApiErrorBody | undefined) : undefined;
+
+/**
+ * Per-field validation problems from a 422, as { field: 'reason' }.
+ *
+ * The API already sends these — `validateRequest` puts Zod's `fieldErrors` in
+ * `details` — but nothing read them, so every validation failure surfaced as
+ * the generic "Some of the submitted values are invalid." and left the user
+ * guessing which input was wrong. Forms can use this to mark the field itself.
+ */
+export const apiFieldErrors = (error: unknown): Record<string, string> => {
+  const details = bodyOf(error)?.details;
+  if (!details || typeof details !== 'object' || Array.isArray(details)) return {};
+
+  const out: Record<string, string> = {};
+  for (const [field, messages] of Object.entries(details as Record<string, unknown>)) {
+    const first = Array.isArray(messages) ? messages.find((m) => typeof m === 'string') : messages;
+    if (typeof first === 'string' && first.trim()) out[field] = humanizeValidation(first.trim());
+  }
+  return out;
+};
+
+/**
+ * Best human-readable message from an error, falling back to a default.
+ *
+ * Field-level problems win over the generic wrapper: "Period scheme: Required"
+ * tells the user what to change, "Some of the submitted values are invalid."
+ * does not.
+ */
 export const apiMessage = (error: unknown, fallback: string): string => {
   if (error instanceof AxiosError) {
-    const data = error.response?.data as { message?: string; errors?: { message?: string }[] } | undefined;
+    const data = bodyOf(error);
+    const fields = apiFieldErrors(error);
+    const lines = Object.entries(fields).map(([field, message]) => `${fieldLabel(field)}: ${message}`);
+    if (lines.length) return lines.join(' · ');
     return data?.message || data?.errors?.[0]?.message || error.message || fallback;
   }
   return error instanceof Error ? error.message : fallback;

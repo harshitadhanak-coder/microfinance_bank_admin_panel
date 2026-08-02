@@ -813,6 +813,13 @@ button.icon-btn.action-trigger.active { background: #F3EFE6; color: var(--ink); 
 .info-box { background: var(--status-info-bg); color: var(--status-info-fg); }
 .error-box svg, .success-box svg, .info-box svg { flex: none; margin-top: 1px; }
 
+/* Inline note under the specific input the server rejected, so a 422 points at
+   the field rather than only summarising at the bottom of the form. */
+.error-text { color: var(--red); font-weight: 500; }
+label:has(> .error-text) input,
+label:has(> .error-text) select,
+label:has(> .error-text) textarea { border-color: var(--red); }
+
 /* Tabbed detail (employee modal) */
 .tabs { display: flex; gap: 0.2rem; border-bottom: 1px solid var(--line); margin: 0.25rem 0 0.9rem; flex-wrap: wrap; }
 .tab {
@@ -893,10 +900,15 @@ button.icon-btn.action-trigger.active { background: #F3EFE6; color: var(--ink); 
 .palette-foot { display: flex; gap: 1rem; padding: 0.45rem 0.85rem; border-top: 1px solid var(--line); font-size: 0.74rem; color: var(--muted); }
 .palette-foot .palette-kbd { margin-right: 0.25rem; }
 
+/* Sits ABOVE .drawer-overlay and .palette-overlay (both 60). A modal is a
+   blocking confirmation, so it has to be the topmost interactive layer —
+   at 50 a confirm opened from inside a drawer rendered behind it and could
+   be neither read nor clicked. Below .action-menu (1200) and toasts (2000),
+   which are deliberately above everything. */
 .modal-overlay {
   position: fixed; inset: 0; background: rgba(11, 26, 20, 0.55);
   backdrop-filter: blur(4px);
-  display: grid; place-items: center; padding: 1rem; z-index: 50;
+  display: grid; place-items: center; padding: 1rem; z-index: 70;
   animation: overlay-in 0.18s ease-out;
 }
 .modal {
@@ -1747,6 +1759,13 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
 .cell-link { color: var(--color-ink); font-weight: 600; cursor: pointer; text-decoration: none; }
 .cell-link:hover { color: var(--color-brass-dark); text-decoration: underline; }
 /* Inline checkbox rows in Form cards. */
+/* Standalone checkbox label. Previously `.check` was only styled inside
+   `.check-row`, so a checkbox dropped straight into a `.form-grid` inherited
+   the grid's stacked block layout and rendered as a large detached square
+   above its text. */
+.check { display: inline-flex; flex-direction: row; align-items: center; gap: 0.5rem; font-weight: 500; }
+.check input[type="checkbox"] { width: auto; min-height: 0; margin: 0; flex: none; }
+
 .check-row { display: flex; flex-wrap: wrap; gap: var(--space-4); margin-top: var(--space-2); }
 .check-row .check { display: inline-flex; flex-direction: row; align-items: center; gap: 0.5rem; font: var(--text-sm); font-weight: 500; }
 .check-row .check input { width: auto; min-height: 0; }
