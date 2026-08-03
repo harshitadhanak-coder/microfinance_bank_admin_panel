@@ -9,6 +9,13 @@ export interface AttendanceRow {
   attendanceDate: string;
   checkInAt?: string | null;
   checkOutAt?: string | null;
+  /** Place name resolved at punch time; null when GPS was unavailable. */
+  checkInLocation?: string | null;
+  checkOutLocation?: string | null;
+  checkInLatitude?: string | number | null;
+  checkInLongitude?: string | number | null;
+  checkOutLatitude?: string | number | null;
+  checkOutLongitude?: string | number | null;
   workedMinutes: number;
   source: string;
   isHoliday: boolean;
@@ -43,6 +50,12 @@ export interface CalendarDay {
   overtimeMinutes?: number;
   checkInAt?: string | null;
   checkOutAt?: string | null;
+  checkInLocation?: string | null;
+  checkOutLocation?: string | null;
+  checkInLatitude?: string | number | null;
+  checkInLongitude?: string | number | null;
+  checkOutLatitude?: string | number | null;
+  checkOutLongitude?: string | number | null;
   leaveType?: string | null;
   holidayName?: string | null;
 }
@@ -99,3 +112,43 @@ export const fmtWorked = (minutes: number): string =>
   minutes > 0 ? `${Math.floor(minutes / 60)}h ${minutes % 60}m` : '—';
 export const otHours = (minutes?: number): string =>
   minutes && minutes > 0 ? `${(minutes / 60).toFixed(1)}h` : '—';
+
+/**
+ * The exact position of a punch, ready to display and to plot.
+ *
+ * `display` is for reading, `mapUrl` for proving. A geocoded name can only ever
+ * be as precise as the underlying map data — in thinly-mapped areas the best
+ * available answer names a whole town — so the coordinates are what actually
+ * establish where somebody was, and every punch that has them gets a link to
+ * see the pin.
+ */
+export const punchCoordinates = (
+  latitude?: string | number | null,
+  longitude?: string | number | null,
+): { display: string; mapUrl: string } | null => {
+  if (latitude == null || longitude == null) return null;
+  const lat = Number(latitude);
+  const lon = Number(longitude);
+  if (!Number.isFinite(lat) || !Number.isFinite(lon)) return null;
+  return {
+    display: `${lat.toFixed(5)}, ${lon.toFixed(5)}`,
+    mapUrl: `https://www.google.com/maps/search/?api=1&query=${lat},${lon}`,
+  };
+};
+
+/**
+ * How one punch's place reads on screen: the name resolved when the punch was
+ * recorded, falling back to the raw coordinates.
+ *
+ * The fallback matters — a punch whose coordinates were captured before place
+ * names existed, or whose lookup failed, still knows *where* it happened, and
+ * showing the numbers is far better than an empty cell that implies no GPS.
+ */
+export const punchLocation = (
+  name?: string | null,
+  latitude?: string | number | null,
+  longitude?: string | number | null,
+): string | null => {
+  if (name && name.trim()) return name.trim();
+  return punchCoordinates(latitude, longitude)?.display ?? null;
+};

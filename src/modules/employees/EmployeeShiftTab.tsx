@@ -6,8 +6,9 @@ import { Badge } from '../../components/Badge';
 import { Drawer } from '../../components/Drawer';
 import { Form, FormGrid, Field } from '../../components/Form';
 import { EmptyState } from '../../components/EmptyState';
+import { ConfirmDialog } from '../../components/Modal';
 import { useToast } from '../../components/Toast';
-import { CalendarCheck, Loader, Pencil, Plus } from '../../components/icons';
+import { CalendarCheck, Loader, Pencil, Plus, Trash2 } from '../../components/icons';
 import { apiMessage, fmtDate } from '../../lib/format';
 
 const WEEKDAYS = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -31,6 +32,22 @@ interface AssignmentRow {
 }
 
 /**
+ * The employee's shift as the backend resolves it: taken from the employee
+ * record (what attendance reads) and enriched by the open history row when there
+ * is one. `tracked` is false for a shift set before the assignment log existed —
+ * still a real shift, just without a change record behind it.
+ */
+interface CurrentAssignment {
+  shift: { id: string; code: string; name: string };
+  effectiveFrom: string | null;
+  note: string | null;
+  assignmentId: string | null;
+  tracked: boolean;
+}
+
+interface AssignmentResponse { current: CurrentAssignment | null; history: AssignmentRow[] }
+
+/**
  * Employee → Shift tab. Assign / change this employee's shift and read its
  * history, all in one place instead of the branch-wide Shifts screen.
  *
@@ -51,12 +68,15 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
   });
   const historyQuery = useQuery({
     queryKey: ['/human-resources/shifts/assignments', employeeId],
-    queryFn: () => api.get(`/human-resources/shifts/assignments/${employeeId}`).then((r) => r.data.data as AssignmentRow[]),
+    queryFn: () => api.get(`/human-resources/shifts/assignments/${employeeId}`).then((r) => r.data.data as AssignmentResponse),
   });
 
   const shifts = shiftsQuery.data ?? [];
-  const history = historyQuery.data ?? [];
-  const current = history.find((h) => h.isCurrent) ?? null;
+  const history = historyQuery.data?.history ?? [];
+  // Straight from the backend, not inferred from history: a shift set on the
+  // employee form never wrote a history row, and reading history alone made this
+  // tab claim "No shift assigned" for staff who clearly had one.
+  const current = historyQuery.data?.current ?? null;
   const currentShift = current ? shifts.find((s) => s.id === current.shift.id) ?? null : null;
 
   const [shiftId, setShiftId] = useState('');
@@ -66,6 +86,7 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
   // Assigning happens in a slide-over so the tab stays a clean current-shift +
   // history read-out instead of a permanently-open form.
   const [assignOpen, setAssignOpen] = useState(false);
+  const [removing, setRemoving] = useState(false);
 
   const assign = useMutation({
     mutationFn: () => api.post(`/human-resources/shifts/${shiftId}/assign`, {
@@ -78,11 +99,27 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
       qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assignments', employeeId] });
       // Overview's "Shift" row reads the denormalised pointer on the employee.
       qc.invalidateQueries({ queryKey: ['/employees', employeeId] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assign-options'] });
       setShiftId(''); setEffectiveFrom(''); setNote(''); setError('');
       setAssignOpen(false);
       toast.success(data.assigned ? 'Shift assigned.' : 'Employee is already on that shift.');
     },
     onError: (err) => setError(apiMessage(err, 'Could not assign the shift.')),
+  });
+
+  // Taking the shift off is its own action, not "assign nothing": it closes the
+  // assignment and drops the employee back to the global attendance policy.
+  const unassign = useMutation({
+    mutationFn: () => api.post(`/human-resources/shifts/${current!.shift.id}/unassign`, { employeeIds: [employeeId] }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assignments', employeeId] });
+      qc.invalidateQueries({ queryKey: ['/employees', employeeId] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts'] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assign-options'] });
+      setRemoving(false);
+      toast.success('Shift removed.');
+    },
+    onError: (err) => { setRemoving(false); toast.error(apiMessage(err, 'Could not remove the shift.')); },
   });
 
   const submit = (e: FormEvent) => {
@@ -100,9 +137,14 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
       <Card
         title="Current shift"
         action={canManage && (
-          <button className="sm" onClick={openAssign}>
-            {current ? <><Pencil size={14} /> Change shift</> : <><Plus size={14} /> Assign shift</>}
-          </button>
+          <div className="row-actions">
+            {current && (
+              <button className="sm ghost" onClick={() => setRemoving(true)}><Trash2 size={14} /> Remove shift</button>
+            )}
+            <button className="sm" onClick={openAssign}>
+              {current ? <><Pencil size={14} /> Change shift</> : <><Plus size={14} /> Assign shift</>}
+            </button>
+          </div>
         )}
       >
         {loading ? (
@@ -125,7 +167,12 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
                 <div><dt>Weekly off</dt><dd>{currentShift.weeklyOffDays.length ? currentShift.weeklyOffDays.map((d) => WEEKDAYS[d]).join(', ') : '—'}</dd></div>
               </>
             )}
-            <div><dt>Effective from</dt><dd>{fmtDate(current.effectiveFrom)}</dd></div>
+            <div>
+              <dt>Effective from</dt>
+              <dd>{current.effectiveFrom
+                ? fmtDate(current.effectiveFrom)
+                : <span className="muted">Set on the employee record — no change log</span>}</dd>
+            </div>
             {current.note && <div><dt>Note</dt><dd>{current.note}</dd></div>}
           </dl>
         )}
@@ -201,6 +248,19 @@ export default function EmployeeShiftTab({ employeeId, canManage }: { employeeId
             {error && <div className="error-box">{error}</div>}
           </Form>
         </Drawer>
+      )}
+
+      {removing && current && (
+        <ConfirmDialog
+          tone="danger"
+          icon={<Trash2 size={20} />}
+          title="Remove shift"
+          message={<>This takes the employee off <strong>{current.shift.name}</strong>. Attendance falls back to the global policy until another shift is assigned.</>}
+          confirmLabel="Remove shift"
+          loading={unassign.isPending}
+          onConfirm={() => unassign.mutate()}
+          onCancel={() => setRemoving(false)}
+        />
       )}
     </div>
   );

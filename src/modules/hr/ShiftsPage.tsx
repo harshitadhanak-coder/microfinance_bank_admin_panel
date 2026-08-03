@@ -6,6 +6,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { ConfirmDialog, Modal } from '../../components/Modal';
+import { EmptyState } from '../../components/EmptyState';
 import { MultiSelect } from '../../components/MultiSelect';
 import { CalendarCheck, Pencil, Plus, Trash2, Users } from '../../components/icons';
 import { apiMessage } from '../../lib/format';
@@ -30,10 +31,30 @@ interface Shift {
   effectiveFrom: string | null;
   description: string | null;
   isActive: boolean;
+  /** Employees on this shift right now — what blocks a delete. */
+  employeeCount: number;
+  /** Assignment-log rows pointing at it, including closed ones. */
+  assignmentCount: number;
 }
 
-interface EmployeeOption { id: string; fullName: string; employeeCode: string }
+/** Assign-picker row: every assignable employee with the shift they are on now. */
+interface EmployeeOption {
+  id: string;
+  fullName: string;
+  employeeCode: string;
+  shift: { id: string; name: string } | null;
+}
 interface BranchOption { id: string; name: string }
+
+/** One employee currently on a shift, as listed by the "Assigned employees" view. */
+interface AssignedEmployee {
+  id: string;
+  employeeCode: string;
+  fullName: string;
+  designation: string | null;
+  employmentStatus: string;
+  branch: { id: string; name: string } | null;
+}
 
 export default function ShiftsPage() {
   const qc = useQueryClient();
@@ -43,6 +64,7 @@ export default function ShiftsPage() {
 
   const [editing, setEditing] = useState<Shift | 'new' | null>(null);
   const [assignFor, setAssignFor] = useState<Shift | null>(null);
+  const [employeesFor, setEmployeesFor] = useState<Shift | null>(null);
   const [deleteFor, setDeleteFor] = useState<Shift | null>(null);
 
   const query = useQuery({
@@ -65,6 +87,17 @@ export default function ShiftsPage() {
     { header: 'Grace', render: (s) => <span className="num">{s.lateAfterMinutes ?? s.graceMinutes} min</span> },
     { header: 'Full / Half day', render: (s) => <span className="num">{s.fullDayMinutes} / {s.halfDayAfterMinutes ?? s.halfDayMinutes} min</span> },
     { header: 'Weekly off', render: (s) => s.weeklyOffDays.length ? s.weeklyOffDays.map((d) => WEEKDAYS[d]).join(', ') : '—' },
+    {
+      header: 'Employees',
+      // Clickable, because "who is on this shift?" is the question every
+      // assign / delete decision starts from.
+      render: (s) => (
+        s.employeeCount
+          ? <button type="button" className="link-btn num" onClick={() => setEmployeesFor(s)}>{s.employeeCount}</button>
+          : <span className="muted">None</span>
+      ),
+      sortValue: (s) => s.employeeCount,
+    },
     { header: 'Status', render: (s) => <Badge status={s.isActive ? 'ACTIVE' : 'INACTIVE'}>{s.isActive ? 'Active' : 'Inactive'}</Badge>, sortValue: (s) => String(s.isActive) },
   ];
 
@@ -74,7 +107,8 @@ export default function ShiftsPage() {
       render: (s) => (
         <div className="actions-cell">
           <ActionMenu items={[
-            { key: 'assign', label: 'Assign employees', icon: <Users size={15} />, onSelect: () => setAssignFor(s) },
+            { key: 'assigned', label: `Assigned employees (${s.employeeCount})`, icon: <Users size={15} />, onSelect: () => setEmployeesFor(s) },
+            { key: 'assign', label: 'Assign employees', icon: <Plus size={15} />, onSelect: () => setAssignFor(s) },
             { key: 'edit', label: 'Edit', icon: <Pencil size={15} />, onSelect: () => setEditing(s) },
             { key: 'delete', label: 'Delete', icon: <Trash2 size={15} />, tone: 'danger', separatorBefore: true, onSelect: () => setDeleteFor(s) },
           ]} />
@@ -109,20 +143,50 @@ export default function ShiftsPage() {
       )}
 
       {assignFor && (
-        <AssignShiftModal shift={assignFor} onClose={() => setAssignFor(null)} onDone={(msg) => { setAssignFor(null); toast.success(msg); }} />
+        <AssignShiftModal shift={assignFor} onClose={() => setAssignFor(null)} onDone={(msg) => { setAssignFor(null); refresh(); toast.success(msg); }} />
+      )}
+
+      {employeesFor && (
+        <ShiftEmployeesModal
+          shift={employeesFor}
+          onClose={() => setEmployeesFor(null)}
+          onChanged={(msg) => { refresh(); toast.success(msg); }}
+        />
       )}
 
       {deleteFor && (
-        <ConfirmDialog
-          tone="danger"
-          icon={<Trash2 size={20} />}
-          title="Delete shift"
-          message={<>This removes the shift. A shift assigned to employees (current or past) cannot be deleted — mark it inactive instead.<br /><span className="muted sm-text">{deleteFor.name} · {deleteFor.code}</span></>}
-          confirmLabel="Delete"
-          loading={remove.isPending}
-          onConfirm={() => remove.mutate(deleteFor.id)}
-          onCancel={() => setDeleteFor(null)}
-        />
+        // Two different situations, so two different dialogs: staff still on the
+        // shift is a dead end until they are moved, and the page says so rather
+        // than letting the delete fail with a server error.
+        deleteFor.employeeCount > 0 ? (
+          <ConfirmDialog
+            tone="warn"
+            icon={<Users size={20} />}
+            title="Shift is still in use"
+            message={<>
+              <strong>{deleteFor.employeeCount}</strong> employee{deleteFor.employeeCount === 1 ? ' is' : 's are'} still on <strong>{deleteFor.name}</strong>. Unassign them or move them to another shift first — then the shift can be deleted.
+              <br /><span className="muted sm-text">Marking the shift inactive keeps its history and stops new assignments.</span>
+            </>}
+            confirmLabel="View employees"
+            onConfirm={() => { setEmployeesFor(deleteFor); setDeleteFor(null); }}
+            onCancel={() => setDeleteFor(null)}
+          />
+        ) : (
+          <ConfirmDialog
+            tone="danger"
+            icon={<Trash2 size={20} />}
+            title="Delete shift"
+            message={<>
+              No employee is on this shift, so it can be removed.
+              {deleteFor.assignmentCount > 0 && <> Its {deleteFor.assignmentCount} past assignment record{deleteFor.assignmentCount === 1 ? '' : 's'} will be deleted with it.</>}
+              <br /><span className="muted sm-text">{deleteFor.name} · {deleteFor.code}</span>
+            </>}
+            confirmLabel="Delete"
+            loading={remove.isPending}
+            onConfirm={() => remove.mutate(deleteFor.id)}
+            onCancel={() => setDeleteFor(null)}
+          />
+        )
       )}
     </>
   );
@@ -216,8 +280,143 @@ function ShiftFormModal({ shift, onClose, onDone }: { shift: Shift | null; onClo
   );
 }
 
+// ── Assigned employees ─────────────────────────────────────────────────────
+/**
+ * Who is on a shift, and the way off it. This is the missing half of shift
+ * management: a shift could be assigned from three places but never unassigned,
+ * so "cannot be deleted, employees are still on it" was a dead end with no
+ * screen that even said who those employees were.
+ *
+ * Unassigning clears the employee's shift — attendance then follows the global
+ * policy — so the alternative (move them to another shift) is offered too.
+ */
+function ShiftEmployeesModal({ shift, onClose, onChanged }: { shift: Shift; onClose: () => void; onChanged: (msg: string) => void }) {
+  const qc = useQueryClient();
+  const [selected, setSelected] = useState<string[]>([]);
+  const [confirming, setConfirming] = useState(false);
+  const [error, setError] = useState('');
+
+  const query = useQuery({
+    queryKey: ['/human-resources/shifts', shift.id, 'employees'],
+    queryFn: () => api.get(`/human-resources/shifts/${shift.id}/employees`)
+      .then((r) => r.data.data as { employees: AssignedEmployee[]; employeeCount: number; assignmentCount: number }),
+  });
+  const employees = query.data?.employees ?? [];
+  const allSelected = employees.length > 0 && selected.length === employees.length;
+
+  const unassign = useMutation({
+    mutationFn: () => api.post(`/human-resources/shifts/${shift.id}/unassign`, selected.length ? { employeeIds: selected } : {}),
+    onSuccess: (res) => {
+      const { unassigned } = res.data.data as { unassigned: number };
+      setSelected([]); setConfirming(false);
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts', shift.id, 'employees'] });
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assign-options'] });
+      onChanged(`Removed ${unassigned} employee${unassigned === 1 ? '' : 's'} from ${shift.name}.`);
+    },
+    onError: (err) => { setConfirming(false); setError(apiMessage(err, 'Could not unassign the employees.')); },
+  });
+
+  const toggle = (id: string) => setSelected((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]));
+  const targetCount = selected.length || employees.length;
+
+  return (
+    <>
+      <Modal
+        size="lg"
+        onClose={onClose}
+        icon={<Users size={20} />}
+        title={`Employees on "${shift.name}"`}
+        subtitle="Unassign to free the shift for deletion, or assign them to a different shift instead"
+        footer={<>
+          <button type="button" className="ghost" onClick={onClose}>Close</button>
+          <button
+            type="button"
+            className="danger"
+            disabled={employees.length === 0 || unassign.isPending}
+            onClick={() => { setError(''); setConfirming(true); }}
+          >
+            {selected.length ? `Remove ${selected.length} from shift` : 'Remove all from shift'}
+          </button>
+        </>}
+      >
+        {query.isLoading ? (
+          <p className="muted">Loading…</p>
+        ) : employees.length === 0 ? (
+          <EmptyState
+            variant="no-data"
+            title="No employees on this shift"
+            message={query.data?.assignmentCount
+              ? `Nobody is on it now. ${query.data.assignmentCount} past assignment record${query.data.assignmentCount === 1 ? '' : 's'} remain, and are removed with the shift.`
+              : 'This shift can be deleted.'}
+          />
+        ) : (
+          <>
+            <p className="muted sm-text">
+              {employees.length} employee{employees.length === 1 ? '' : 's'} currently follow this shift's timings.
+              Unassigned staff fall back to the global attendance policy.
+            </p>
+            <div className="table-scroll">
+              <table className="perm-table">
+                <thead>
+                  <tr>
+                    <th style={{ width: '2.2rem' }}>
+                      <input
+                        type="checkbox"
+                        aria-label="Select all"
+                        checked={allSelected}
+                        onChange={() => setSelected(allSelected ? [] : employees.map((e) => e.id))}
+                      />
+                    </th>
+                    <th>Employee</th>
+                    <th>Designation</th>
+                    <th>Branch</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {employees.map((emp) => (
+                    <tr key={emp.id}>
+                      <td>
+                        <input
+                          type="checkbox"
+                          aria-label={`Select ${emp.fullName}`}
+                          checked={selected.includes(emp.id)}
+                          onChange={() => toggle(emp.id)}
+                        />
+                      </td>
+                      <td><strong>{emp.fullName}</strong><div className="muted sm-text">{emp.employeeCode}</div></td>
+                      <td className="sm-text">{emp.designation ?? '—'}</td>
+                      <td className="sm-text">{emp.branch?.name ?? '—'}</td>
+                      <td><Badge status={emp.employmentStatus}>{emp.employmentStatus.replace(/_/g, ' ')}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
+        )}
+        {error && <div className="error-box">{error}</div>}
+      </Modal>
+
+      {confirming && (
+        <ConfirmDialog
+          tone="danger"
+          icon={<Users size={20} />}
+          title={`Remove ${targetCount} employee${targetCount === 1 ? '' : 's'} from this shift?`}
+          message={<>Their current assignment is closed and attendance falls back to the global policy until another shift is assigned.</>}
+          confirmLabel="Remove from shift"
+          loading={unassign.isPending}
+          onConfirm={() => unassign.mutate()}
+          onCancel={() => setConfirming(false)}
+        />
+      )}
+    </>
+  );
+}
+
 // ── Assign ─────────────────────────────────────────────────────────────────
 function AssignShiftModal({ shift, onClose, onDone }: { shift: Shift; onClose: () => void; onDone: (msg: string) => void }) {
+  const qc = useQueryClient();
   const [mode, setMode] = useState<'employees' | 'branch'>('employees');
   const [employeeIds, setEmployeeIds] = useState<string[]>([]);
   const [branchId, setBranchId] = useState('');
@@ -225,9 +424,14 @@ function AssignShiftModal({ shift, onClose, onDone }: { shift: Shift; onClose: (
   const [note, setNote] = useState('');
   const [error, setError] = useState('');
 
+  // Whether to leave out staff who already sit on another shift. Off by default:
+  // moving someone from one shift to another is the common case, so hiding them
+  // would be the very thing that makes an employee "missing" from the picker.
+  const [onlyUnassigned, setOnlyUnassigned] = useState(false);
+
   const employeesQuery = useQuery({
-    queryKey: ['/employees', 'shift-assign-options'],
-    queryFn: () => api.get('/employees?pageSize=300').then((r) => r.data.data as EmployeeOption[]),
+    queryKey: ['/human-resources/shifts/assign-options'],
+    queryFn: () => api.get('/human-resources/shifts/assign-options').then((r) => r.data.data as EmployeeOption[]),
   });
   const branchesQuery = useQuery({
     queryKey: ['/branches', 'shift-assign-options'],
@@ -244,6 +448,9 @@ function AssignShiftModal({ shift, onClose, onDone }: { shift: Shift; onClose: (
     },
     onSuccess: (res) => {
       const data = res.data.data as { assigned: number; unchanged: number };
+      // The picker labels each employee with their current shift, so it is stale
+      // the moment an assignment lands.
+      qc.invalidateQueries({ queryKey: ['/human-resources/shifts/assign-options'] });
       onDone(`Assigned ${data.assigned} employee${data.assigned === 1 ? '' : 's'}${data.unchanged ? `, ${data.unchanged} already on this shift` : ''}.`);
     },
     onError: (err) => setError(apiMessage(err, 'Could not assign the shift.')),
@@ -251,7 +458,16 @@ function AssignShiftModal({ shift, onClose, onDone }: { shift: Shift; onClose: (
 
   const submit = (e: FormEvent) => { e.preventDefault(); setError(''); assign.mutate(); };
   const disabled = assign.isPending || (mode === 'employees' ? employeeIds.length === 0 : !branchId);
-  const options = (employeesQuery.data ?? []).map((emp) => ({ id: emp.id, name: `${emp.fullName} (${emp.employeeCode})` }));
+
+  const roster = employeesQuery.data ?? [];
+  const visible = onlyUnassigned ? roster.filter((emp) => !emp.shift) : roster;
+  // The current shift is part of the option label, so the search box finds
+  // "everyone on HO Team" as readily as it finds one person by name or code.
+  const options = visible.map((emp) => ({
+    id: emp.id,
+    name: `${emp.fullName} (${emp.employeeCode}) · ${emp.shift ? (emp.shift.id === shift.id ? 'already on this shift' : emp.shift.name) : 'No shift'}`,
+  }));
+  const alreadyHere = roster.filter((emp) => emp.shift?.id === shift.id).length;
 
   return (
     <Modal
@@ -271,9 +487,23 @@ function AssignShiftModal({ shift, onClose, onDone }: { shift: Shift; onClose: (
           <button type="button" className={mode === 'branch' ? 'on' : ''} onClick={() => setMode('branch')}>Entire branch</button>
         </div>
         {mode === 'employees' ? (
-          <label className="span-all">Employees
+          <div className="span-all">
+            <span className="field-label">Employees</span>
             <MultiSelect options={options} selected={employeeIds} onChange={setEmployeeIds} allLabel="Select employees…" noun="employee" />
-          </label>
+            <p className="muted sm-text">
+              {employeesQuery.isLoading
+                ? 'Loading employees…'
+                : <>
+                    {options.length} of {roster.length} employee{roster.length === 1 ? '' : 's'} listed, A–Z, each showing the shift they are on now.
+                    {alreadyHere > 0 && ` ${alreadyHere} already on this shift.`}
+                    {' '}Someone on another shift is still selectable — assigning moves them here.
+                  </>}
+            </p>
+            <label className="checkbox">
+              <input type="checkbox" checked={onlyUnassigned} onChange={(e) => { setOnlyUnassigned(e.target.checked); setEmployeeIds([]); }} />
+              Only show employees without a shift
+            </label>
+          </div>
         ) : (
           <label className="span-all">Branch
             <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required>

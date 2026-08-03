@@ -109,6 +109,9 @@ export const Landmark = (p: IconProps) => (
 export const Target = (p: IconProps) => (
   <svg {...base(p)}><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>
 );
+export const MapPin = (p: IconProps) => (
+  <svg {...base(p)}><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0" /><circle cx="12" cy="10" r="3" /></svg>
+);
 export const ListChecks = (p: IconProps) => (
   <svg {...base(p)}><path d="m3 17 2 2 4-4" /><path d="m3 7 2 2 4-4" /><path d="M13 6h8" /><path d="M13 12h8" /><path d="M13 18h8" /></svg>
 );

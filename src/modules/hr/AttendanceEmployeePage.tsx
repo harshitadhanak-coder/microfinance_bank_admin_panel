@@ -15,6 +15,7 @@ import {
   CalendarResponse, CalendarDay,
   STATUS_TONE, statusText, STATUS_LEGEND, fmtTime, fmtWorked, otHours,
 } from './attendanceShared';
+import { PunchPlace } from './PunchPlace';
 
 interface EmployeeDetail {
   id: string; fullName: string; employeeCode: string; designation: string;
@@ -86,11 +87,13 @@ export default function AttendanceEmployeePage() {
 
   const s = cal?.summary;
 
-  const columns: Column<{ id: string; attendanceDate: string; status?: CalendarDay['status']; isLate?: boolean; lateMinutes?: number; checkInAt?: string | null; checkOutAt?: string | null; workedMinutes: number; overtimeMinutes?: number; source: string }>[] = [
+  const columns: Column<{ id: string; attendanceDate: string; status?: CalendarDay['status']; isLate?: boolean; lateMinutes?: number; checkInAt?: string | null; checkOutAt?: string | null; checkInLocation?: string | null; checkOutLocation?: string | null; checkInLatitude?: string | number | null; checkInLongitude?: string | number | null; checkOutLatitude?: string | number | null; checkOutLongitude?: string | number | null; workedMinutes: number; overtimeMinutes?: number; source: string }>[] = [
     { header: 'Date', render: (a) => fmtDate(a.attendanceDate), sortValue: (a) => a.attendanceDate },
     { header: 'Status', render: (a) => a.status ? <Badge tone={STATUS_TONE[a.status]}>{statusText(a.status)}</Badge> : '—' },
     { header: 'Check in', render: (a) => fmtTime(a.checkInAt) },
+    { header: 'In at', render: (a) => <PunchPlace name={a.checkInLocation} latitude={a.checkInLatitude} longitude={a.checkInLongitude} /> },
     { header: 'Check out', render: (a) => fmtTime(a.checkOutAt) },
+    { header: 'Out at', render: (a) => <PunchPlace name={a.checkOutLocation} latitude={a.checkOutLatitude} longitude={a.checkOutLongitude} /> },
     { header: 'Worked', render: (a) => fmtWorked(a.workedMinutes) },
     { header: 'Late by', render: (a) => (a.lateMinutes ? `${a.lateMinutes}m` : '—') },
     { header: 'OT', render: (a) => otHours(a.overtimeMinutes) },

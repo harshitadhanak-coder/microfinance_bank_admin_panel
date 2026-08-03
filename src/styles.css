@@ -1377,6 +1377,26 @@ label:has(> .error-text) textarea { border-color: var(--red); }
 }
 
 /* ── HR module upgrade: toasts, attendance chips, calendar, balances ────────── */
+/* Portal tooltip (components/Tooltip.tsx). Rendered on <body> and fixed, so it
+   escapes the `overflow: auto` table scroller that would otherwise clip it.
+   Below toasts, above modals' backdrop peers — a tooltip should never be the
+   thing covering an alert. `pointer-events: none` keeps it from stealing the
+   hover that opened it. */
+.tooltip-pop {
+  /* Anchored at 0,0 and moved with a transform — see Tooltip.tsx for why
+     setting `left` here would squeeze the bubble near the viewport edge. */
+  position: fixed; top: 0; left: 0;
+  z-index: 1900; max-width: 22rem; pointer-events: none;
+  display: grid; gap: 0.25rem;
+  padding: 0.5rem 0.65rem;
+  background: var(--color-ink); color: #fff;
+  border-radius: var(--radius-sm); box-shadow: var(--shadow-2);
+  font: var(--text-sm); line-height: 1.4;
+}
+.tooltip-pop .tooltip-title { font-weight: 600; overflow-wrap: break-word; }
+.tooltip-pop .tooltip-meta { opacity: 0.75; font-variant-numeric: tabular-nums; }
+.tooltip-pop .tooltip-hint { opacity: 0.6; font: var(--text-xs); }
+
 .toast-host { position: fixed; right: 20px; bottom: 20px; display: flex; flex-direction: column; gap: 8px; z-index: 2000; }
 .toast { padding: 10px 14px; border-radius: 8px; font-size: 13px; font-weight: 500; color: #fff; box-shadow: 0 6px 20px rgba(0,0,0,.18); max-width: 340px; animation: toast-in .18s ease-out; }
 .toast-success { background: #1d7a4f; }
@@ -1852,6 +1872,30 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
   .att-toolbar { align-items: flex-start; }
   .att-period { width: 100%; }
   .att-period select { flex: 1; }
+}
+/* Check-in / check-out addresses stacked in one table cell.
+   These are full written addresses ("Avenue 3, G Block, Bandra Kurla Complex,
+   Mumbai, Maharashtra 400024"). Wrapping them made a single positioned row three
+   times taller than its neighbours, so each is held to ONE truncated line and
+   the complete address is shown on hover. Width is fixed rather than
+   content-driven so every row's Location column lines up. */
+.att-loc { display: inline-flex; flex-direction: column; gap: 0.2rem; width: 15rem; max-width: 15rem; }
+/* max-width applies to the standalone use too (the per-employee month table
+   renders a PunchPlace straight into a cell, with no .att-loc wrapper), so a
+   long address truncates there rather than stretching the column. */
+.att-loc-line { display: flex; align-items: center; gap: 0.35rem; font: var(--text-sm); color: var(--color-ink-2); min-width: 0; max-width: 15rem; }
+.att-loc-tip { display: flex; min-width: 0; }
+.att-loc-value { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* The name is a label; the link is the proof. Underline on hover only, so a
+   column of these does not read as a wall of links. */
+.att-loc-link { display: inline-flex; align-items: center; gap: 0.25rem; min-width: 0; color: inherit; text-decoration: none; }
+.att-loc-link:hover .att-loc-value,
+.att-loc-link:focus-visible .att-loc-value { text-decoration: underline; }
+.att-loc-link:hover { color: var(--color-accent, currentColor); }
+.att-loc-link svg { flex: none; opacity: 0.6; }
+.att-loc-tag {
+  flex: none; font: var(--text-xs); font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.4px; color: var(--color-muted); min-width: 1.6rem;
 }
 .att-tiles { margin-bottom: 0; }
 .att-summary-band { margin-bottom: var(--space-4); }

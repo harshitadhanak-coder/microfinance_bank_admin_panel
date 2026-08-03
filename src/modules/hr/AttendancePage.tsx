@@ -1,4 +1,4 @@
-import { FormEvent, useMemo, useState } from 'react';
+import { FormEvent, useEffect, useMemo, useState } from 'react';
 import { keepPreviousData, useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../../api/client';
@@ -22,16 +22,43 @@ import { can } from '../auth/permissions';
 import {
   AttendanceRow, SummaryRow, SummaryResponse, CalendarResponse, BranchOption, EmployeeOption,
   MONTHS, STATUS_FILTERS, statusLabel, STATUS_TONE, statusText, STATUS_LEGEND,
-  fmtTime, fmtWorked, otHours, AttStatus,
+  fmtTime, fmtWorked, punchLocation, AttStatus,
 } from './attendanceShared';
+import { PunchPlace } from './PunchPlace';
 
 /** Small day-status chip pair (status + optional "Late") used in list cells. */
 function StatusCell({ status, isLate, lateMinutes }: { status?: AttStatus; isLate?: boolean; lateMinutes?: number }) {
-  if (!status) return <>—</>;
+  // A stored row always carries a status, so a missing one means this is an
+  // employee with no attendance record at all — say so rather than showing a
+  // dash, since the unfiltered list mixes both.
+  if (!status) return <Badge tone="neutral">Not marked</Badge>;
   return (
     <span style={{ display: 'inline-flex', gap: 4, flexWrap: 'wrap' }}>
       <Badge tone={STATUS_TONE[status]}>{statusText(status)}</Badge>
       {isLate && <Badge tone="warning">Late {lateMinutes ?? 0}m</Badge>}
+    </span>
+  );
+}
+
+/**
+ * Where the day's two punches happened.
+ *
+ * Both sit in one cell, tagged In/Out, rather than as two columns: the pair is
+ * read together ("arrived at the branch, left from the field") and two more
+ * wide text columns would push the table into horizontal scroll.
+ */
+function LocationCell({ row }: { row: AttendanceRow }) {
+  const checkIn = punchLocation(row.checkInLocation, row.checkInLatitude, row.checkInLongitude);
+  const checkOut = punchLocation(row.checkOutLocation, row.checkOutLatitude, row.checkOutLongitude);
+  if (!checkIn && !checkOut) return <>—</>;
+  return (
+    <span className="att-loc">
+      {checkIn && (
+        <PunchPlace label="In" name={row.checkInLocation} latitude={row.checkInLatitude} longitude={row.checkInLongitude} />
+      )}
+      {checkOut && (
+        <PunchPlace label="Out" name={row.checkOutLocation} latitude={row.checkOutLatitude} longitude={row.checkOutLongitude} />
+      )}
     </span>
   );
 }
@@ -54,6 +81,30 @@ function Legend() {
 type ViewKey = 'list' | 'summary' | 'calendar';
 
 const PERIOD_OVERRIDE_HINT = 'A custom From/To range is set — clear it to filter by month again.';
+
+/**
+ * Current position for a punch, or `{}` if it cannot be obtained.
+ *
+ * Resolves rather than rejects on every failure path — a denied permission, a
+ * device without GPS, a timeout — because a punch must still be recorded when
+ * the location is not. The backend stores whatever arrives and leaves the place
+ * name blank when nothing does.
+ */
+const getPosition = (): Promise<{ latitude: number; longitude: number } | Record<string, never>> =>
+  new Promise((resolve) => {
+    if (!navigator.geolocation) return resolve({});
+    navigator.geolocation.getCurrentPosition(
+      (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude }),
+      () => resolve({}),
+      { enableHighAccuracy: true, timeout: 8000 },
+    );
+  });
+
+/** Labels for the check-in presence filter (marked attendance vs did not). */
+const PUNCH_FILTER_LABELS: Record<string, string> = {
+  CHECKED_IN: 'Checked in',
+  NOT_CHECKED_IN: 'Not checked in',
+};
 
 /**
  * Attendance — List + Calendar. A single browse surface with a view switch:
@@ -97,6 +148,7 @@ export default function AttendancePage() {
   const branchId = params.get('branch') || '';
   const status = params.get('status') || '';
   const employeeId = params.get('employee') || '';
+  const punch = params.get('punch') || '';
 
   const setFilter = (key: string, value: string) => { patchParams({ [key]: value || null }); table.setPage(1); };
   const setMonth = (m: number) => { patchParams({ month: String(m) }); table.setPage(1); };
@@ -114,6 +166,22 @@ export default function AttendancePage() {
    * never appear to disagree.
    */
   const pad = (n: number) => String(n).padStart(2, '0');
+  const todayStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+
+  /**
+   * The list opens on TODAY, not the whole month: the client reads the screen
+   * as "today's attendance", so a fresh visit (no period in the URL) seeds
+   * From/To with today's date. It goes through the URL rather than a silent
+   * default so the date inputs and chips say exactly what is being shown, and
+   * clearing the chips still widens back out to the month picker.
+   */
+  useEffect(() => {
+    if (!params.get('from') && !params.get('to') && !params.get('month') && !params.get('year')) {
+      patchParams({ from: todayStr, to: todayStr });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const monthStart = `${year}-${pad(month)}-01`;
   const monthEnd = `${year}-${pad(month)}-${pad(new Date(year, month, 0).getDate())}`;
   const customRange = !!(from || to);
@@ -135,13 +203,17 @@ export default function AttendancePage() {
   if (branchId) extra.set('branchId', branchId);
   if (status) extra.set('status', status);
   if (employeeId) extra.set('employeeId', employeeId);
+  if (punch) extra.set('punch', punch);
   const listUrl = `/human-resources/attendance?${table.params}${extra.toString() ? `&${extra.toString()}` : ''}`;
 
+  // Skip the very first render while the today-default above is still being
+  // written into the URL, so the month-wide list is never fetched needlessly.
+  const defaultPeriodPending = !from && !to && !params.get('month') && !params.get('year');
   const query = useQuery({
     queryKey: [listUrl],
     queryFn: () => api.get(listUrl).then((r) => r.data),
     placeholderData: keepPreviousData,
-    enabled: view === 'list',
+    enabled: view === 'list' && !defaultPeriodPending,
   });
   const rows = (query.data?.data ?? []) as AttendanceRow[];
   const totalItems = (query.data?.pagination?.totalItems ?? 0) as number;
@@ -179,12 +251,12 @@ export default function AttendancePage() {
   };
 
   const punchIn = useMutation({
-    mutationFn: () => api.post('/human-resources/attendance/punch-in', {}).then((r) => r.data),
+    mutationFn: async () => api.post('/human-resources/attendance/punch-in', await getPosition()).then((r) => r.data),
     onSuccess: (data) => { toast.success(data?.message || 'Checked in'); invalidateAttendance(); },
     onError: (err) => toast.error(apiMessage(err, 'Check-in failed')),
   });
   const punchOut = useMutation({
-    mutationFn: () => api.post('/human-resources/attendance/punch-out', {}).then((r) => r.data),
+    mutationFn: async () => api.post('/human-resources/attendance/punch-out', await getPosition()).then((r) => r.data),
     onSuccess: (data) => { toast.success(data?.message || 'Checked out'); invalidateAttendance(); },
     onError: (err) => toast.error(apiMessage(err, 'Check-out failed')),
   });
@@ -201,7 +273,9 @@ export default function AttendancePage() {
     { header: 'Check out', render: (a) => fmtTime(a.checkOutAt), sortKey: 'checkOutAt' },
     { header: 'Worked', render: (a) => fmtWorked(a.workedMinutes), sortKey: 'workedMinutes' },
     { header: 'Late by', render: (a) => (a.lateMinutes ? `${a.lateMinutes}m` : '—'), sortKey: 'lateMinutes' },
-    { header: 'OT', render: (a) => otHours(a.overtimeMinutes), sortKey: 'overtimeMinutes' },
+    // Overtime lives on in the Monthly summary tiles and the export; on the
+    // daily roll-call the client needs to see where each punch happened.
+    { header: 'Location', render: (a) => <LocationCell row={a} /> },
     { header: 'Source', render: (a) => <Badge tone="neutral">{a.source.replaceAll('_', ' ')}</Badge>, sortKey: 'source' },
   ];
 
@@ -218,7 +292,7 @@ export default function AttendancePage() {
   ];
   const summaryTableRows = summaryRows.map((r) => ({ ...r, id: r.employeeId }));
 
-  const clearFilters = () => { patchParams({ from: null, to: null, branch: null, status: null, employee: null }); table.setPage(1); };
+  const clearFilters = () => { patchParams({ from: null, to: null, branch: null, status: null, employee: null, punch: null }); table.setPage(1); };
   const employeeName = (id: string) => employeesQuery.data?.find((e) => e.id === id);
   const chips: FilterChip[] = [
     // Removing either range chip falls the list straight back to the month
@@ -228,6 +302,7 @@ export default function AttendancePage() {
     ...(branchId ? [{ key: 'branch', label: `Branch: ${branchesQuery.data?.find((b) => b.id === branchId)?.name ?? '…'}`, onRemove: () => setFilter('branch', '') }] : []),
     ...(employeeId ? [{ key: 'employee', label: `Employee: ${employeeName(employeeId)?.fullName ?? '…'}`, onRemove: () => setFilter('employee', '') }] : []),
     ...(status ? [{ key: 'status', label: `Status: ${statusLabel(status)}`, onRemove: () => setFilter('status', '') }] : []),
+    ...(punch ? [{ key: 'punch', label: `Check-in: ${PUNCH_FILTER_LABELS[punch] ?? punch}`, onRemove: () => setFilter('punch', '') }] : []),
   ];
 
   const yearOptions = [now.getFullYear() + 1, now.getFullYear(), now.getFullYear() - 1, now.getFullYear() - 2];
@@ -277,7 +352,7 @@ export default function AttendancePage() {
             <ExportButton
               url="/human-resources/attendance/export"
               fileBase="Attendance"
-              params={{ from: effectiveFrom, to: effectiveTo, branchId, status, employeeId, search: table.search }}
+              params={{ from: effectiveFrom, to: effectiveTo, branchId, status, employeeId, punch, search: table.search }}
             />
             {canManage && (
               <button type="button" className="ghost" onClick={() => setManualOpen(true)}>
@@ -351,6 +426,14 @@ export default function AttendancePage() {
             </select>
             <select className="filter-control" value={status} onChange={(e) => setFilter('status', e.target.value)} aria-label="Status" title="Status">
               {STATUS_FILTERS.map((s) => <option key={s} value={s}>{statusLabel(s)}</option>)}
+            </select>
+            {/* Who marked attendance vs who did not. "Not checked in" lists
+                employees with no punch in the range — rows the attendance
+                table itself does not have. */}
+            <select className="filter-control" value={punch} onChange={(e) => setFilter('punch', e.target.value)} aria-label="Check-in filter" title="Check-in">
+              <option value="">All (marked or not)</option>
+              <option value="CHECKED_IN">Checked in</option>
+              <option value="NOT_CHECKED_IN">Not checked in</option>
             </select>
             {/* Empty means "use the period above"; the placeholder date shown is
                 the month bound that is actually in force, so the row always
