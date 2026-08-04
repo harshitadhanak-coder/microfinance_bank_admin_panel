@@ -2,7 +2,7 @@ import { ReactNode } from 'react';
 import type { ModuleGroup, ModuleKey } from '../auth/permissions';
 import {
   AlertCircle, Banknote, CalendarCheck, CalendarOff, FileSpreadsheet, HandCoins,
-  Landmark, LayoutDashboard, ListChecks, LogOut, Settings2, Target, UserCheck,
+  Landmark, LayoutDashboard, ListChecks, Lock, LogOut, Settings2, Target, UserCheck,
   Users, Wallet, Briefcase,
 } from '../../components/icons';
 
@@ -43,6 +43,7 @@ export const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   bankDeposits: <Banknote size={18} />,
   bankReconciliation: <Landmark size={18} />,
   users: <UserCheck size={18} />,
+  subAdmins: <Lock size={18} />,
   documents: <FileSpreadsheet size={18} />,
   settings: <Settings2 size={18} />,
 };

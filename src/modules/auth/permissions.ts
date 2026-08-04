@@ -109,6 +109,7 @@ export type ModuleKey =
   | 'bankDeposits'
   | 'bankReconciliation'
   | 'users'
+  | 'subAdmins'
   | 'documents'
   | 'settings';
 
@@ -219,6 +220,13 @@ export const MODULES: ModuleDef[] = [
   // Hidden from the sidebar per request. Login accounts are administered per
   // employee from the Account & Access tab; the list stays routable at /users.
   { key: 'users', to: '/users', label: 'User Management', permission: 'employee:account', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'HUMAN_RESOURCES_ADMIN'], group: 'admin', hidden: true },
+  // Sub Admin — Operations-only delegate logins (Operations Team, Gujarat Head,
+  // Mumbai Head). SUPER ADMIN ONLY, and deliberately carries NO `permission`:
+  // an omitted code means no matrix cell can ever unlock it, which is the point.
+  // Creating sub-admins is how Operations access is handed out, so a role that
+  // could reach this screen could grant itself a colleague. The API guards it
+  // again with authorizeRoles(SUPER_ADMIN) — that copy is the one that counts.
+  { key: 'subAdmins', to: '/sub-admins', label: 'Sub Admin', roles: ['SUPER_ADMIN'], group: 'admin' },
   // Employee personnel files — part of HR. Client/lead KYC lives on those records.
   { key: 'documents', to: '/documents', label: 'Document Center', permission: 'document:view', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },
   { key: 'masters', to: '/masters', label: 'Organization Masters', permission: 'masters:view', roles: ['HUMAN_RESOURCES_ADMIN'], group: 'admin' },

@@ -66,6 +66,7 @@ const HrPolicyDetailPage = lazy(() => import('./modules/hr/HrPolicyDetailPage'))
 const MastersPage = lazy(() => import('./modules/masters/MastersPage'));
 const MasterResourcePage = lazy(() => import('./modules/masters/MasterResourcePage'));
 const UsersPage = lazy(() => import('./modules/users/UsersPage'));
+const SubAdminsPage = lazy(() => import('./modules/sub-admins/SubAdminsPage'));
 const DocumentCenterPage = lazy(() => import('./modules/documents/DocumentCenterPage'));
 const SettingsHubPage = lazy(() => import('./modules/settings/SettingsHubPage'));
 const HrPolicyPage = lazy(() => import('./modules/settings/HrPolicyPage'));
@@ -184,6 +185,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="masters" element={<RequireModule module="masters"><MastersPage /></RequireModule>} />
                 <Route path="masters/:resource" element={<RequireModule module="masters"><MasterResourcePage /></RequireModule>} />
                 <Route path="users" element={<RequireModule module="users"><UsersPage /></RequireModule>} />
+                <Route path="sub-admins" element={<RequireModule module="subAdmins"><SubAdminsPage /></RequireModule>} />
                 <Route path="documents" element={<RequireModule module="documents"><DocumentCenterPage /></RequireModule>} />
                 <Route path="settings" element={<RequireModule module="settings"><SettingsHubPage /></RequireModule>} />
                 {/* HR Policy belongs to the HR module, not Settings: HR must reach
