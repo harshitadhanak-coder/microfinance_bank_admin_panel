@@ -54,6 +54,7 @@ interface EmployeeDetail {
   dateOfBirth?: string | null; gender?: string | null; maritalStatus?: string | null; addressLine?: string | null;
   emergencyContactName?: string | null; emergencyContactPhone?: string | null; emergencyContactRelation?: string | null;
   employeeType?: string | null; confirmationDate?: string | null;
+  separationDate?: string | null; noticeStartDate?: string | null;
   uanNumber?: string | null; providentFundNumber?: string | null; stateInsuranceNumber?: string | null;
   departmentRef?: MasterRef | null; designationRef?: MasterRef | null; grade?: MasterRef | null;
   employmentTypeRef?: MasterRef | null; shift?: MasterRef | null;
@@ -501,6 +502,20 @@ export default function EmployeeDetailPage() {
                     display={fmtDate(detail.joiningDate)} canEdit={canManage} onSave={patchField('joiningDate')} />
                   <InlineEditField label="Confirmation date" kind="date" value={dateInput(detail.confirmationDate)}
                     display={fmtDate(detail.confirmationDate)} canEdit={canManage} onSave={patchField('confirmationDate')} />
+                  {/*
+                    Shown only once they exist, and never editable on their own:
+                    each belongs to an employment status, so it is set alongside
+                    that status on the Edit screen. Editing one here in isolation
+                    could date a separation for somebody still on the rolls.
+                  */}
+                  {detail.noticeStartDate && (
+                    <InlineEditField label="Notice start date" value=""
+                      display={fmtDate(detail.noticeStartDate)} canEdit={false} />
+                  )}
+                  {detail.separationDate && (
+                    <InlineEditField label="Last working date" value=""
+                      display={fmtDate(detail.separationDate)} canEdit={false} />
+                  )}
                   <InlineEditField label="Address" value={detail.addressLine ?? ''}
                     canEdit={canManage} onSave={patchField('addressLine')} />
                   <InlineEditField label="Emergency contact" value={detail.emergencyContactName ?? ''}

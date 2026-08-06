@@ -25,8 +25,14 @@ interface Props {
    */
   sensitive?: boolean;
   canEdit?: boolean;
-  /** Persists the new value; reject to keep the editor open for a retry. */
-  onSave: (value: string) => Promise<unknown>;
+  /**
+   * Persists the new value; reject to keep the editor open for a retry.
+   *
+   * Optional because `canEdit` defaults to false: a read-only row is a supported
+   * use (a field owned by another screen, shown here for reference) and has
+   * nothing to save.
+   */
+  onSave?: (value: string) => Promise<unknown>;
 }
 
 /**
@@ -47,7 +53,7 @@ export function InlineEditField({
   const [saving, setSaving] = useState(false);
 
   const start = () => {
-    if (!canEdit || saving) return;
+    if (!canEdit || !onSave || saving) return;
     setDraft(sensitive ? '' : value);
     setEditing(true);
   };
@@ -56,7 +62,7 @@ export function InlineEditField({
     const next = (transform ? transform(draft) : draft).trim();
     // Blank keeps the current value (and is the only "keep" path for sensitive
     // fields); an unchanged plain value needs no round-trip either.
-    if (!next || (!sensitive && next === value)) { cancel(); return; }
+    if (!next || !onSave || (!sensitive && next === value)) { cancel(); return; }
     setSaving(true);
     try {
       await onSave(next);

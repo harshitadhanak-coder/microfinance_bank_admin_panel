@@ -19,6 +19,7 @@ interface EmployeeDetail {
   id: string; employeeCode: string; fullName: string; phoneNumber: string; email?: string | null;
   designation: string; employmentStatus: string; joiningDate: string; branchId?: string | null;
   bankIfscCode?: string | null;
+  separationDate?: string | null; noticeStartDate?: string | null;
   departmentRef?: MasterRef | null; designationRef?: MasterRef | null; grade?: MasterRef | null;
   employmentTypeRef?: MasterRef | null; shift?: MasterRef | null;
   role?: { id: string; name: string; displayName: string | null } | null;
@@ -30,6 +31,7 @@ const emptyEdit = {
   fullName: '', phoneNumber: '', email: '', branchId: '',
   joiningDate: '', employmentStatus: 'ACTIVE', bankAccountNumber: '', bankIfscCode: '', panNumber: '',
   departmentId: '', designationId: '', roleId: '', gradeId: '', employmentTypeId: '', shiftId: '',
+  separationDate: '', noticeStartDate: '',
 };
 type EditForm = typeof emptyEdit;
 
@@ -65,6 +67,8 @@ export default function EmployeeEditPage() {
       branchId: detail.branchId ?? '',
       joiningDate: detail.joiningDate ? detail.joiningDate.slice(0, 10) : '',
       employmentStatus: detail.employmentStatus, bankIfscCode: detail.bankIfscCode ?? '',
+      separationDate: detail.separationDate ? detail.separationDate.slice(0, 10) : '',
+      noticeStartDate: detail.noticeStartDate ? detail.noticeStartDate.slice(0, 10) : '',
       departmentId: detail.departmentRef?.id ?? detail.departmentId ?? '',
       designationId: detail.designationRef?.id ?? detail.designationId ?? '',
       // Stays empty when the employee has no role — the form must show "not set"
@@ -77,14 +81,26 @@ export default function EmployeeEditPage() {
   }, [detail]);
 
   const updateEmployee = useMutation({
-    mutationFn: () => api.patch(`/employees/${id}`, compact({
-      fullName: form.fullName, phoneNumber: form.phoneNumber, email: form.email,
-      branchId: form.branchId, joiningDate: form.joiningDate,
-      employmentStatus: form.employmentStatus, bankAccountNumber: form.bankAccountNumber,
-      bankIfscCode: form.bankIfscCode, panNumber: form.panNumber,
-      departmentId: form.departmentId, designationId: form.designationId, roleId: form.roleId,
-      gradeId: form.gradeId, employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
-    })),
+    mutationFn: () => api.patch(`/employees/${id}`, {
+      ...compact({
+        fullName: form.fullName, phoneNumber: form.phoneNumber, email: form.email,
+        joiningDate: form.joiningDate,
+        employmentStatus: form.employmentStatus, bankAccountNumber: form.bankAccountNumber,
+        bankIfscCode: form.bankIfscCode, panNumber: form.panNumber,
+        departmentId: form.departmentId, designationId: form.designationId, roleId: form.roleId,
+        gradeId: form.gradeId, employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
+        // Only the date the chosen status actually calls for. Sending both would
+        // have the API record a notice date for someone being separated outright.
+        ...(form.employmentStatus === 'SEPARATED' ? { separationDate: form.separationDate } : {}),
+        ...(form.employmentStatus === 'ON_NOTICE' ? { noticeStartDate: form.noticeStartDate } : {}),
+      }),
+      // Deliberately outside compact(), which drops empty values so untouched
+      // fields are omitted. Branch is the one field where "empty" is a choice the
+      // operator made — "— Unassigned —" — rather than an absence of input, so it
+      // has to travel as an explicit null. Passing it through compact() silently
+      // dropped the key and the posting simply stayed put.
+      branchId: form.branchId || null,
+    }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['/employees'] });
       qc.invalidateQueries({ queryKey: ['/employees', id] });
@@ -128,6 +144,30 @@ export default function EmployeeEditPage() {
                   <option value="ON_NOTICE">On notice</option><option value="SEPARATED">Separated</option>
                 </select>
               </Field>
+              {/*
+                Each ending status brings its own date, shown only once that
+                status is chosen so the form stays short for the ordinary edit.
+                Both are `required`, matching the API — and the last working date
+                is not bookkeeping: leave accrual prorates the final month
+                against it, so a blank one over-credits somebody who has left.
+                `min` stops a date before the employee even joined.
+              */}
+              {form.employmentStatus === 'SEPARATED' && (
+                <Field label="Last working date" required help="The employee's final day. Used to prorate their last month of leave accrual.">
+                  <input
+                    type="date" required value={form.separationDate} min={form.joiningDate || undefined}
+                    onChange={(e) => set({ separationDate: e.target.value })}
+                  />
+                </Field>
+              )}
+              {form.employmentStatus === 'ON_NOTICE' && (
+                <Field label="Notice start date" required help="The day the notice period began.">
+                  <input
+                    type="date" required value={form.noticeStartDate} min={form.joiningDate || undefined}
+                    onChange={(e) => set({ noticeStartDate: e.target.value })}
+                  />
+                </Field>
+              )}
               <Field label="Department">
                 <select value={form.departmentId} onChange={(e) => set({ departmentId: e.target.value, designationId: '' })}>
                   <option value="">— Select —</option>
