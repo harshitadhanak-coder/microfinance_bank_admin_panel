@@ -203,6 +203,7 @@ export function ConfirmDialog({
   confirmLabel = 'Confirm',
   cancelLabel = 'Cancel',
   loading = false,
+  confirmDisabled = false,
   onConfirm,
   onCancel,
 }: {
@@ -213,6 +214,11 @@ export function ConfirmDialog({
   confirmLabel?: string;
   cancelLabel?: string;
   loading?: boolean;
+  /**
+   * Blocks the action while the dialog stays open — for a confirm that cannot
+   * succeed yet, so the reason is read rather than discovered from an error.
+   */
+  confirmDisabled?: boolean;
   onConfirm: () => void;
   onCancel: () => void;
 }) {
@@ -225,7 +231,7 @@ export function ConfirmDialog({
         <button type="button" className="ghost" data-autofocus onClick={onCancel} disabled={loading}>
           {cancelLabel}
         </button>
-        <button type="button" className={tone === 'danger' ? 'danger' : ''} onClick={onConfirm} disabled={loading}>
+        <button type="button" className={tone === 'danger' ? 'danger' : ''} onClick={onConfirm} disabled={loading || confirmDisabled}>
           {loading ? <><Loader size={15} /> Working…</> : confirmLabel}
         </button>
       </div>

@@ -222,17 +222,111 @@ export default function EmployeesPage() {
       </div>
 
       {deleteTarget && (
-        <ConfirmDialog
-          tone="danger"
-          icon={<Trash2 size={20} />}
-          title={`Delete ${deleteTarget.fullName}?`}
-          message="This permanently removes the employee's profile, salary structure and KYC records. It is blocked if the employee has loans, attendance, payroll or an active branch posting."
-          confirmLabel="Delete employee"
+        <DeleteEmployeeDialog
+          employee={deleteTarget}
           loading={deleteEmployee.isPending}
           onConfirm={() => deleteEmployee.mutate(deleteTarget.id)}
           onCancel={() => setDeleteTarget(null)}
         />
       )}
     </>
+  );
+}
+
+// ── Delete confirmation ──────────────────────────────────────────────────
+interface DeletionImpact {
+  fullName: string;
+  employmentStatus: string;
+  separated: boolean;
+  /** Why the delete would be refused. Empty when it can go ahead. */
+  blockers: string[];
+  /** Destroyed permanently. */
+  removes: { label: string; count: number }[];
+  /** Row kept, link to this employee cleared. */
+  detaches: { label: string; count: number }[];
+  /** The sign-in account deleted with them, if they had one. */
+  loginAccount: { email: string; status: string; role: string } | null;
+  purges: boolean;
+  needsSeparation: boolean;
+  canDelete: boolean;
+}
+
+/**
+ * Deleting a separated employee erases their attendance, leave and payroll for
+ * good, so the dialog states the actual counts before the operator commits
+ * instead of describing the rules in the abstract. It also refuses up front
+ * when something blocks the delete, so the reason is read rather than
+ * discovered from a failed request.
+ */
+function DeleteEmployeeDialog({
+  employee, loading, onConfirm, onCancel,
+}: {
+  employee: EmployeeRow;
+  loading: boolean;
+  onConfirm: () => void;
+  onCancel: () => void;
+}) {
+  const impactQuery = useQuery({
+    queryKey: ['/employees', employee.id, 'deletion-impact'],
+    queryFn: () => api.get(`/employees/${employee.id}/deletion-impact`).then((r) => r.data.data as DeletionImpact),
+  });
+  const impact = impactQuery.data;
+
+  const line = (r: { label: string; count: number }) => `${r.count} ${r.label.toLowerCase()}`;
+
+  /**
+   * The login always goes with the employee, whether or not there is any HR
+   * history — so it is stated on every variant of this dialog rather than only
+   * on the purge one.
+   */
+  const loginNote = impact?.loginAccount && (
+    <>
+      <br /><br />
+      Their login <strong>{impact.loginAccount.email}</strong> is deleted too — password, active
+      sessions, login history and any pending reset link. They will not be able to sign in again.
+    </>
+  );
+
+  const message = impactQuery.isLoading ? 'Checking what this would remove…'
+    : !impact ? 'Could not check what this would remove. Try again.'
+    : impact.blockers.length > 0 ? <>{impact.blockers[0]}</>
+    : impact.needsSeparation ? (
+      <>
+        This employee still has HR records ({impact.removes.map(line).join(', ')}) and is on the rolls as{' '}
+        <strong>{statusLabel(impact.employmentStatus)}</strong>.
+        <br /><br />
+        Mark them as separated first — deleting a separated employee removes those records with them.
+      </>
+    ) : impact.purges ? (
+      <>
+        <strong>{impact.fullName}</strong> is separated, so deleting them <strong>permanently erases</strong>:
+        <br />{impact.removes.map(line).join(' · ')}
+        {impact.detaches.length > 0 && (
+          <><br /><br />Kept, with the link to this employee cleared: {impact.detaches.map(line).join(' · ')}.</>
+        )}
+        {loginNote}
+        <br /><br />This cannot be undone.
+      </>
+    ) : (
+      <>
+        This removes <strong>{impact.fullName}</strong>’s profile, salary structure and KYC records.
+        No attendance, leave or payroll history is attached.
+        {loginNote}
+        <br /><br /><span className="sm-text">This cannot be undone.</span>
+      </>
+    );
+
+  return (
+    <ConfirmDialog
+      tone="danger"
+      icon={<Trash2 size={20} />}
+      title={impact?.purges ? `Delete ${employee.fullName} and all their records?` : `Delete ${employee.fullName}?`}
+      message={message}
+      confirmLabel={impact?.purges ? 'Delete everything' : 'Delete employee'}
+      loading={loading}
+      confirmDisabled={impactQuery.isLoading || !impact?.canDelete}
+      onConfirm={onConfirm}
+      onCancel={onCancel}
+    />
   );
 }
