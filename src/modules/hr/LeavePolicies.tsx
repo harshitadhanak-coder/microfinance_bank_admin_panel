@@ -249,10 +249,23 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
   const usageQuery = useQuery({ queryKey: [...leaveKeys.policy(planId), 'usage'], queryFn: () => leaveApi.planUsage(planId) });
   const usage = usageQuery.data;
 
+  /**
+   * Retire a live policy; delete one nothing points at.
+   *
+   * An already-retired policy has nothing left to retire, so delete is its only
+   * exit — otherwise a policy retired before it ever accrued anything stays on
+   * the list forever with no control that can remove it.
+   */
+  const removeMode: 'retire' | 'delete' | null =
+    !usage || !plan ? null
+    : plan.status === 'INACTIVE' ? (usage.canDelete ? 'delete' : null)
+    : usage.isUsed ? 'retire'
+    : 'delete';
+
   const removePlan = useMutation({
-    mutationFn: () => (usage?.isUsed ? leaveApi.retirePlan(planId) : leaveApi.deletePlan(planId)),
+    mutationFn: () => (removeMode === 'retire' ? leaveApi.retirePlan(planId) : leaveApi.deletePlan(planId)),
     onSuccess: () => {
-      toast.success(usage?.isUsed
+      toast.success(removeMode === 'retire'
         ? 'Policy retired. It no longer applies to anyone; its history is intact.'
         : 'Policy deleted.');
       setRemoving(false);
@@ -298,11 +311,12 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
       subtitle={plan ? `${plan.code} · ${plan.leaveType.name}` : undefined}
       footer={<>
         {canManage && <button type="button" onClick={() => setDrafting(true)}><Plus size={15} /> New version</button>}
-        {/* Delete when it was never used; retire once it has history. Retiring
-            takes entitlement away from people, so it is Super-Admin-only. */}
-        {plan?.status !== 'INACTIVE' && usage && (usage.isUsed ? canActivate : canManage) && (
+        {/* Delete when nothing references it; retire once it has history.
+            Retiring takes entitlement away from people, so it is
+            Super-Admin-only; deleting a policy nobody depends on is not. */}
+        {removeMode && (removeMode === 'retire' ? canActivate : canManage) && (
           <button type="button" className="ghost danger" onClick={() => setRemoving(true)}>
-            <Trash2 size={15} /> {usage.isUsed ? 'Retire policy' : 'Delete policy'}
+            <Trash2 size={15} /> {removeMode === 'retire' ? 'Retire policy' : 'Delete policy'}
           </button>
         )}
         <button className="ghost" onClick={onClose}>Close</button>
@@ -429,8 +443,8 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
             <ConfirmDialog
               icon={<Trash2 size={20} />}
               tone="danger"
-              title={usage.isUsed ? `Retire ${plan.name}?` : `Delete ${plan.name}?`}
-              message={usage.isUsed ? (
+              title={removeMode === 'retire' ? `Retire ${plan.name}?` : `Delete ${plan.name}?`}
+              message={removeMode === 'retire' ? (
                 <>
                   This policy has already governed people, so it cannot be deleted — balances and payslips still
                   point at the rules it applied. Retiring it instead:
@@ -444,6 +458,16 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
                     so they stop accruing it. Assign them another policy first if that is not what you want.
                   </span>
                 </>
+              ) : plan.status === 'INACTIVE' ? (
+                <>
+                  This policy is already retired — it applies to nobody, and no balance, request or accrual run
+                  references it. Deleting clears the leftover row and its {plan.versions.length}{' '}
+                  version{plan.versions.length === 1 ? '' : 's'} off the policies list.
+                  <br /><span className="muted sm-text">
+                    The {plan.leaveType.name} leave type, and any ledger history already recorded against it,
+                    are untouched. This cannot be undone.
+                  </span>
+                </>
               ) : (
                 <>
                   This policy has never been used — no balances, requests or accruals reference it — so it can be
@@ -451,7 +475,7 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
                   <br /><span className="muted sm-text">This cannot be undone.</span>
                 </>
               )}
-              confirmLabel={usage.isUsed ? 'Retire policy' : 'Delete policy'}
+              confirmLabel={removeMode === 'retire' ? 'Retire policy' : 'Delete policy'}
               loading={removePlan.isPending}
               onConfirm={() => removePlan.mutate()}
               onCancel={() => setRemoving(false)}

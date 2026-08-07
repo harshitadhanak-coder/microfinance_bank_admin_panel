@@ -311,11 +311,19 @@ export interface PlanUsage {
   activeAssignments: number;
   /** Versions that ever left DRAFT — i.e. the policy has been in force. */
   liveVersions: number;
+  /** Rows elsewhere whose numbers this policy's rules explain. */
+  hasHistory: boolean;
   /**
-   * True if the policy ever went live or targets anyone today. Deletion is
-   * refused from here; retire is the answer instead.
+   * True if the policy ever went live or targets anyone today — so the screen
+   * offers Retire rather than Delete.
    */
   isUsed: boolean;
+  /**
+   * Nothing anywhere references it, so it can be removed outright. Stays true
+   * once retired, which is how a retired-but-never-used policy gets cleared
+   * off the list instead of sitting there forever.
+   */
+  canDelete: boolean;
 }
 
 export interface RetireResult {
