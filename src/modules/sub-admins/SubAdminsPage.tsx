@@ -11,6 +11,7 @@ import { useServerTable } from '../../components/useServerTable';
 import { useToast } from '../../components/Toast';
 import { Ban, CheckCircle, Pencil, Plus, RotateCcw, Trash2, UserCheck } from '../../components/icons';
 import { apiMessage } from '../../lib/format';
+import { PHONE_ERROR, sanitizePhoneInput, validatePhone } from '../../lib/validation';
 import { useAuth } from '../auth/AuthContext';
 
 /** Date + time, as the lead and report screens format timestamps. */
@@ -200,15 +201,16 @@ export default function SubAdminsPage() {
       <PageHeader
         breadcrumb={[{ label: 'Administration' }, { label: 'Sub Admin' }]}
         title="Sub Admin"
-        subtitle="Administrator logins — Super Admin, HR Admin and the Operations-only sub-admins"
+        subtitle="Administrator logins — assign any role that fits the account"
         actions={<button className="btn-lg" onClick={() => setEditing('new')}><Plus size={16} /> Add sub-admin</button>}
       />
 
       <div className="info-box" style={{ marginBottom: '1rem' }}>
-        These are login accounts, not employees. Sub-admins (Operations Team, Gujarat Head, Mumbai Head) hold the
-        Operations module only and cannot open Human Resources; new ones start on the shared default password and must
-        change it at first sign-in. Super Admin and HR Admin are listed for visibility — they can be edited and
-        deactivated here, but not created, re-roled or deleted.
+        These are login accounts, not employees. When adding a sub-admin you can assign any available role — the
+        account is granted exactly what that role permits (configure it under Roles &amp; permissions). New accounts
+        start on the shared default password and must change it at first sign-in. Super Admin is the one role that
+        cannot be granted here, and existing Super Admin / HR Admin accounts are listed for visibility — they can be
+        edited and deactivated, but not created, re-roled or deleted.
       </div>
 
       <FilterBar chips={chips} onReset={chips.length ? () => { setStatus(''); setRoleId(''); table.setPage(1); } : undefined}>
@@ -291,6 +293,8 @@ function SubAdminFormModal({ row, roles, onClose, onDone }: {
   const [phoneNumber, setPhoneNumber] = useState(row?.phoneNumber ?? '');
   const [roleId, setRoleId] = useState(row?.role.id ?? '');
   const [error, setError] = useState('');
+  const [attempted, setAttempted] = useState(false);
+  const phoneError = validatePhone(phoneNumber);
 
   const save = useMutation({
     mutationFn: () => {
@@ -308,8 +312,14 @@ function SubAdminFormModal({ row, roles, onClose, onDone }: {
     onError: (err) => setError(apiMessage(err, 'Could not save the sub-admin.')),
   });
 
-  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); save.mutate(); };
-  const disabled = !fullName.trim() || !email.trim() || !phoneNumber.trim() || !roleId || save.isPending;
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    setError('');
+    setAttempted(true);
+    if (phoneError) { setError(PHONE_ERROR); return; }
+    save.mutate();
+  };
+  const disabled = !fullName.trim() || !email.trim() || !!phoneError || !roleId || save.isPending;
   const selected = roles.find((r) => r.id === roleId);
 
   return (
@@ -318,7 +328,7 @@ function SubAdminFormModal({ row, roles, onClose, onDone }: {
       onClose={onClose}
       icon={<UserCheck size={20} />}
       title={isEdit ? 'Edit sub-admin' : 'Add sub-admin'}
-      subtitle="Operations-only delegate login"
+      subtitle="Administrator login — assign any available role"
       footer={
         <>
           <button type="button" className="ghost" onClick={onClose}>Cancel</button>
@@ -334,17 +344,18 @@ function SubAdminFormModal({ row, roles, onClose, onDone }: {
           <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="name@company.com" required />
         </label>
         <label>Phone
-          <input value={phoneNumber} onChange={(e) => setPhoneNumber(e.target.value)} placeholder="9876543210" required />
+          <input value={phoneNumber} onChange={(e) => setPhoneNumber(sanitizePhoneInput(e.target.value))} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} required />
+          {(attempted || phoneNumber) && phoneError && <span className="field-error">{phoneError}</span>}
         </label>
         <label className="span-all">Role
           <select value={roleId} onChange={(e) => setRoleId(e.target.value)} required>
-            <option value="">— Select a sub-admin role —</option>
+            <option value="">— Select a role —</option>
             {roles.map((r) => <option key={r.id} value={r.id}>{roleLabel(r)}</option>)}
           </select>
         </label>
         {selected && (
           <p className="muted sm-text span-all">
-            {ACCESS_NOTE[selected.key ?? ''] ?? 'Operations module'} · Operations module only — no access to Human Resources.
+            {ACCESS_NOTE[selected.key ?? ''] ?? 'Access is defined by this role’s permission matrix (Roles & permissions).'}
           </p>
         )}
         {!isEdit && (

@@ -80,6 +80,7 @@ export interface PayslipDetail {
     loanDeduction: number;
     salaryAdvanceRecovery: number;
     lateDeduction: number;
+    mediclaimDeduction: number;
     otherDeductions: number;
     totalDeductions: number;
   };
@@ -172,6 +173,7 @@ export const deductionRows = (d: PayslipDetail): Array<[string, number]> =>
     ['TDS', d.deductions.taxDeductedAtSource],
     ['Loan EMI', d.deductions.loanDeduction],
     ['Advance', d.deductions.salaryAdvanceRecovery],
+    ['Mediclaim', d.deductions.mediclaimDeduction],
     ['Late Deduction', d.deductions.lateDeduction],
     ['Other Deductions', d.deductions.otherDeductions],
   ] as Array<[string, number]>).filter(([, v]) => v > 0);

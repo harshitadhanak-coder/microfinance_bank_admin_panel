@@ -9,7 +9,7 @@ import { PageHeader } from '../../components/PageHeader';
 import { Badge } from '../../components/Badge';
 import { ActionMenu } from '../../components/ActionMenu';
 import { useToast } from '../../components/Toast';
-import { Ban, Check, ListChecks, Pencil, Plus } from '../../components/icons';
+import { Ban, Check, ListChecks, Pencil, Plus, Trash2 } from '../../components/icons';
 import { apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
@@ -31,6 +31,7 @@ export default function RolesListPage() {
   const canManage = can(user?.role, 'role:manage');
 
   const [statusTarget, setStatusTarget] = useState<RoleRow | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<RoleRow | null>(null);
   const [error, setError] = useState('');
 
   const listUrl = `/roles?${table.params}`;
@@ -53,6 +54,19 @@ export default function RolesListPage() {
       toast.success(target.isActive ? 'Role deactivated.' : 'Role activated.');
     },
     onError: (err) => { setStatusTarget(null); setError(apiMessage(err, 'Could not change the role status.')); },
+  });
+
+  const deleteRole = useMutation({
+    mutationFn: (target: RoleRow) => api.delete(`/roles/${target.id}`),
+    onSuccess: () => {
+      refresh();
+      setDeleteTarget(null);
+      setError('');
+      toast.success('Role deleted.');
+    },
+    // The role is kept selected so its confirm dialog can surface the reason
+    // (e.g. "still assigned to users") inline rather than closing on failure.
+    onError: (err) => { setError(apiMessage(err, 'Could not delete the role.')); setDeleteTarget(null); },
   });
 
   const columns: Column<RoleRow>[] = [
@@ -89,6 +103,15 @@ export default function RolesListPage() {
                     tone: (r.isActive ? 'danger' : 'default') as 'default' | 'danger',
                     separatorBefore: true,
                     onSelect: () => setStatusTarget(r),
+                  }]
+                : []),
+              ...(canManage && !r.isSystem
+                ? [{
+                    key: 'delete',
+                    label: 'Delete role',
+                    icon: <Trash2 size={15} />,
+                    tone: 'danger' as 'default' | 'danger',
+                    onSelect: () => setDeleteTarget(r),
                   }]
                 : []),
             ]}
@@ -136,6 +159,23 @@ export default function RolesListPage() {
           loading={setStatus.isPending}
           onConfirm={() => setStatus.mutate(statusTarget)}
           onCancel={() => setStatusTarget(null)}
+        />
+      )}
+
+      {deleteTarget && (
+        <ConfirmDialog
+          tone="danger"
+          icon={<Trash2 size={20} />}
+          title={`Delete ${roleLabel(deleteTarget)}?`}
+          message={
+            (deleteTarget._count?.users ?? 0) > 0
+              ? `This role is assigned to ${deleteTarget._count?.users} user(s) and cannot be deleted until they are reassigned. Consider deactivating it instead.`
+              : 'This permanently removes the role and its permission configuration. This cannot be undone.'
+          }
+          confirmLabel="Delete role"
+          loading={deleteRole.isPending}
+          onConfirm={() => deleteRole.mutate(deleteTarget)}
+          onCancel={() => setDeleteTarget(null)}
         />
       )}
     </>

@@ -8,6 +8,7 @@ import { Form, FormSection, FormGrid, Field, FormActions } from '../../component
 import { useToast } from '../../components/Toast';
 import { Loader } from '../../components/icons';
 import { apiMessage, inr } from '../../lib/format';
+import { PHONE_ERROR, sanitizePhoneInput, validatePhone } from '../../lib/validation';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import {
@@ -42,6 +43,8 @@ export default function EmployeeCreatePage() {
   const { user } = useAuth();
   const [form, setForm] = useState<Form>(emptyForm);
   const [error, setError] = useState('');
+  const [attempted, setAttempted] = useState(false);
+  const phoneError = validatePhone(form.phoneNumber);
 
   const canCreate = can(user?.role, 'employee:create');
   const set = (patch: Partial<Form>) => setForm((f) => ({ ...f, ...patch }));
@@ -96,7 +99,13 @@ export default function EmployeeCreatePage() {
     onError: (err) => setError(apiMessage(err, 'Could not create the employee. Check all required fields are valid.')),
   });
 
-  const submit = (ev: FormEvent) => { ev.preventDefault(); setError(''); createEmployee.mutate(form); };
+  const submit = (ev: FormEvent) => {
+    ev.preventDefault();
+    setError('');
+    setAttempted(true);
+    if (phoneError) { setError(PHONE_ERROR); return; }
+    createEmployee.mutate(form);
+  };
 
   if (!canCreate) return <p className="muted">You do not have permission to add employees.</p>;
 
@@ -112,7 +121,9 @@ export default function EmployeeCreatePage() {
         <Card title="Identity & contact">
           <FormGrid cols={3}>
             <Field label="Full name" required><input value={form.fullName} onChange={(e) => set({ fullName: e.target.value })} required /></Field>
-            <Field label="Phone" required><input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: e.target.value })} placeholder="+9198XXXXXXXX" required /></Field>
+            <Field label="Phone" required error={(attempted || form.phoneNumber) ? phoneError : undefined}>
+              <input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: sanitizePhoneInput(e.target.value) })} placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} required />
+            </Field>
             <Field label="Email"><input type="email" value={form.email} onChange={(e) => set({ email: e.target.value })} /></Field>
             <Field label="Branch">
               <select value={form.branchId} onChange={(e) => set({ branchId: e.target.value, reportsToId: '' })}>

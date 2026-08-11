@@ -9,6 +9,7 @@ import { Skeleton } from '../../components/Skeleton';
 import { useToast } from '../../components/Toast';
 import { Loader } from '../../components/icons';
 import { apiMessage } from '../../lib/format';
+import { PHONE_ERROR, sanitizePhoneInput, validatePhone } from '../../lib/validation';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { BranchOption, EmployeeOption, LeadDetail } from './shared';
@@ -43,6 +44,7 @@ export default function LeadFormPage() {
 
   const [form, setForm] = useState<LeadForm>({ ...empty, branchId: user?.branchId ?? '' });
   const [error, setError] = useState('');
+  const [attempted, setAttempted] = useState(false);
   const set = (patch: Partial<LeadForm>) => setForm((f) => ({ ...f, ...patch }));
 
   // Edit: prefill from the lead record.
@@ -104,9 +106,12 @@ export default function LeadFormPage() {
     onError: (err) => setError(apiMessage(err, 'Could not save the lead.')),
   });
 
+  const phoneError = validatePhone(form.phoneNumber);
   const submit = (e: FormEvent) => {
     e.preventDefault();
     setError('');
+    setAttempted(true);
+    if (phoneError) { setError(PHONE_ERROR); return; }
     if (!isEdit && !form.branchId) { setError('Please choose a branch.'); return; }
     save.mutate();
   };
@@ -128,7 +133,9 @@ export default function LeadFormPage() {
         <Card title="Lead details">
           <FormGrid cols={2}>
             <Field label="Full name" required><input value={form.fullName} onChange={(e) => set({ fullName: e.target.value })} required minLength={2} /></Field>
-            <Field label="Phone" required><input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: e.target.value })} required placeholder="+91…" /></Field>
+            <Field label="Phone" required error={(attempted || form.phoneNumber) ? phoneError : undefined}>
+              <input value={form.phoneNumber} onChange={(e) => set({ phoneNumber: sanitizePhoneInput(e.target.value) })} required placeholder="10-digit mobile number" inputMode="numeric" maxLength={10} />
+            </Field>
             <Field label="Requested amount (₹)"><input type="number" min={0} step="0.01" value={form.requestedAmount} onChange={(e) => set({ requestedAmount: e.target.value })} /></Field>
             <Field label="Purpose"><input value={form.purpose} onChange={(e) => set({ purpose: e.target.value })} placeholder="e.g. Working capital" /></Field>
             <Field label="Source"><input value={form.source} onChange={(e) => set({ source: e.target.value })} placeholder="e.g. Referral, Field visit" /></Field>
