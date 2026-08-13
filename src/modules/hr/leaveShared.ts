@@ -37,6 +37,35 @@ export interface LeaveTypeDef {
   status: 'ACTIVE' | 'INACTIVE';
 }
 
+/**
+ * One leave type an employee may actually apply for, from
+ * `/leave/me/eligibility` (or the HR route for somebody else).
+ *
+ * The apply pickers are built from THIS, not from `/leave/types`: maternity and
+ * paternity are gender-scoped, so the full type list would offer people types
+ * they can only be refused for. `rules.maxDaysPerRequest` is where the
+ * entitlement lives for the types that carry no balance.
+ */
+export interface EligibleLeaveType {
+  leaveTypeId: string;
+  code: string;
+  name: string;
+  shortCode: string;
+  unit: 'DAY' | 'HOUR';
+  isPaid: boolean;
+  isBalanceTracked: boolean;
+  planCode: string;
+  rules: {
+    annualEntitlement: number;
+    minNoticeDays: number;
+    maxDaysPerRequest: number | null;
+    allowHalfDay: boolean;
+    allowHourly: boolean;
+    sandwichRule: string;
+    documentRequiredAfterDays: number | null;
+  };
+}
+
 export interface LeaveBalance {
   leaveTypeId: string;
   code: string;
@@ -215,9 +244,11 @@ export const leaveKeys = {
   types: ['/leave/types'] as const,
   myRequests: ['/leave/me/requests'] as const,
   myBalances: ['/leave/me/balances'] as const,
+  myEligibility: ['/leave/me/eligibility'] as const,
   myLedger: ['/leave/me/ledger'] as const,
   requests: (filter?: string) => ['/leave/requests', filter ?? 'all'] as const,
   employeeBalances: (employeeId: string) => ['/leave/employees/balances', employeeId] as const,
+  employeeEligibility: (employeeId: string) => ['/leave/employees/eligibility', employeeId] as const,
   employeeLedger: (employeeId: string) => ['/leave/employees/ledger', employeeId] as const,
   policies: ['/leave/policies'] as const,
   policy: (id: string) => ['/leave/policies', id] as const,
@@ -238,6 +269,8 @@ export const leaveApi = {
   listTypes: () => api.get('/leave/types').then(data<LeaveTypeDef[]>),
 
   myBalances: () => api.get('/leave/me/balances').then(data<BalancesResponse>),
+  myEligibility: () =>
+    api.get('/leave/me/eligibility').then(data<{ eligibility: EligibleLeaveType[] }>).then((r) => r.eligibility),
   myRequests: (limit = 100) => api.get(`/leave/me/requests?limit=${limit}`).then(data<LeaveRequestListResponse>),
   myLedger: (limit = 100) => api.get(`/leave/me/ledger?limit=${limit}`).then(data<{ entries: LedgerEntry[] }>),
 
@@ -256,6 +289,10 @@ export const leaveApi = {
   getRequest: (id: string) => api.get(`/leave/requests/${id}`).then(data<LeaveRequestRow>),
   employeeBalances: (employeeId: string) =>
     api.get(`/leave/employees/${employeeId}/balances`).then(data<BalancesResponse>),
+  employeeEligibility: (employeeId: string) =>
+    api.get(`/leave/employees/${employeeId}/eligibility`)
+      .then(data<{ eligibility: EligibleLeaveType[] }>)
+      .then((r) => r.eligibility),
   employeeLedger: (employeeId: string, limit = 100) =>
     api.get(`/leave/employees/${employeeId}/ledger?limit=${limit}`).then(data<{ entries: LedgerEntry[] }>),
 

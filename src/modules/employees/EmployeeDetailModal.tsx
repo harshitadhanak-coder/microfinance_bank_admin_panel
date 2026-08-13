@@ -9,6 +9,7 @@ import { inr, fmtDate, titleCase, apiMessage } from '../../lib/format';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
 import { leaveApi, leaveKeys } from '../hr/leaveShared';
+import { EMPLOYMENT_STATUS_OPTIONS, needsLastWorkingDate } from './shared';
 
 interface Props {
   employeeId: string;
@@ -50,6 +51,7 @@ interface SalaryStructure {
 interface EmployeeDetail {
   id: string; employeeCode: string; fullName: string; phoneNumber: string; email?: string | null;
   designation: string; employmentStatus: string; joiningDate: string; branchId?: string | null;
+  separationDate?: string | null;
   branch?: { name: string; code?: string | null; city?: string | null; state?: string | null } | null;
   bankIfscCode?: string | null; bankAccountMasked?: string | null;
   panMasked?: string | null; salaryStructure?: SalaryStructure | null;
@@ -119,7 +121,7 @@ const SALARY_COMPONENTS: { key: SalaryComponentKey; label: string }[] = [
 
 const emptyEdit = {
   fullName: '', phoneNumber: '', email: '', designation: '', branchId: '',
-  joiningDate: '', employmentStatus: 'ACTIVE', bankAccountNumber: '', bankIfscCode: '', panNumber: '',
+  joiningDate: '', employmentStatus: 'ACTIVE', separationDate: '', bankAccountNumber: '', bankIfscCode: '', panNumber: '',
   departmentId: '', designationId: '', gradeId: '', employmentTypeId: '', shiftId: '',
 };
 
@@ -179,6 +181,7 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
       branchId: detail.branchId ?? '',
       joiningDate: detail.joiningDate ? detail.joiningDate.slice(0, 10) : '',
       employmentStatus: detail.employmentStatus,
+      separationDate: detail.separationDate ? detail.separationDate.slice(0, 10) : '',
       bankIfscCode: detail.bankIfscCode ?? '',
       departmentId: detail.departmentRef?.id ?? detail.departmentId ?? '',
       designationId: detail.designationRef?.id ?? detail.designationId ?? '',
@@ -229,6 +232,9 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
       fullName: form.fullName, phoneNumber: form.phoneNumber, email: form.email,
       designation: form.designation, branchId: form.branchId, joiningDate: form.joiningDate,
       employmentStatus: form.employmentStatus, bankAccountNumber: form.bankAccountNumber,
+      // Only sent with the statuses that require it — the API rejects an ending
+      // with no last working day, and records none for any other status.
+      ...(needsLastWorkingDate(form.employmentStatus) ? { separationDate: form.separationDate } : {}),
       bankIfscCode: form.bankIfscCode, panNumber: form.panNumber,
       departmentId: form.departmentId, designationId: form.designationId, gradeId: form.gradeId,
       employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
@@ -892,12 +898,20 @@ export default function EmployeeDetailModal({ employeeId, canManage, onClose, in
                 <label>Joining date<input type="date" value={form.joiningDate} onChange={(e) => setForm({ ...form, joiningDate: e.target.value })} /></label>
                 <label>Employment status
                   <select value={form.employmentStatus} onChange={(e) => setForm({ ...form, employmentStatus: e.target.value })}>
-                    <option value="ONBOARDING">Onboarding</option>
-                    <option value="ACTIVE">Active</option>
-                    <option value="ON_NOTICE">On notice</option>
-                    <option value="SEPARATED">Separated</option>
+                    {EMPLOYMENT_STATUS_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>{o.label}</option>
+                    ))}
                   </select>
                 </label>
+                {needsLastWorkingDate(form.employmentStatus) && (
+                  <label>Last working date
+                    <input
+                      type="date" required value={form.separationDate}
+                      min={form.joiningDate || undefined}
+                      onChange={(e) => setForm({ ...form, separationDate: e.target.value })}
+                    />
+                  </label>
+                )}
                 <label>Bank account no.<input value={form.bankAccountNumber} onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })} placeholder="leave blank to keep" /></label>
                 <label>IFSC<input value={form.bankIfscCode} onChange={(e) => setForm({ ...form, bankIfscCode: e.target.value.toUpperCase() })} /></label>
                 <label>PAN<input value={form.panNumber} onChange={(e) => setForm({ ...form, panNumber: e.target.value.toUpperCase() })} placeholder="leave blank to keep" /></label>

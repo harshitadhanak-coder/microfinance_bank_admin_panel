@@ -24,7 +24,7 @@ const STATUS_TONE: Record<string, BadgeTone> = {
   SPECIAL_MENTION_0: 'warning', SPECIAL_MENTION_1: 'warning', PROCESSING: 'warning',
   ON_NOTICE: 'warning',
   // employment lifecycle
-  ONBOARDING: 'info', SEPARATED: 'neutral',
+  ONBOARDING: 'info', SEPARATED: 'neutral', TERMINATED: 'danger', ABSCONDING: 'danger',
   // negative / rejected / overdue
   REJECTED: 'danger', OVERDUE: 'danger', INACTIVE: 'danger', DROPPED: 'danger',
   WRITTEN_OFF: 'danger', NPA: 'danger', SMA_2: 'danger', SPECIAL_MENTION_2: 'danger',

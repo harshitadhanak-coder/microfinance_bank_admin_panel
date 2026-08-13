@@ -1227,6 +1227,8 @@ label:has(> .error-text) textarea { border-color: var(--red); }
 .pill-onboarding { background: #fdf2dd; color: var(--amber); }
 .pill-on_notice { background: #e8e9f3; color: #3c4a8f; }
 .pill-separated { background: #f9e3e0; color: var(--red); }
+.pill-absconding { background: #f9e3e0; color: var(--red); }
+.pill-terminated { background: #f9e3e0; color: var(--red); }
 
 @keyframes overlay-in { from { opacity: 0; } to { opacity: 1; } }
 @keyframes modal-in {
@@ -2165,3 +2167,10 @@ button.btn-lg { min-height: var(--control-h-lg); padding: 0.55rem 1.35rem; font-
   .emp-list .filterbar-search { flex-basis: 100%; }
   .emp-list .filterbar-controls select { min-width: 0; }
 }
+
+/* Collapsed "not charged" breakdown in the leave preview. A six-month request
+   has forty-odd free days; the summary carries the count and the reason, and
+   the dates open on demand. */
+.free-days > summary { cursor: pointer; }
+.free-days > summary::marker { color: var(--muted, #6b7280); }
+.free-days .free-days-list { margin-top: 0.35rem; line-height: 1.5; }

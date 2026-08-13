@@ -12,7 +12,10 @@ import { apiMessage } from '../../lib/format';
 import { PHONE_ERROR, sanitizePhoneInput, validatePhone } from '../../lib/validation';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { compact, portalForRole, useEmployeeMasters } from './shared';
+import {
+  compact, portalForRole, useEmployeeMasters,
+  EMPLOYMENT_STATUS_OPTIONS, needsLastWorkingDate,
+} from './shared';
 import { roleLabel } from '../roles/shared';
 
 interface MasterRef { id: string }
@@ -93,7 +96,7 @@ export default function EmployeeEditPage() {
         gradeId: form.gradeId, employmentTypeId: form.employmentTypeId, shiftId: form.shiftId,
         // Only the date the chosen status actually calls for. Sending both would
         // have the API record a notice date for someone being separated outright.
-        ...(form.employmentStatus === 'SEPARATED' ? { separationDate: form.separationDate } : {}),
+        ...(needsLastWorkingDate(form.employmentStatus) ? { separationDate: form.separationDate } : {}),
         ...(form.employmentStatus === 'ON_NOTICE' ? { noticeStartDate: form.noticeStartDate } : {}),
       }),
       // Deliberately outside compact(), which drops empty values so untouched
@@ -151,8 +154,9 @@ export default function EmployeeEditPage() {
               </Field>
               <Field label="Employment status">
                 <select value={form.employmentStatus} onChange={(e) => set({ employmentStatus: e.target.value })}>
-                  <option value="ONBOARDING">Onboarding</option><option value="ACTIVE">Active</option>
-                  <option value="ON_NOTICE">On notice</option><option value="SEPARATED">Separated</option>
+                  {EMPLOYMENT_STATUS_OPTIONS.map((o) => (
+                    <option key={o.value} value={o.value}>{o.label}</option>
+                  ))}
                 </select>
               </Field>
               {/*
@@ -163,7 +167,7 @@ export default function EmployeeEditPage() {
                 against it, so a blank one over-credits somebody who has left.
                 `min` stops a date before the employee even joined.
               */}
-              {form.employmentStatus === 'SEPARATED' && (
+              {needsLastWorkingDate(form.employmentStatus) && (
                 <Field label="Last working date" required help="The employee's final day. Used to prorate their last month of leave accrual.">
                   <input
                     type="date" required value={form.separationDate} min={form.joiningDate || undefined}

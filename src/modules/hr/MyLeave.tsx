@@ -11,7 +11,7 @@ import { useToast } from '../../components/Toast';
 import {
   leaveApi, leaveKeys, invalidateLeave, isCancellable, requestTypeLabel, currentApprover,
   STATUS_FILTERS, type StatusFilter, type LeaveBalance, type LeaveRequestRow,
-  type LeaveTypeDef, type PreviewResult, type ApplyLeaveBody,
+  type EligibleLeaveType, type PreviewResult, type ApplyLeaveBody,
 } from './leaveShared';
 
 /**
@@ -30,6 +30,16 @@ import {
 
 const todayInput = () => new Date().toISOString().slice(0, 10);
 
+/** "39 weekly offs, 6 holidays" — the reason a long request charges fewer days. */
+const summariseFreeDays = (days: Array<{ dayClass: string }>): string => {
+  const counts = new Map<string, number>();
+  for (const day of days) counts.set(day.dayClass, (counts.get(day.dayClass) ?? 0) + 1);
+  return [...counts.entries()]
+    .sort((a, b) => b[1] - a[1])
+    .map(([dayClass, n]) => `${n} ${dayClass.toLowerCase().replace(/_/g, ' ')}${n === 1 ? '' : 's'}`)
+    .join(', ');
+};
+
 export default function MyLeave() {
   const qc = useQueryClient();
   const toast = useToast();
@@ -39,7 +49,9 @@ export default function MyLeave() {
 
   const listQuery = useQuery({ queryKey: leaveKeys.myRequests, queryFn: () => leaveApi.myRequests() });
   const balancesQuery = useQuery({ queryKey: leaveKeys.myBalances, queryFn: leaveApi.myBalances });
-  const typesQuery = useQuery({ queryKey: leaveKeys.types, queryFn: leaveApi.listTypes });
+  // The picker is built from what this employee is ELIGIBLE for, not from every
+  // active type: maternity and paternity are gender-scoped.
+  const typesQuery = useQuery({ queryKey: leaveKeys.myEligibility, queryFn: leaveApi.myEligibility });
 
   const rows = useMemo(
     () => (listQuery.data?.items ?? []).filter((l) => status === 'ALL' || l.status === status),
@@ -157,7 +169,8 @@ export default function MyLeave() {
 export function ApplyLeaveModal({
   types, balances, employeeId, onBehalf, onClose, onDone,
 }: {
-  types: LeaveTypeDef[];
+  /** Only the types this employee may apply for — see EligibleLeaveType. */
+  types: EligibleLeaveType[];
   balances: LeaveBalance[];
   /** Set together with onBehalf when HR books for someone else. */
   employeeId?: string;
@@ -166,7 +179,7 @@ export function ApplyLeaveModal({
   onDone: () => void;
 }) {
   const toast = useToast();
-  const [leaveTypeId, setLeaveTypeId] = useState(types[0]?.id ?? '');
+  const [leaveTypeId, setLeaveTypeId] = useState(types[0]?.leaveTypeId ?? '');
   const [fromDate, setFromDate] = useState(todayInput());
   const [toDate, setToDate] = useState(todayInput());
   const [reason, setReason] = useState('');
@@ -178,6 +191,13 @@ export function ApplyLeaveModal({
     lines: [{ leaveTypeId, fromDate, toDate }],
     reason: reason.trim(),
   });
+
+  // The HR "record leave for an employee" flow opens this form before the
+  // employee's eligible types have loaded, so the first one is selected when
+  // the list arrives rather than only at mount.
+  useEffect(() => {
+    if (!leaveTypeId && types.length > 0) setLeaveTypeId(types[0].leaveTypeId);
+  }, [types, leaveTypeId]);
 
   const ready = Boolean(leaveTypeId && fromDate && toDate && reason.trim().length >= 3 && toDate >= fromDate);
 
@@ -207,6 +227,10 @@ export function ApplyLeaveModal({
   const submit = (e: FormEvent) => { e.preventDefault(); setError(''); submit_.mutate(); };
   const blocked = preview ? !preview.canSubmit : true;
   const balance = balances.find((b) => b.leaveTypeId === leaveTypeId);
+  const chosen = types.find((t) => t.leaveTypeId === leaveTypeId);
+  // Sick, maternity and paternity carry no balance, so the only number worth
+  // showing is the cap on a single request.
+  const cap = chosen && !chosen.isBalanceTracked ? chosen.rules.maxDaysPerRequest : null;
 
   return (
     <Modal
@@ -223,7 +247,9 @@ export function ApplyLeaveModal({
       <form id="apply-leave-form" className="form-grid" onSubmit={submit}>
         <label className="span-all">Leave type
           <select value={leaveTypeId} onChange={(e) => setLeaveTypeId(e.target.value)}>
-            {types.map((t) => <option key={t.id} value={t.id}>{t.name}{t.isPaid ? '' : ' (unpaid)'}</option>)}
+            {types.map((t) => (
+              <option key={t.leaveTypeId} value={t.leaveTypeId}>{t.name}{t.isPaid ? '' : ' (unpaid)'}</option>
+            ))}
           </select>
         </label>
         <label>From<input type="date" value={fromDate} onChange={(e) => { setFromDate(e.target.value); if (toDate < e.target.value) setToDate(e.target.value); }} required /></label>
@@ -237,10 +263,24 @@ export function ApplyLeaveModal({
             {balance.name}: {balance.available} available{balance.pending > 0 ? `, ${balance.pending} already on hold` : ''}.
           </div>
         )}
+        {!balance && chosen && !chosen.isBalanceTracked && (
+          <div className="span-all muted sm-text">
+            {chosen.name} is not deducted from a balance
+            {cap ? `, and is limited to ${cap} days per request` : ''}
+            {chosen.rules.documentRequiredAfterDays
+              ? `. A supporting document is expected beyond ${chosen.rules.documentRequiredAfterDays} days`
+              : ''}.
+          </div>
+        )}
 
         <div className="span-all">
-          {previewMutation.isPending && <div className="muted sm-text">Checking…</div>}
-          {preview && <PreviewPanel preview={preview} />}
+          {/*
+            "Checking…" only before the FIRST result. Every later edit re-checks
+            with the previous summary still on screen, dimmed — swapping it out
+            made the whole panel vanish and reappear on every keystroke.
+          */}
+          {previewMutation.isPending && !preview && <div className="muted sm-text">Checking…</div>}
+          {preview && <PreviewPanel preview={preview} stale={previewMutation.isPending} />}
         </div>
 
         {error && <div className="error-box span-all">{error}</div>}
@@ -250,16 +290,16 @@ export function ApplyLeaveModal({
 }
 
 /** The dry-run result: charge, blockers, warnings and the approval chain. */
-function PreviewPanel({ preview }: { preview: PreviewResult }) {
+function PreviewPanel({ preview, stale }: { preview: PreviewResult; stale?: boolean }) {
   const days = preview.lines.flatMap((l) => l.days);
   const charged = days.filter((d) => d.chargeable);
   const free = days.filter((d) => !d.chargeable);
 
   return (
-    <div className="panel pad" style={{ marginTop: '0.5rem' }}>
+    <div className="panel pad" style={{ marginTop: '0.5rem', opacity: stale ? 0.55 : 1 }}>
       <div style={{ display: 'flex', gap: '1.25rem', flexWrap: 'wrap', marginBottom: '0.6rem' }}>
         <div>
-          <div className="muted sm-text">Days charged</div>
+          <div className="muted sm-text">Days charged{stale ? ' · updating…' : ''}</div>
           <div style={{ fontSize: '1.35rem', fontWeight: 600 }}>{preview.totalChargedDays}</div>
         </div>
         {preview.balance && (
@@ -276,10 +316,18 @@ function PreviewPanel({ preview }: { preview: PreviewResult }) {
         )}
       </div>
 
+      {/*
+        Six months of maternity leave has forty-odd free days, and listing every
+        date buried the numbers under a wall of text. The count and the reason
+        answer "why 170 and not 204"; the dates stay one click away.
+      */}
       {free.length > 0 && (
-        <p className="muted sm-text" style={{ marginBottom: '0.5rem' }}>
-          Free: {free.map((d) => `${d.date.slice(5)} (${d.dayClass.toLowerCase().replace(/_/g, ' ')})`).join(', ')}
-        </p>
+        <details className="free-days" style={{ marginBottom: '0.5rem' }}>
+          <summary className="muted sm-text">Not charged: {summariseFreeDays(free)}</summary>
+          <div className="muted sm-text free-days-list">
+            {free.map((d) => `${d.date.slice(5)} (${d.dayClass.toLowerCase().replace(/_/g, ' ')})`).join(', ')}
+          </div>
+        </details>
       )}
 
       {charged.some((d) => d.chargeReason) && (

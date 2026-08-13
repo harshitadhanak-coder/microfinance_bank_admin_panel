@@ -38,7 +38,35 @@ export interface ShiftOption { id: string; name: string; code: string; startTime
 export interface EmployeeLite { id: string; fullName: string; designation: string; branchId?: string | null }
 
 // ── Status ──
-export const STATUS_FILTERS = ['', 'ONBOARDING', 'ACTIVE', 'ON_NOTICE', 'SEPARATED'] as const;
+export const STATUS_FILTERS = [
+  '', 'ONBOARDING', 'ACTIVE', 'ON_NOTICE', 'SEPARATED', 'ABSCONDING', 'TERMINATED',
+] as const;
+
+/**
+ * The employment-status picker, in lifecycle order. Kept here rather than
+ * spelled out in each form so the edit page and the quick-edit modal cannot
+ * drift apart — they did when SEPARATED was the only ending.
+ *
+ * `needsLastWorkingDate` marks the statuses the API requires a separation date
+ * with: all three ends of employment, since the final month's leave accrual is
+ * prorated against that day.
+ */
+export const EMPLOYMENT_STATUS_OPTIONS: ReadonlyArray<{
+  value: string;
+  label: string;
+  needsLastWorkingDate?: boolean;
+}> = [
+  { value: 'ONBOARDING', label: 'Onboarding' },
+  { value: 'ACTIVE', label: 'Active' },
+  { value: 'ON_NOTICE', label: 'On notice' },
+  { value: 'SEPARATED', label: 'Separated', needsLastWorkingDate: true },
+  { value: 'ABSCONDING', label: 'Absconding', needsLastWorkingDate: true },
+  { value: 'TERMINATED', label: 'Terminated', needsLastWorkingDate: true },
+];
+
+/** True when the chosen status makes the last-working-date field mandatory. */
+export const needsLastWorkingDate = (status: string): boolean =>
+  EMPLOYMENT_STATUS_OPTIONS.some((o) => o.value === status && o.needsLastWorkingDate);
 export const statusLabel = (s: string): string =>
   s ? s.charAt(0) + s.slice(1).toLowerCase().replaceAll('_', ' ') : 'All statuses';
 

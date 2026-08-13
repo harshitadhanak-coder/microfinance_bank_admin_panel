@@ -325,7 +325,13 @@ function RecordLeaveModal({
   onDone: () => void;
 }) {
   const [employeeId, setEmployeeId] = useState('');
-  const typesQuery = useQuery({ queryKey: leaveKeys.types, queryFn: leaveApi.listTypes });
+  // Per-employee, not the global type list: the picker must not offer maternity
+  // leave to a man, or paternity leave to a woman.
+  const typesQuery = useQuery({
+    queryKey: leaveKeys.employeeEligibility(employeeId),
+    queryFn: () => leaveApi.employeeEligibility(employeeId),
+    enabled: Boolean(employeeId),
+  });
   const balancesQuery = useQuery({
     queryKey: leaveKeys.employeeBalances(employeeId),
     queryFn: () => leaveApi.employeeBalances(employeeId),
@@ -335,6 +341,7 @@ function RecordLeaveModal({
   if (employeeId) {
     return (
       <ApplyLeaveModal
+        key={employeeId}
         types={typesQuery.data ?? []}
         balances={balancesQuery.data?.balances ?? []}
         employeeId={employeeId}
