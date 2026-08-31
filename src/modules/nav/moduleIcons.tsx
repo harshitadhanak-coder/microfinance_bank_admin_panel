@@ -40,6 +40,7 @@ export const MODULE_ICONS: Record<ModuleKey, ReactNode> = {
   collectionRecords: <ListChecks size={18} />,
   collectionSettlement: <Landmark size={18} />,
   settlements: <HandCoins size={18} />,
+  staffSettlementEntry: <Banknote size={18} />,
   bankDeposits: <Banknote size={18} />,
   bankReconciliation: <Landmark size={18} />,
   users: <UserCheck size={18} />,

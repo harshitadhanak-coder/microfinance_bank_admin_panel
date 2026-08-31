@@ -106,6 +106,7 @@ export type ModuleKey =
   | 'collectionRecords'
   | 'collectionSettlement'
   | 'settlements'
+  | 'staffSettlementEntry'
   | 'bankDeposits'
   | 'bankReconciliation'
   | 'users'
@@ -207,6 +208,11 @@ export const MODULES: ModuleDef[] = [
   // was a tab on the Collections mega-page). Settlement offers / NPA live under
   // /settlements/offers, reached from this page.
   { key: 'settlements', to: '/settlements', label: 'Day-End Settlements', permission: 'collection:view', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
+  // A branch manager keys a staff member's day-end cash book on their behalf —
+  // for an officer out of network, without a device, or handing the book over
+  // at the counter. Gated on 'collection:record' (filing a settlement is data
+  // entry, not review) and branch-scoped by the API to the manager's own staff.
+  { key: 'staffSettlementEntry', to: '/settlements/file', label: 'File Staff Settlement', permission: 'collection:record', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },
   // Branch-custody cash trail (stages 5–7): consolidated bank deposits, then
   // reconciliation of those deposits against the uploaded bank statement.
   { key: 'bankDeposits', to: '/reconciliation/deposits', label: 'Bank Deposits', permission: 'collection:reconcile', roles: ['SUPER_ADMIN', 'HEADQUARTERS_ADMIN', 'ACCOUNTANT', 'BRANCH_MANAGER'], group: 'operations' },

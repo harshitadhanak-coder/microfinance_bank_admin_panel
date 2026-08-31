@@ -36,6 +36,7 @@ const CollectionImportPage = lazy(() => import('./modules/collections/Collection
 const CollectionRecordsPage = lazy(() => import('./modules/collections/CollectionRecordsPage'));
 const CollectionSettlementPage = lazy(() => import('./modules/collections/CollectionSettlementPage'));
 const SettlementsPage = lazy(() => import('./modules/collections/SettlementsPage'));
+const StaffSettlementEntryPage = lazy(() => import('./modules/collections/StaffSettlementEntryPage'));
 const SettlementOffersPage = lazy(() => import('./modules/collections/SettlementOffersPage'));
 const BranchDepositsPage = lazy(() => import('./modules/reconciliation/BranchDepositsPage'));
 const BankReconciliationPage = lazy(() => import('./modules/reconciliation/BankReconciliationPage'));
@@ -222,6 +223,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="collections/settlement" element={<RequireModule module="collectionSettlement"><CollectionSettlementPage /></RequireModule>} />
                 <Route path="collections" element={<RequireModule module="collections"><CollectionsPage /></RequireModule>} />
                 <Route path="settlements" element={<RequireModule module="settlements"><SettlementsPage /></RequireModule>} />
+                <Route path="settlements/file" element={<RequireModule module="staffSettlementEntry"><StaffSettlementEntryPage /></RequireModule>} />
                 <Route path="settlements/offers" element={<RequireModule module="settlements"><SettlementOffersPage /></RequireModule>} />
                 <Route path="reconciliation/deposits" element={<RequireModule module="bankDeposits"><BranchDepositsPage /></RequireModule>} />
                 <Route path="reconciliation" element={<RequireModule module="bankReconciliation"><BankReconciliationPage /></RequireModule>} />
