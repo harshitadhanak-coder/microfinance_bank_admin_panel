@@ -98,10 +98,17 @@ export default function BranchDetailPage() {
                     <dt>Manager</dt>
                     <dd>
                       {branch.manager?.fullName ?? '—'}
-                      {canUpdate && !branch.reportsToSuperAdmin && (
+                      {canUpdate && (
                         <button className="ghost sm" style={{ marginLeft: 8 }} onClick={() => setAssignManager(true)}><UserCheck size={13} /> Change</button>
                       )}
-                      {branch.reportsToSuperAdmin && <span className="muted sm-text"> · reports to Super Admin</span>}
+                    </dd>
+                  </div>
+                  <div>
+                    <dt>Staff report to</dt>
+                    <dd>
+                      {branch.reportsToSuperAdmin
+                        ? <>HR / Super Admin <span className="muted sm-text">· head office branch</span></>
+                        : <>Branch manager <span className="muted sm-text">· standard</span></>}
                     </dd>
                   </div>
                   <div><dt>Status</dt><dd><Badge status={branch.status} /></dd></div>

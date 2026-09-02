@@ -21,9 +21,13 @@ export interface BranchDashboard {
 }
 
 /** Editable branch fields (financials/manager are managed elsewhere). */
-export interface BranchForm { code: string; name: string; addressLine: string; city: string; state: string }
+export interface BranchForm {
+  code: string; name: string; addressLine: string; city: string; state: string;
+  /** Head office — staff report to HR / Super Admin, not to the branch manager. */
+  reportsToSuperAdmin: boolean;
+}
 
-export const emptyBranchForm: BranchForm = { code: '', name: '', addressLine: '', city: '', state: '' };
+export const emptyBranchForm: BranchForm = { code: '', name: '', addressLine: '', city: '', state: '', reportsToSuperAdmin: false };
 
 /** Branch status values used as the list filter (blank = all). */
 export const BRANCH_STATUSES = ['', 'ACTIVE', 'INACTIVE'];

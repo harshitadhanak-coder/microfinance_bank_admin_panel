@@ -33,7 +33,14 @@ export default function BranchEditPage() {
   const detail = detailQuery.data;
   useEffect(() => {
     if (!detail) return;
-    setForm({ code: detail.code, name: detail.name, addressLine: detail.addressLine ?? '', city: detail.city, state: detail.state });
+    setForm({
+      code: detail.code,
+      name: detail.name,
+      addressLine: detail.addressLine ?? '',
+      city: detail.city,
+      state: detail.state,
+      reportsToSuperAdmin: detail.reportsToSuperAdmin ?? false,
+    });
   }, [detail]);
 
   const update = useMutation({
@@ -70,6 +77,22 @@ export default function BranchEditPage() {
               <Field label="City" required><input value={form.city} onChange={(e) => set({ city: e.target.value })} required /></Field>
               <Field label="State" required><input value={form.state} onChange={(e) => set({ state: e.target.value })} required /></Field>
             </FormGrid>
+          </Card>
+
+          <Card title="Reporting">
+            <Field
+              label="Head office branch"
+              full
+              help="Staff of this branch report to HR (Super Admin if there is no HR) instead of to the branch manager — for leave approvals, the org chart and reports. The branch keeps its manager for day-to-day operations. Every other branch is unaffected."
+            >
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={form.reportsToSuperAdmin}
+                  onChange={(e) => set({ reportsToSuperAdmin: e.target.checked })}
+                /> Staff report to HR / Super Admin, not the branch manager
+              </label>
+            </Field>
           </Card>
 
           {error && <div className="error-box">{error}</div>}
