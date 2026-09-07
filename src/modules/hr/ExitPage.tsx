@@ -7,35 +7,29 @@ import { FilterBar } from '../../components/FilterBar';
 import { ExportButton } from '../../components/ExportButton';
 import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
+import { Tabs, TabDef } from '../../components/Tabs';
 import { LogOut, Check } from '../../components/icons';
 import { apiMessage, fmtDate, inr, titleCase } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import MyResignation from './MyResignation';
+import { exitLabel as label, type ClearanceItem, type Resignation as BaseResignation } from './exitShared';
 
 const STATUSES = ['ALL', 'SUBMITTED', 'UNDER_REVIEW', 'NOTICE_PERIOD', 'CLEARANCE', 'SETTLEMENT', 'COMPLETED', 'WITHDRAWN', 'REJECTED'] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
-interface ClearanceItem { id: string; department: string; label: string; status: string; remarks: string | null }
-interface FinalSettlement { unpaidSalary: string; leaveEncashment: string; gratuity: string; deductions: string; loanRecovery: string; advanceRecovery: string; netPayable: string }
-interface Resignation {
-  id: string;
-  reason: string | null;
-  resignationDate: string;
-  requestedLastWorkingDate: string;
-  approvedLastWorkingDate: string | null;
-  noticePeriodDays: number;
-  status: string;
+/** A queue row — the self-service shape plus the employee it belongs to. */
+interface Resignation extends BaseResignation {
   employee: { id: string; fullName: string; employeeCode: string; designation: string; branch: { name: string } | null };
-  clearanceItems?: ClearanceItem[];
-  finalSettlement?: FinalSettlement | null;
 }
-
-const label = (s: string) => titleCase(s.replace(/_/g, ' '));
 
 export default function ExitPage() {
   const { user } = useAuth();
   const canManage = can(user?.role, 'exit:manage');
+  // 'team' = HR's review queue / the Branch Manager's read-only branch view;
+  // 'mine' = the caller's own resignation, which they file and withdraw.
+  const [view, setView] = useState<'team' | 'mine'>('team');
   const [status, setStatus] = useState<StatusFilter>('ALL');
   const [openId, setOpenId] = useState<string | null>(null);
 
@@ -56,14 +50,24 @@ export default function ExitPage() {
     { header: '', render: (r) => <button className="ghost sm" onClick={() => setOpenId(r.id)}>Open</button> },
   ];
 
+  const viewTabs: TabDef[] = [
+    { key: 'team', label: 'Team resignations' },
+    { key: 'mine', label: 'My resignation' },
+  ];
+
   return (
     <>
       <PageHeader
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Exit Management' }]}
         title="Exit Management"
-        subtitle={canManage ? 'Review resignations through notice, clearance, full-&-final settlement and exit.' : 'Team resignations (read-only).'}
-        actions={<ExportButton url="/human-resources/exit/resignations/export" fileBase="Exit-Management" params={{ status: status === 'ALL' ? undefined : status }} />}
+        subtitle={view === 'mine'
+          ? 'Submit and track your own resignation.'
+          : canManage ? 'Review resignations through notice, clearance, full-&-final settlement and exit.' : 'Team resignations (read-only).'}
+        actions={view === 'team' && <ExportButton url="/human-resources/exit/resignations/export" fileBase="Exit-Management" params={{ status: status === 'ALL' ? undefined : status }} />}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'team' | 'mine')} />}
       />
+
+      {view === 'mine' ? <MyResignation /> : <>
       <FilterBar
         chips={status !== 'ALL' ? [{ key: 'status', label: `Status: ${label(status)}`, onRemove: () => setStatus('ALL') }] : []}
         onReset={status !== 'ALL' ? () => setStatus('ALL') : undefined}
@@ -76,6 +80,7 @@ export default function ExitPage() {
       </FilterBar>
 
       <DataTable columns={columns} rows={query.data ?? []} loading={query.isLoading} empty="No resignations." searchPlaceholder="Search by employee…" />
+      </>}
 
       {openId && <ExitDetailModal id={openId} canManage={canManage} onClose={() => setOpenId(null)} />}
     </>

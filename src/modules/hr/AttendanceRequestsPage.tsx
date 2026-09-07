@@ -6,13 +6,15 @@ import { PageHeader } from '../../components/PageHeader';
 import { FilterBar } from '../../components/FilterBar';
 import { Badge } from '../../components/Badge';
 import { Modal } from '../../components/Modal';
+import { Tabs, TabDef } from '../../components/Tabs';
 import { Check, Ban, ListChecks } from '../../components/icons';
 import { apiMessage, fmtDate, titleCase } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
+import MyAttendanceRequests from './MyAttendanceRequests';
+import { REQUEST_TYPES as TYPES, requestTypeLabel as label, fmtRequestTime as fmtTime } from './attendanceRequestShared';
 
-const TYPES = ['MISSING_PUNCH', 'REGULARIZATION', 'WRONG_TIMING', 'OUTDOOR_DUTY', 'WORK_FROM_HOME', 'PERMISSION'] as const;
 const STATUSES = ['ALL', 'PENDING', 'APPROVED', 'REJECTED', 'CANCELLED'] as const;
 type StatusFilter = (typeof STATUSES)[number];
 
@@ -29,15 +31,15 @@ interface AttendanceRequest {
   employee: { fullName: string; employeeCode: string; branch: { name: string } | null };
 }
 
-const fmtTime = (iso: string | null) => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '—');
-const label = (t: string) => titleCase(t.replace(/_/g, ' '));
-
 export default function AttendanceRequestsPage() {
   const qc = useQueryClient();
   const { user } = useAuth();
   const toast = useToast();
   const canApprove = can(user?.role, 'attendance:approve');
 
+  // 'team' = the review queue (HR) / read-only branch view (Branch Manager);
+  // 'mine' = the caller's own requests, which they raise and cancel themselves.
+  const [view, setView] = useState<'team' | 'mine'>('team');
   const [status, setStatus] = useState<StatusFilter>('PENDING');
   const [type, setType] = useState('ALL');
   const [decideFor, setDecideFor] = useState<{ req: AttendanceRequest; decision: 'APPROVED' | 'REJECTED' } | null>(null);
@@ -79,14 +81,23 @@ export default function AttendanceRequestsPage() {
     ...(type !== 'ALL' ? [{ key: 'type', label: `Type: ${label(type)}`, onRemove: () => setType('ALL') }] : []),
   ];
 
+  const viewTabs: TabDef[] = [
+    { key: 'team', label: 'Team requests' },
+    { key: 'mine', label: 'My requests' },
+  ];
+
   return (
     <>
       <PageHeader
         breadcrumb={[{ label: 'Human Resources' }, { label: 'Attendance Requests' }]}
         title="Attendance Requests"
-        subtitle={canApprove ? 'Approve or reject employee corrections — approval applies the change to attendance.' : 'Team attendance requests (read-only).'}
+        subtitle={view === 'mine'
+          ? 'Raise and track your own attendance corrections.'
+          : canApprove ? 'Approve or reject employee corrections — approval applies the change to attendance.' : 'Team attendance requests (read-only).'}
+        tabs={<Tabs tabs={viewTabs} active={view} onChange={(t) => setView(t as 'team' | 'mine')} />}
       />
 
+      {view === 'mine' ? <MyAttendanceRequests /> : <>
       <FilterBar chips={chips} onReset={chips.length ? () => { setStatus('PENDING'); setType('ALL'); } : undefined}>
         <label>Status
           <select value={status} onChange={(e) => setStatus(e.target.value as StatusFilter)}>
@@ -102,6 +113,7 @@ export default function AttendanceRequestsPage() {
       </FilterBar>
 
       <DataTable columns={columns} rows={query.data ?? []} loading={query.isLoading} empty="No attendance requests." searchPlaceholder="Search by employee…" />
+      </>}
 
       {decideFor && (
         <DecideModal
