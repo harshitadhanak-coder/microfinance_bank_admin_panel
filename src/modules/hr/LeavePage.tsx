@@ -455,7 +455,7 @@ function BalancesDrawer({ leave, onClose }: { leave: LeaveRequestRow; onClose: (
             <div key={b.leaveTypeId} className={`bal-chip${b.available <= 1 ? ' bal-low' : ''}`}>
               <div className="bal-type">{b.name}</div>
               <div className="bal-avail">{b.available}</div>
-              <div className="bal-sub">used {b.used} / {b.opening + b.accrued}{b.pending > 0 ? ` · ${b.pending} held` : ''}</div>
+              <div className="bal-sub">used {b.used} · credited {b.opening + b.accrued} of {b.entitlement} / yr{b.pending > 0 ? ` · ${b.pending} held` : ''}</div>
             </div>
           ))}
         </div>

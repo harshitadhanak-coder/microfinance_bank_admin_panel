@@ -101,7 +101,7 @@ export default function MyLeave() {
                 <div className="bal-type">{b.name}</div>
                 <div className="bal-avail">{b.available}</div>
                 <div className="bal-sub">
-                  used {b.used} / {b.opening + b.accrued}
+                  used {b.used} · credited {b.opening + b.accrued} of {b.entitlement} / yr
                   {b.pending > 0 ? ` · ${b.pending} on hold` : ''}
                 </div>
                 {b.expiringSoon > 0 && (
