@@ -319,6 +319,8 @@ export const leaveApi = {
   planUsage: (planId: string) => api.get(`/leave/policies/${planId}/usage`).then(data<PlanUsage>),
   deletePlan: (planId: string) => api.delete(`/leave/policies/${planId}`).then(data<unknown>),
   retirePlan: (planId: string) => api.post(`/leave/policies/${planId}/retire`).then(data<RetireResult>),
+  createAssignment: (planId: string, body: CreateAssignmentBody) =>
+    api.post(`/leave/policies/${planId}/assignments`, body).then(data<unknown>),
   deleteAssignment: (planId: string, assignmentId: string) =>
     api.delete(`/leave/policies/${planId}/assignments/${assignmentId}`).then(data<unknown>),
 
@@ -328,6 +330,17 @@ export const leaveApi = {
     api.post('/leave/accrual/backfill', { monthsBack }).then(data<unknown>),
   listAccrualRuns: () => api.get('/leave/accrual/runs').then(data<AccrualRun[]>),
 };
+
+/**
+ * Who a policy applies to. The screen offers the scopes HR actually uses;
+ * the API accepts more (designation, grade, expression…).
+ */
+export interface CreateAssignmentBody {
+  scopeType: 'GLOBAL' | 'BRANCH' | 'GENDER';
+  effectiveFrom: string;
+  branchId?: string;
+  gender?: string;
+}
 
 export interface PeriodScheme {
   id: string;

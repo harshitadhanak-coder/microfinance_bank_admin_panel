@@ -12,7 +12,7 @@ import { fmtDate, apiMessage, apiFieldErrors } from '../../lib/format';
 import { useToast } from '../../components/Toast';
 import { useAuth } from '../auth/AuthContext';
 import { can } from '../auth/permissions';
-import { leaveApi, leaveKeys, type LeaveTypeDef } from './leaveShared';
+import { leaveApi, leaveKeys, type CreateAssignmentBody, type LeaveTypeDef } from './leaveShared';
 
 /**
  * Leave policies — the versioned policy engine.
@@ -46,6 +46,8 @@ interface PlanVersion {
   accrualAmount?: string | number | null;
   carryForwardEnabled: boolean;
   maxCarryForward?: string | number | null;
+  expiryEnabled?: boolean;
+  expiryMonths?: number | null;
   maxBalance?: string | number | null;
   sandwichRule: string;
   insufficientBalanceAction: string;
@@ -112,6 +114,16 @@ const inForceVersion = (versions: PlanVersion[]): PlanVersion | undefined =>
 
 const versionTone = (status: string) =>
   status === 'ACTIVE' ? 'success' : status === 'SCHEDULED' ? 'info' : status === 'DRAFT' ? 'warning' : 'neutral';
+
+/**
+ * Carry-forward is a per-period rule, but monthly credit can also expire on
+ * its own (Casual: no carry into the following month). Showing a bare "No"
+ * for that case would hide the rule HR most needs to see.
+ */
+const carryForwardLabel = (v: PlanVersion) =>
+  v.carryForwardEnabled ? `Yes · max ${v.maxCarryForward ?? '∞'}`
+  : v.expiryEnabled && v.expiryMonths ? `No · each credit expires after ${v.expiryMonths} mo`
+  : 'No';
 
 const accrualLabel = (v: PlanVersion) =>
   v.accrualFrequency === 'NONE' ? 'No accrual'
@@ -192,7 +204,7 @@ export default function LeavePolicies() {
                     <td className="num">{current ? Number(current.annualEntitlement) : '—'}</td>
                     <td className="sm-text">{current ? accrualLabel(current) : '—'}</td>
                     <td className="sm-text">
-                      {current?.carryForwardEnabled ? `Yes · max ${current.maxCarryForward ?? '∞'}` : 'No'}
+                      {current ? carryForwardLabel(current) : '—'}
                     </td>
                     <td className="sm-text">
                       {p._count.assignments === 0
@@ -234,6 +246,7 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
   const [activating, setActivating] = useState<PlanVersion | null>(null);
   const [removing, setRemoving] = useState(false);
   const [removingAssignment, setRemovingAssignment] = useState<PlanAssignment | null>(null);
+  const [addingAssignment, setAddingAssignment] = useState(false);
 
   const canManage = can(user?.role, 'leave:managePolicy');
   const canActivate = can(user?.role, 'leave:approvePolicy');
@@ -379,11 +392,18 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
             </div>
           )}
 
-          <h3 style={{ marginTop: '1.25rem', marginBottom: '0.5rem' }}>Who it applies to</h3>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '0.5rem', marginTop: '1.25rem', marginBottom: '0.5rem' }}>
+            <h3 style={{ flex: 1, margin: 0 }}>Who it applies to</h3>
+            {canManage && plan.status === 'ACTIVE' && (
+              <button type="button" className="sm ghost" onClick={() => setAddingAssignment(true)}>
+                <Plus size={13} /> Add assignment
+              </button>
+            )}
+          </div>
           {plan.assignments.length === 0 ? (
             <p className="muted sm-text">
-              No assignment rules — this policy currently applies to nobody. Add one to target a branch,
-              department, designation, grade or gender.
+              No assignment rules — this policy currently applies to nobody. Add one to apply it to everyone,
+              or to target a branch or gender.
             </p>
           ) : (
             <ul className="doc-list">
@@ -411,6 +431,16 @@ function PlanDrawer({ planId, onClose, onChanged }: { planId: string; onClose: (
             Removing every assignment is the lightest way to stop a policy applying — it keeps the rules on file
             in case the group comes back.
           </p>
+
+          {addingAssignment && (
+            <AddAssignmentModal
+              planId={planId}
+              planName={plan.name}
+              hasActiveGlobal={plan.assignments.some((a) => a.scopeType === 'GLOBAL' && a.status === 'ACTIVE')}
+              onClose={() => setAddingAssignment(false)}
+              onDone={() => { setAddingAssignment(false); query.refetch(); onChanged(); }}
+            />
+          )}
 
           {drafting && (
             <NewVersionModal
@@ -539,6 +569,8 @@ function NewVersionModal({
     accrualAmount: current?.accrualAmount != null ? String(Number(current.accrualAmount)) : '',
     carryForwardEnabled: current?.carryForwardEnabled ?? false,
     maxCarryForward: current?.maxCarryForward != null ? String(Number(current.maxCarryForward)) : '',
+    expiryEnabled: current?.expiryEnabled ?? false,
+    expiryMonths: current?.expiryMonths != null ? String(current.expiryMonths) : '2',
     sandwichRule: current?.sandwichRule ?? 'NONE',
     insufficientBalanceAction: current?.insufficientBalanceAction ?? 'BLOCK',
     lwpLeaveTypeId: current?.lwpLeaveTypeId ?? '',
@@ -560,7 +592,9 @@ function NewVersionModal({
       accrualFrequency: form.accrualFrequency,
       ...(form.accrualAmount ? { accrualAmount: Number(form.accrualAmount) } : {}),
       carryForwardEnabled: form.carryForwardEnabled,
-      ...(form.maxCarryForward ? { maxCarryForward: Number(form.maxCarryForward) } : {}),
+      ...(form.carryForwardEnabled && form.maxCarryForward ? { maxCarryForward: Number(form.maxCarryForward) } : {}),
+      expiryEnabled: form.expiryEnabled,
+      ...(form.expiryEnabled ? { expiryMonths: Number(form.expiryMonths) } : {}),
       sandwichRule: form.sandwichRule,
       insufficientBalanceAction: form.insufficientBalanceAction,
       ...(form.insufficientBalanceAction === 'CONVERT_TO_LWP' ? { lwpLeaveTypeId: form.lwpLeaveTypeId } : {}),
@@ -580,12 +614,16 @@ function NewVersionModal({
   // Mirror the API's own cross-field rule so the dependency is visible in the
   // form rather than discovered from a 422.
   const needsLwpType = form.insufficientBalanceAction === 'CONVERT_TO_LWP' && !form.lwpLeaveTypeId;
+  const expiryMonthsValue = Number(form.expiryMonths);
+  const badExpiry = form.expiryEnabled
+    && (!Number.isInteger(expiryMonthsValue) || expiryMonthsValue < 1 || expiryMonthsValue > 60);
   const disabled =
     save.isPending
     || form.changeReason.trim().length < 3
     || !form.effectiveFrom
     || !periodSchemeId
-    || needsLwpType;
+    || needsLwpType
+    || badExpiry;
   /** Inline note under the input the server rejected. */
   const fieldNote = (name: string) =>
     fieldErrors[name] ? <span className="error-text sm-text">{fieldErrors[name]}</span> : null;
@@ -682,6 +720,30 @@ function NewVersionModal({
             <input type="number" min={0} step="0.5" value={form.maxCarryForward} onChange={(e) => setForm({ ...form, maxCarryForward: e.target.value })} />
           </label>
         )}
+        {/* Expiry is per credit, not per period: it is what makes a monthly
+            entitlement "use it or lose it" without waiting for the year-end
+            rollover. The sweep that writes expired days off runs automatically. */}
+        <label className="check span-all">
+          <input type="checkbox" checked={form.expiryEnabled} onChange={(e) => setForm({ ...form, expiryEnabled: e.target.checked })} />
+          Unused accrued days expire
+        </label>
+        {form.expiryEnabled && (
+          <label className="span-all">Each credit is usable for (months)
+            <input
+              type="number" min={1} max={60} step={1}
+              value={form.expiryMonths}
+              onChange={(e) => setForm({ ...form, expiryMonths: e.target.value })}
+              required
+            />
+            <span className="muted sm-text">
+              Counted from the start of the month the days are earned for. A month’s credit is posted once that
+              month closes, so <strong>2</strong> means the days earned for October can be used through November
+              and lapse on 1 December — no carry forward into the month after.
+            </span>
+            {badExpiry && <span className="error-text sm-text">Enter a whole number of months from 1 to 60.</span>}
+            {fieldNote('expiryMonths')}
+          </label>
+        )}
         <label className="span-all">Transition
           <select value={form.policyChangeStrategy} onChange={(e) => setForm({ ...form, policyChangeStrategy: e.target.value })}>
             <option value="PROSPECTIVE">Prospective — future months only</option>
@@ -697,6 +759,118 @@ function NewVersionModal({
             placeholder="Required — this is what explains the number two years from now"
           />
           {fieldNote('changeReason')}
+        </label>
+        {error && <div className="error-box span-all">{error}</div>}
+      </form>
+    </Modal>
+  );
+}
+
+// ── Add an assignment (who the policy applies to) ───────────────────────
+type AssignmentScope = CreateAssignmentBody['scopeType'];
+
+function AddAssignmentModal({
+  planId, planName, hasActiveGlobal, onClose, onDone,
+}: {
+  planId: string;
+  planName: string;
+  hasActiveGlobal: boolean;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const toast = useToast();
+  const [error, setError] = useState('');
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  // "Everyone" is the common case, unless the policy already has it — a second
+  // global rule would change nothing and just clutter the list.
+  const [scopeType, setScopeType] = useState<AssignmentScope>(hasActiveGlobal ? 'BRANCH' : 'GLOBAL');
+  const [branchId, setBranchId] = useState('');
+  const [gender, setGender] = useState('FEMALE');
+  // Defaults to the first of the current month, so this month's accrual
+  // (resolved at month end) already sees the new rule.
+  const [effectiveFrom, setEffectiveFrom] = useState(() => {
+    const now = new Date();
+    return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-01`;
+  });
+
+  const branchesQuery = useQuery({
+    queryKey: ['/branches', 'leave-assignment'],
+    queryFn: () => api.get('/branches?pageSize=100').then((r) => r.data.data as Array<{ id: string; name: string; code: string }>),
+    enabled: scopeType === 'BRANCH',
+  });
+
+  const save = useMutation({
+    mutationFn: () => leaveApi.createAssignment(planId, {
+      scopeType,
+      effectiveFrom,
+      ...(scopeType === 'BRANCH' ? { branchId } : {}),
+      ...(scopeType === 'GENDER' ? { gender } : {}),
+    }),
+    onSuccess: () => {
+      toast.success(scopeType === 'GLOBAL'
+        ? `${planName} now applies to every employee.`
+        : 'Assignment added.');
+      onDone();
+    },
+    onError: (err) => {
+      setError(apiMessage(err, 'Could not add the assignment.'));
+      setFieldErrors(apiFieldErrors(err));
+    },
+  });
+
+  const submit = (e: FormEvent) => { e.preventDefault(); setError(''); setFieldErrors({}); save.mutate(); };
+  const disabled =
+    save.isPending
+    || !effectiveFrom
+    || (scopeType === 'GLOBAL' && hasActiveGlobal)
+    || (scopeType === 'BRANCH' && !branchId);
+  const fieldNote = (name: string) =>
+    fieldErrors[name] ? <span className="error-text sm-text">{fieldErrors[name]}</span> : null;
+
+  return (
+    <Modal
+      size="sm" onClose={onClose} icon={<Plus size={20} />}
+      title="Add assignment"
+      subtitle={`Who ${planName} applies to`}
+      footer={<>
+        <button type="button" className="ghost" onClick={onClose} disabled={save.isPending}>Cancel</button>
+        <button type="submit" form="add-assignment-form" disabled={disabled}>{save.isPending ? 'Saving…' : 'Add assignment'}</button>
+      </>}
+    >
+      <form id="add-assignment-form" className="form-grid" onSubmit={submit}>
+        <label className="span-all">Applies to
+          <select value={scopeType} onChange={(e) => setScopeType(e.target.value as AssignmentScope)}>
+            <option value="GLOBAL" disabled={hasActiveGlobal}>Everyone{hasActiveGlobal ? ' (already assigned)' : ''}</option>
+            <option value="BRANCH">One branch</option>
+            <option value="GENDER">One gender</option>
+          </select>
+          <span className="muted sm-text">
+            When several policies of the same leave type match an employee, the more specific one wins
+            (branch or gender beats everyone).
+          </span>
+          {fieldNote('scopeType')}
+        </label>
+        {scopeType === 'BRANCH' && (
+          <label className="span-all">Branch
+            <select value={branchId} onChange={(e) => setBranchId(e.target.value)} required>
+              <option value="">{branchesQuery.isLoading ? 'Loading…' : '— Select a branch —'}</option>
+              {(branchesQuery.data ?? []).map((b) => <option key={b.id} value={b.id}>{b.name} ({b.code})</option>)}
+            </select>
+            {fieldNote('branchId')}
+          </label>
+        )}
+        {scopeType === 'GENDER' && (
+          <label className="span-all">Gender
+            <select value={gender} onChange={(e) => setGender(e.target.value)}>
+              <option value="FEMALE">Female</option>
+              <option value="MALE">Male</option>
+            </select>
+            {fieldNote('gender')}
+          </label>
+        )}
+        <label className="span-all">Effective from
+          <input type="date" value={effectiveFrom} onChange={(e) => setEffectiveFrom(e.target.value)} required />
+          {fieldNote('effectiveFrom')}
         </label>
         {error && <div className="error-box span-all">{error}</div>}
       </form>
